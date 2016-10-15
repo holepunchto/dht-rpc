@@ -5,8 +5,11 @@ var inherits = require('inherits')
 var events = require('events')
 var peers = require('ipv4-peers')
 var bufferEquals = require('buffer-equals')
+var duplexify = require('duplexify')
+var collect = require('stream-collector')
 var nodes = peers.idLength(32)
 var messages = require('./messages')
+var queryStream = require('./query-stream')
 
 module.exports = DHT
 
@@ -21,7 +24,7 @@ function DHT (opts) {
   this.concurrency = opts.concurrency || 16
   this.bootstrap = [].concat(opts.bootstrap || []).map(parseAddr)
   this.id = opts.id || crypto.randomBytes(32)
-  this.nodes = new KBucket({localNodeId: this.id})
+  this.nodes = new KBucket({localNodeId: this.id, arbiter: arbiter})
   this.nodes.on('ping', onnodeping)
 
   this.socket = udp({
@@ -35,8 +38,16 @@ function DHT (opts) {
 
   this._bootstrapped = false
   this._pendingRequests = []
+  this._tick = 0
   this._secrets = [crypto.randomBytes(32), crypto.randomBytes(32)]
-  this._interval = setInterval(rotateSecrets, 5 * 60 * 1000)
+  this._secretsInterval = setInterval(rotateSecrets, 5 * 60 * 1000)
+  this._tickInterval = setInterval(tick, 5 * 1000)
+
+  if (opts.nodes) {
+    for (var i = 0; i < opts.nodes.length; i++) {
+      this._addNode(opts.nodes[i].id, opts.nodes[i])
+    }
+  }
 
   process.nextTick(function () {
     self._bootstrap()
@@ -64,9 +75,50 @@ function DHT (opts) {
     }
     self.emit('close')
   }
+
+  function tick () {
+    self._tick++
+  }
 }
 
 inherits(DHT, events.EventEmitter)
+
+DHT.prototype.query = function (query, opts, cb) {
+  if (typeof opts === 'function') return this.query(query, null, opts)
+  return collect(queryStream(this, query, opts), cb)
+}
+
+DHT.prototype.closest = function (query, opts, cb) {
+  if (typeof opts === 'function') return this.closest(query, null, opts)
+  if (!opts) opts = {}
+  opts.token = true
+  return collect(queryStream(this, query, opts), cb)
+}
+
+DHT.prototype._closestNodes = function (target, opts, cb) {
+  var nodes = opts.nodes || opts.node
+
+  if (nodes) {
+    if (!Array.isArray(nodes)) nodes = [nodes]
+    process.nextTick(function () {
+      cb(null, nodes)
+    })
+    return null
+  }
+
+  var qs = this.get({
+    command: '_find_node',
+    target: target
+  })
+
+  qs.resume()
+  qs.on('error', noop)
+  qs.on('end', function () {
+    cb(null, qs.closest)
+  })
+
+  return qs
+}
 
 DHT.prototype.ping = function (peer, cb) {
   this._ping(parseAddr(peer), function (err, res, peer) {
@@ -77,7 +129,13 @@ DHT.prototype.ping = function (peer, cb) {
   })
 }
 
+DHT.prototype.toArray = function () {
+  return this.nodes.toArray()
+}
+
 DHT.prototype.destroy = function () {
+  clearInterval(this._secretsInterval)
+  clearInterval(this._tickInterval)
   this.socket.destroy()
 }
 
@@ -92,68 +150,21 @@ DHT.prototype._bootstrap = function () {
   // TODO: check stats, to determine wheather to rerun?
 
   var self = this
-  this._closest({command: '_find_node', target: this.id, id: this.id}, null, function (err) {
-    if (err) return self.emit('error', err)
+  var qs = this.query({
+    command: '_find_node',
+    target: this.id
+  })
+
+  qs.resume()
+
+  qs.on('error', function (err) {
+    self.emit('error', err)
+  })
+
+  qs.on('end', function () {
     self._bootstrapped = true
     self.emit('ready')
   })
-}
-
-DHT.prototype._closest = function (request, onresponse, cb) {
-  if (!cb) cb = noop
-
-  var self = this
-  var target = request.target
-  var stats = {responses: 0, errors: 0}
-  // var table = new KBucket({localNodeId: target})
-  var table = require('./table')(target)
-  var requested = {}
-  var inflight = 0
-
-  var bootstrap = this.nodes.closest(target, 20)
-  if (bootstrap.length < this.bootstrap.length) bootstrap.push.apply(bootstrap, this.bootstrap)
-
-  bootstrap.forEach(send)
-  if (!inflight) cb(null, stats, table)
-
-  function send (peer) {
-    var addr = peer.host + ':' + peer.port
-
-    if (requested[addr]) return
-    requested[addr] = true
-
-    inflight++
-    self._request(request, peer, false, next)
-  }
-
-  function next (err, res, peer) {
-    inflight--
-
-    if (err) {
-      stats.errors++
-    } else {
-      stats.responses++
-
-      if (res.id) {
-        // var prev = table.get(res.id)
-        // if (prev) prev.roundtripToken = res.roundtripToken
-      }
-
-      // TODO: do not add nodes to table.
-      // instead merge-sort with table so we only add nodes that actually respond
-      var n = decodeNodes(res.nodes)
-      for (var i = 0; i < n.length; i++) {
-        if (!bufferEquals(n[i].id, self.id)) table.add(n[i])
-      }
-
-      if (onresponse) onresponse(res, peer)
-    }
-
-    table.closest(20).forEach(send)
-    if (!inflight) {
-      cb(null, stats, table)
-    }
-  }
 }
 
 DHT.prototype._ping = function (peer, cb) {
@@ -211,7 +222,9 @@ DHT.prototype._onquery = function (request, peer) {
     roundtripToken: request.roundtripToken
   }
 
-  if (!this.emit('query', query, callback)) callback()
+  var method = request.roundtripToken ? 'closest' : 'query'
+
+  if (!this.emit(method + ':' + request.command, query, callback) && !this.emit(method, query, callback)) callback()
 
   function callback (err, value) {
     // TODO: support errors?
@@ -260,10 +273,39 @@ DHT.prototype._onfindnode = function (request, peer) {
 
 DHT.prototype._onnodeping = function (oldContacts, newContact) {
   if (!this._bootstrapped) return // bootstrapping, we've recently pinged all nodes
-  // TODO: record if we've recently pinged oldContacts, no need to flood them with new pings then
-  // console.log('onnodeping', this.bootstrap.length, this._bootstrapped, oldContacts.length)
+
+  var reping = []
+
   for (var i = 0; i < oldContacts.length; i++) {
-    this.nodes.add(oldContacts[i])
+    var old = oldContacts[i]
+
+    if (this._tick - old.tick < 3) { // less than 10s since we talked to this peer ...
+      this.nodes.add(oldContacts[i])
+      continue
+    }
+
+    reping.push(old)
+  }
+
+  if (reping.length) this._reping(reping, newContact)
+}
+
+DHT.prototype._reping = function (oldContacts, newContact) {
+  var self = this
+  var next = null
+
+  ping()
+
+  function ping () {
+    next = oldContacts.shift()
+    if (next) self._request({command: '_ping', id: self.id}, next, true, afterPing)
+  }
+
+  function afterPing (err) {
+    if (!err) return ping()
+
+    self.nodes.remove(next)
+    self.nodes.add(newContact)
   }
 }
 
@@ -273,7 +315,13 @@ DHT.prototype._token = function (peer, i) {
 
 DHT.prototype._addNode = function (id, peer, token) {
   if (bufferEquals(id, this.id)) return
-  this.nodes.add({id: id, roundtripToken: token, port: peer.port, host: peer.host})
+  this.nodes.add({
+    id: id,
+    port: peer.port,
+    host: peer.host,
+    roundtripToken: token,
+    tick: this._tick
+  })
 }
 
 DHT.prototype.listen = function (port, cb) {
@@ -281,6 +329,15 @@ DHT.prototype.listen = function (port, cb) {
 }
 
 function noop () {}
+
+function once (cb) {
+  var called = false
+  return function (err, val) {
+    if (called) return
+    called = true
+    cb(err, val)
+  }
+}
 
 function decodeNodes (buf) {
   if (!buf) return []
@@ -311,4 +368,8 @@ function parseAddr (addr) {
 
 function validateId (id) {
   return id && id.length === 32
+}
+
+function arbiter (incumbant, candidate) {
+  return candidate
 }

@@ -1,4 +1,5 @@
-require('crypto').randomBytes = randomBytes = require('random-bytes-seed')()
+var seed = new Buffer('2fd346fe907c29d215838c1bac0719f05010dda530a825dcac36081040db6acb', 'hex')
+require('crypto').randomBytes = require('random-bytes-seed')(seed)
 // new Buffer('bc2cee9806f1408a4d09821a2478f593d8f08e27b4000c61e3672a1b6a42a5fa', 'hex')
 
 var dht = require('./')
@@ -6,8 +7,9 @@ var dht = require('./')
 // bootstrap
 dht().listen(10000)
 
-var hash = require('crypto').createHash('sha256').update('hello world').digest()
-var missing = 1000
+var value = new Buffer('hello world')
+var hash = require('crypto').createHash('sha256').update(value).digest()
+var missing = 100
 var KBucket = require('k-bucket')
 var bingo = (0.6 * missing) | 0 //(Math.random() * missing) | 0
 var t
@@ -16,19 +18,17 @@ loop(0)
 
 function createNode (i) {
   var node = dht({bootstrap: 10000})
+  var store = {}
 
-  node.on('query', function (query, cb) {
-    if (query.command === 'put' && query.roundtripToken) {
-      console.log('got put command', query)
-      return cb()
-    }
-
-    if (query.command === 'get') {
-      console.log('got get command', query)
-      return cb()
-    }
-
+  node.on('closest', function (request, cb) {
+    console.log('storing')
+    store[request.target.toString('hex')] = request.value
     cb()
+  })
+
+  node.on('query', function (request, cb) {
+    var value = store[request.target.toString('hex')]
+    cb(null, value)
   })
 
   return node
@@ -53,39 +53,74 @@ function loop (i) {
   // })
 }
 
-function update (node, nodes, request, cb) {
-  var missing = nodes.length
-
-  for (var i = 0; i < nodes.length; i++) {
-    var req = {
-      id: node.id,
-      command: request.command,
-      target: request.target,
-      value: request.value,
-      roundtripToken: nodes[i].roundtripToken
-    }
-
-    node._request(req, nodes[i], done)
-  }
-
-  function done (err, res) {
-    if (--missing) return
-    cb()
-  }
-}
-
 function test () {
   var node = dht({bootstrap: 10000})
 
   node.on('ready', function () {
     console.log('ready')
 
+    node.closest({
+      command: 'store',
+      target: hash,
+      value: value
+    }, function (err, responses) {
+      console.log(err)
+      console.log('stored on ' + responses.length + ' peers')
+
+      var peers = 0
+      var node2 = dht({bootstrap: 10000})
+
+      node2.on('ready', function () {
+        console.log('ready to query')
+
+        var s = node2.query({
+          command: 'lookup',
+          target: hash
+        })
+        // s._debug = true
+
+        s.on('data', function (data) {
+          peers++
+          if (data.value) {
+            console.log(hash.toString('hex') + ' --> ' + data.value.toString(), '(' + peers + ' messages)')
+            console.log(data)
+            s.destroy()
+          }
+        })
+
+        s.on('end', function () {
+          console.log('(no more data)')
+        })
+      })
+    })
+
+    return
+
+    // var qs = node.query({
+    //   command: '_find_node',
+    //   target: hash
+    // }, {
+    //   concurrency: 1
+    // })
+
+    // qs.on('end', function () {
+    //   console.log('(end)')
+    // })
+
+    // loop()
+
+    // function loop () {
+    //   var data = qs.read()
+    //   if (data) console.log('data', data)
+    //   setTimeout(loop, 1000)
+    // }
+
+    // return
+
     var messages = 0
-    var qs = require('./query-stream')(node, {
+    var qs = node.query({
       command: '_find_node',
       target: hash
-    }, {
-      concurrency: 3
     })
 
     qs.on('data', function (data) {
@@ -96,7 +131,21 @@ function test () {
       console.log('(end)', '(used ' + messages + ')')
       console.log('seed', randomBytes.seed.toString('hex'))
 
-      console.log('closest', qs.closest)
+      // console.log('closest', qs.closest)
+      update(node, qs.closest, {command: 'put', target: hash, value: value}, function () {
+        node.query({
+          command: 'get',
+          target: hash
+        }).on('data', function (data) {
+          if (data.value) {
+            console.log('->', data.value)
+            this.destroy()
+          }
+        }).on('end', function () {
+          console.log('(get query done)')
+        })
+      })
+
 
       // node._closest({command: '_find_node', target: hash}, onresponse, function () {
       //   console.log('(end2)')

@@ -1,6 +1,5 @@
 var stream = require('readable-stream')
 var inherits = require('inherits')
-var KBucket = require('k-bucket')
 var nodes = require('ipv4-peers').idLength(32)
 var bufferEquals = require('buffer-equals')
 var xor = require('xor-distance')
@@ -16,26 +15,31 @@ function QueryStream (dht, query, opts) {
   stream.Readable.call(this, {objectMode: true, highWaterMark: opts.concurrency})
 
   var self = this
+  var nodes = opts.node || opts.nodes
 
-  this.request = query
-  this.request.id = dht.id
-  this.target = this.request.target
-  this.destroyed = false
+  this.query = query
+  this.query.id = dht.id
+  this.target = query.target
+  this.token = !!opts.token
   this.responses = 0
   this.errors = 0
-  this.closest = []
+  this.destroyed = false
+  this.verbose = !!opts.verbose
 
-  this._post = opts.post
   this._dht = dht
-  this._bootstrapped = false
+  this._committing = false
+  this._closest = opts.closest || []
   this._concurrency = opts.concurrency
+  this._updating = false
+  this._pending = nodes ? [].concat(nodes).map(copyNode) : []
+  this._k = nodes ? Infinity : opts.k || 20
   this._inflight = 0
-  this._k = 20
+  this._moveCloser = !nodes
+  this._bootstrapped = !this._moveCloser
   this._onresponse = onresponse
-  this._pending = []
 
-  function onresponse (err, response, peer) {
-    self._update(err, response, peer)
+  function onresponse (err, res, peer) {
+    self._callback(err, res, peer)
   }
 }
 
@@ -53,35 +57,77 @@ QueryStream.prototype._bootstrap = function () {
   this._bootstrapped = true
 
   var bootstrap = this._dht.nodes.closest(this.target, this._k)
+  var i = 0
 
-  for (var i = 0; i < bootstrap.length; i++) {
+  for (i = 0; i < bootstrap.length; i++) {
     var b = bootstrap[i]
     this._addPending({id: b.id, port: b.port, host: b.host})
   }
 
   if (bootstrap.length < this._dht.bootstrap.length) {
-    for (var i = 0; i < this._dht.bootstrap.length; i++) {
-      this._send(this._dht.bootstrap[i], true)
+    for (i = 0; i < this._dht.bootstrap.length; i++) {
+      this._send(this._dht.bootstrap[i], true, false)
     }
   }
 }
 
-QueryStream.prototype._update = function (err, res, peer) {
+QueryStream.prototype._readMaybe = function () {
+  if (this._readableState.flowing === true) this._read()
+}
+
+QueryStream.prototype._sendTokens = function () {
+  if (this.destroyed) return
+
+  var sent = this._sendAll(this._closest, false, true)
+  if (sent || this._inflight) return
+
+  this.push(null)
+}
+
+QueryStream.prototype._sendPending = function () {
+  if (this.destroyed) return
+  if (!this._bootstrapped) this._bootstrap()
+
+  var sent = this._sendAll(this._pending, false, false)
+  if (sent || this._inflight) return
+
+  if (this.token) {
+    for (var i = 0; i < this._closest.length; i++) this._closest[i].queried = false
+    this._committing = true
+    this._sendTokens()
+  } else {
+    this.push(null)
+  }
+}
+
+QueryStream.prototype._read = function () {
+  if (this._committing) this._sendTokens()
+  else this._sendPending()
+}
+
+QueryStream.prototype._callback = function (err, res, peer) {
   this._inflight--
   if (this.destroyed) return
 
   if (err) {
     this.errors++
     this.emit('warning', err)
-    if (this._readableState.flowing === true) this._read()
+    this._readMaybe()
     return
   }
 
   this.responses++
   this._addClosest(res, peer)
 
-  var candidates = decodeNodes(res.nodes)
-  for (var i = 0; i < candidates.length; i++) this._addPending(candidates[i])
+  if (this._moveCloser) {
+    var candidates = decodeNodes(res.nodes)
+    for (var i = 0; i < candidates.length; i++) this._addPending(candidates[i])
+  }
+
+  if (this.token && !this.verbose && !this._committing) {
+    this._readMaybe()
+    return
+  }
 
   this.push({
     node: {
@@ -93,32 +139,44 @@ QueryStream.prototype._update = function (err, res, peer) {
   })
 }
 
-QueryStream.prototype._read = function () {
-  if (this.destroyed) return
-  if (!this._bootstrapped) this._bootstrap()
-
+QueryStream.prototype._sendAll = function (nodes, force, useToken) {
+  var sent = 0
   var free = Math.max(0, this._concurrency - this._dht.socket.inflight)
+
   if (!free && !this._inflight) free = 1
-  var missing = free
+  if (!free) return 0
 
-  for (var i = 0; missing && i < this._pending.length; i++) {
-    if (this._pending[i].queried) continue
-    missing--
-    this._send(this._pending[i], false)
+  for (var i = 0; i < nodes.length; i++) {
+    if (this._send(nodes[i], force, useToken)) {
+      if (++sent === free) break
+    }
   }
 
-  if (!this._inflight && free) {
-    this.push(null)
-  }
+  return sent
 }
 
-QueryStream.prototype._send = function (node, bootstrap) {
-  if (!bootstrap) {
-    if (node.queried) return
+QueryStream.prototype._send = function (node, force, useToken) {
+  if (!force) {
+    if (node.queried) return false
     node.queried = true
   }
+
   this._inflight++
-  this._dht._request(this.request, node, false, this._onresponse)
+
+  var query = this.query
+
+  if (useToken && node.roundtripToken) {
+    query = {
+      command: this.query.command,
+      id: this.query.id,
+      target: this.query.target,
+      value: this.query.value,
+      roundtripToken: node.roundtripToken
+    }
+  }
+
+  this._dht._request(query, node, false, this._onresponse)
+  return true
 }
 
 QueryStream.prototype._addPending = function (node) {
@@ -142,7 +200,7 @@ QueryStream.prototype._addClosest = function (res, peer) {
   }
 
   prev.roundtripToken = res.roundtripToken
-  insertSorted(prev, this._k, this.closest)
+  insertSorted(prev, this._k, this._closest)
 }
 
 function decodeNodes (buf) {
@@ -177,5 +235,15 @@ function insertSorted (node, max, list) {
     list[pos] = list[pos - 1]
     list[pos - 1] = node
     pos--
+  }
+}
+
+function copyNode (node) {
+  return {
+    id: node.id,
+    port: node.port,
+    host: node.host,
+    roundtripToken: node.roundtripToken,
+    referer: node.referer // TODO: is this the correct spelling?
   }
 }
