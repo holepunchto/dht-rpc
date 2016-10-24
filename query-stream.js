@@ -18,7 +18,7 @@ function QueryStream (dht, query, opts) {
   var nodes = opts.node || opts.nodes
 
   this.query = query
-  this.query.id = dht.id
+  this.query.id = dht._queryId
   this.target = query.target
   this.token = !!opts.token
   this.responses = 0
@@ -244,6 +244,6 @@ function copyNode (node) {
     port: node.port,
     host: node.host,
     roundtripToken: node.roundtripToken,
-    referer: node.referer // TODO: is this the correct spelling?
+    referrer: node.referrer
   }
 }

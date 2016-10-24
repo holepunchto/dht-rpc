@@ -9,7 +9,7 @@ dht().listen(10000)
 
 var value = new Buffer('hello world')
 var hash = require('crypto').createHash('sha256').update(value).digest()
-var missing = 100
+var missing = 1000
 var KBucket = require('k-bucket')
 var bingo = (0.6 * missing) | 0 //(Math.random() * missing) | 0
 var t
@@ -20,13 +20,13 @@ function createNode (i) {
   var node = dht({bootstrap: 10000})
   var store = {}
 
-  node.on('closest', function (request, cb) {
+  node.on('closest:store', function (request, cb) {
     console.log('storing')
     store[request.target.toString('hex')] = request.value
     cb()
   })
 
-  node.on('query', function (request, cb) {
+  node.on('query:lookup', function (request, cb) {
     var value = store[request.target.toString('hex')]
     cb(null, value)
   })

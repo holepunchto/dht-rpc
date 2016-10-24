@@ -24,6 +24,7 @@ function DHT (opts) {
   this.concurrency = opts.concurrency || 16
   this.bootstrap = [].concat(opts.bootstrap || []).map(parseAddr)
   this.id = opts.id || crypto.randomBytes(32)
+  this.ephemeral = !!opts.ephemeral
   this.nodes = new KBucket({localNodeId: this.id, arbiter: arbiter})
   this.nodes.on('ping', onnodeping)
 
@@ -36,6 +37,7 @@ function DHT (opts) {
   this.socket.on('response', onresponse)
   this.socket.on('close', onclose)
 
+  this._queryId = this.ephemeral ? null : this.id
   this._bootstrapped = false
   this._pendingRequests = []
   this._tick = 0
@@ -168,7 +170,7 @@ DHT.prototype._bootstrap = function () {
 }
 
 DHT.prototype._ping = function (peer, cb) {
-  this._request({command: '_ping', id: this.id}, peer, false, cb)
+  this._request({command: '_ping', id: this._queryId}, peer, false, cb)
 }
 
 DHT.prototype._request = function (request, peer, important, cb) {
@@ -230,7 +232,7 @@ DHT.prototype._onquery = function (request, peer) {
     // TODO: support errors?
 
     var res = {
-      id: self.id,
+      id: self._queryId,
       value: value || null,
       nodes: nodes.encode(self.nodes.closest(request.target, 20)),
       roundtripToken: self._token(peer, 0)
@@ -251,7 +253,7 @@ DHT.prototype._onresponse = function (response, peer) {
 
 DHT.prototype._onping = function (request, peer) {
   var res = {
-    id: this.id,
+    id: this._queryId,
     value: peers.encode([peer]),
     roundtripToken: this._token(peer, 0)
   }
@@ -263,7 +265,7 @@ DHT.prototype._onfindnode = function (request, peer) {
   if (!validateId(request.target)) return
 
   var res = {
-    id: this.id,
+    id: this._queryId,
     nodes: nodes.encode(this.nodes.closest(request.target, 20)),
     roundtripToken: this._token(peer, 0)
   }
@@ -298,7 +300,7 @@ DHT.prototype._reping = function (oldContacts, newContact) {
 
   function ping () {
     next = oldContacts.shift()
-    if (next) self._request({command: '_ping', id: self.id}, next, true, afterPing)
+    if (next) self._request({command: '_ping', id: self._queryId}, next, true, afterPing)
   }
 
   function afterPing (err) {
