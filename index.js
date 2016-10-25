@@ -30,6 +30,7 @@ function DHT (opts) {
   this.inflightQueries = 0
 
   this.socket = udp({
+    socket: opts.socket,
     requestEncoding: messages.Request,
     responseEncoding: messages.Response
   })
@@ -86,6 +87,11 @@ function DHT (opts) {
 
 inherits(DHT, events.EventEmitter)
 
+DHT.prototype.ready = function (cb) {
+  if (this.bootstrapping) this.once('ready', cb)
+  else cb()
+}
+
 DHT.prototype.query = function (query, opts, cb) {
   if (typeof opts === 'function') return this.query(query, null, opts)
   return collect(queryStream(this, query, opts), cb)
@@ -121,6 +127,10 @@ DHT.prototype._closestNodes = function (target, opts, cb) {
   })
 
   return qs
+}
+
+DHT.prototype.holepunch = function (peer, referrer, cb) {
+  this._holepunch(parseAddr(peer), parseAddr(referrer), cb)
 }
 
 DHT.prototype.ping = function (peer, cb) {
@@ -404,6 +414,7 @@ function decodePeer (buf) {
 }
 
 function parseAddr (addr) {
+  if (typeof addr === 'object' && addr) return addr
   if (typeof addr === 'number') return parseAddr(':' + addr)
   if (addr[0] === ':') return parseAddr('127.0.0.1' + addr)
   return {port: Number(addr.split(':')[1] || 3282), host: addr.split(':')[0]}
