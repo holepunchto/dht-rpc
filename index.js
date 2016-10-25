@@ -181,6 +181,10 @@ DHT.prototype._ping = function (peer, cb) {
   this._request({command: '_ping', id: this._queryId}, peer, false, cb)
 }
 
+DHT.prototype._holepunch = function (peer, referrer, cb) {
+  this._request({command: '_ping', id: this._queryId, forwardRequest: peers.encode([peer])}, referrer, false, cb)
+}
+
 DHT.prototype._request = function (request, peer, important, cb) {
   if (this.socket.inflight >= this.concurrency || this._pendingRequests.length) {
     this._pendingRequests.push({request: request, peer: peer, callback: cb})
@@ -192,16 +196,6 @@ DHT.prototype._request = function (request, peer, important, cb) {
 DHT.prototype._onrequest = function (request, peer) {
   if (validateId(request.id)) this._addNode(request.id, peer, request.roundtripToken)
 
-  var forwardRequest = decodePeer(request.forwardRequest)
-  if (forwardRequest) { // TODO: security stuff
-    console.error('TODO: [forward request]', forwardRequest)
-  }
-
-  var forwardResponse = decodePeer(request.forwardResponse)
-  if (forwardResponse) {
-    console.error('TODO: [forward response]', forwardResponse)
-  }
-
   if (request.roundtripToken) {
     if (!bufferEquals(request.roundtripToken, this._token(peer, 0))) {
       if (!bufferEquals(request.roundtripToken, this._token(peer, 1))) {
@@ -210,12 +204,51 @@ DHT.prototype._onrequest = function (request, peer) {
     }
   }
 
+  if (request.forwardRequest) {
+    this._forwardRequest(request, peer)
+    return
+  }
+
+  if (request.forwardResponse) peer = this._forwardResponse(request, peer)
+
   switch (request.command) {
     case '_ping': return this._onping(request, peer)
     case '_find_node': return this._onfindnode(request, peer)
   }
 
   this._onquery(request, peer)
+}
+
+DHT.prototype._forwardResponse = function (request, peer) {
+  if (request.command !== '_ping') return // only allow ping for now
+
+  try {
+    var from = peers.decode(request.forwardResponse)[0]
+    if (!from) return
+  } catch (err) {
+    return
+  }
+
+  from.request = true
+  from.tid = peer.tid
+
+  return from
+}
+
+DHT.prototype._forwardRequest = function (request, peer) {
+  if (request.command !== '_ping') return // only allow ping forwards right now
+
+  try {
+    var to = peers.decode(request.forwardRequest)[0]
+    if (!to) return
+  } catch (err) {
+    return
+  }
+
+  this.emit('holepunch', peer, to)
+  request.forwardRequest = null
+  request.forwardResponse = peers.encode([peer])
+  this.socket.forwardRequest(request, peer, to)
 }
 
 DHT.prototype._onquery = function (request, peer) {
