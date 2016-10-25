@@ -161,10 +161,10 @@ DHT.prototype._rotateSecrets = function () {
 DHT.prototype._bootstrap = function () {
   // TODO: run in the background
   // TODO: check stats, to determine wheather to rerun?
+  var self = this
 
   if (!this.bootstrap.length) return process.nextTick(done)
 
-  var self = this
   var backgroundCon = Math.min(self.concurrency, Math.max(2, Math.floor(self.concurrency / 8)))
   var qs = this.query({
     command: '_find_node',
