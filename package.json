@@ -1,0 +1,34 @@
+{
+  "name": "hyperdht",
+  "version": "0.0.0",
+  "description": "WIP dht based on kademlia, with a focus on extensibility + modularity",
+  "main": "index.js",
+  "dependencies": {
+    "buffer-equals": "^1.0.4",
+    "duplexify": "^3.5.0",
+    "inherits": "^2.0.3",
+    "ipv4-peers": "^1.1.1",
+    "k-bucket": "^3.2.1",
+    "protocol-buffers": "^3.1.6",
+    "readable-stream": "^2.1.5",
+    "stream-collector": "^1.0.1",
+    "udp-request": "^1.2.0",
+    "xor-distance": "^1.0.0"
+  },
+  "devDependencies": {
+    "standard": "^8.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mafintosh/hyperdht.git"
+  },
+  "scripts": {
+    "test": "standard"
+  },
+  "author": "Mathias Buus (@mafintosh)",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/mafintosh/hyperdht/issues"
+  },
+  "homepage": "https://github.com/mafintosh/hyperdht"
+}
