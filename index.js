@@ -162,6 +162,8 @@ DHT.prototype._bootstrap = function () {
   // TODO: run in the background
   // TODO: check stats, to determine wheather to rerun?
 
+  if (!this.bootstrap.length) return process.nextTick(done)
+
   var self = this
   var backgroundCon = Math.min(self.concurrency, Math.max(2, Math.floor(self.concurrency / 8)))
   var qs = this.query({
@@ -175,12 +177,14 @@ DHT.prototype._bootstrap = function () {
     self.emit('error', err)
   })
 
-  qs.on('end', function () {
-    self._bootstrapped = true
-    self.emit('ready')
-  })
+  qs.on('end', done)
 
   update()
+
+  function done () {
+    self._bootstrapped = true
+    self.emit('ready')
+  }
 
   function update () {
     qs._concurrency = self.inflightQueries === 1 ? self.concurrency : backgroundCon
