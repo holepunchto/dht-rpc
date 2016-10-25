@@ -26,8 +26,11 @@ function QueryStream (dht, query, opts) {
   this.destroyed = false
   this.verbose = !!opts.verbose
 
+  dht.inflightQueries++
+
   this._dht = dht
   this._committing = false
+  this._finalized = false
   this._closest = opts.closest || []
   this._concurrency = opts.concurrency
   this._updating = false
@@ -48,9 +51,16 @@ inherits(QueryStream, stream.Readable)
 QueryStream.prototype.destroy = function (err) {
   if (this.destroyed) return
   this.destroyed = true
-  this.push(null)
+  this._finalize()
   if (err) this.emit('error', err)
   this.emit('close')
+}
+
+QueryStream.prototype._finalize = function () {
+  if (this._finalized) return
+  this._finalized = true
+  this._dht.inflightQueries--
+  this.push(null)
 }
 
 QueryStream.prototype._bootstrap = function () {
@@ -81,7 +91,7 @@ QueryStream.prototype._sendTokens = function () {
   var sent = this._sendAll(this._closest, false, true)
   if (sent || this._inflight) return
 
-  this.push(null)
+  this._finalize()
 }
 
 QueryStream.prototype._sendPending = function () {
@@ -96,7 +106,7 @@ QueryStream.prototype._sendPending = function () {
     this._committing = true
     this._sendTokens()
   } else {
-    this.push(null)
+    this._finalize()
   }
 }
 

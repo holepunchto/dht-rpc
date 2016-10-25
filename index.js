@@ -27,6 +27,7 @@ function DHT (opts) {
   this.ephemeral = !!opts.ephemeral
   this.nodes = new KBucket({localNodeId: this.id, arbiter: arbiter})
   this.nodes.on('ping', onnodeping)
+  this.inflightQueries = 0
 
   this.socket = udp({
     requestEncoding: messages.Request,
@@ -152,12 +153,13 @@ DHT.prototype._bootstrap = function () {
   // TODO: check stats, to determine wheather to rerun?
 
   var self = this
+  var backgroundCon = Math.min(self.concurrency, Math.max(2, Math.floor(self.concurrency / 8)))
   var qs = this.query({
     command: '_find_node',
-    target: this.id
+    target: this.id,
   })
 
-  qs.resume()
+  qs.on('data', update)
 
   qs.on('error', function (err) {
     self.emit('error', err)
@@ -167,6 +169,12 @@ DHT.prototype._bootstrap = function () {
     self._bootstrapped = true
     self.emit('ready')
   })
+
+  update()
+
+  function update () {
+    qs._concurrency = self.inflightQueries === 1 ? self.concurrency : backgroundCon
+  }
 }
 
 DHT.prototype._ping = function (peer, cb) {
