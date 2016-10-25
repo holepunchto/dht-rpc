@@ -357,7 +357,7 @@ DHT.prototype._reping = function (oldContacts, newContact) {
   function afterPing (err) {
     if (!err) return ping()
 
-    self.nodes.remove(next)
+    self.nodes.remove(next.id)
     self.nodes.add(newContact)
   }
 }
