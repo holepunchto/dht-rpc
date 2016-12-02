@@ -22,6 +22,7 @@ function QueryStream (dht, query, opts) {
   this.target = query.target
   this.token = !!opts.token
   this.holepunching = opts.holepunching !== false
+  this.commits = 0
   this.responses = 0
   this.errors = 0
   this.destroyed = false
@@ -68,6 +69,7 @@ QueryStream.prototype._finalize = function () {
   this._finalized = true
   this._dht.inflightQueries--
   if (!this.responses && !this.destroyed) this.destroy(new Error('No nodes responded'))
+  if (!this.commits && this._committing && !this.destroyed) this.destroy(new Error('No close nodes responded'))
   this.push(null)
 }
 
@@ -144,6 +146,7 @@ QueryStream.prototype._callback = function (err, res, peer) {
   }
 
   this.responses++
+  if (this._committing) this.commits++
   this._addClosest(res, peer)
 
   if (this._moveCloser) {
@@ -202,7 +205,6 @@ QueryStream.prototype._send = function (node, force, useToken) {
     }
   }
 
-  var s = this
   this._dht._request(query, node, false, this.holepunching ? this._onresponseholepunch : this._onresponse)
   return true
 }
