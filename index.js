@@ -5,7 +5,6 @@ var inherits = require('inherits')
 var events = require('events')
 var peers = require('ipv4-peers')
 var bufferEquals = require('buffer-equals')
-var duplexify = require('duplexify')
 var collect = require('stream-collector')
 var nodes = peers.idLength(32)
 var messages = require('./messages')
@@ -82,6 +81,7 @@ function DHT (opts) {
 
   function tick () {
     self._tick++
+    if ((self._tick & 7) === 0) self._pingSome()
   }
 }
 
@@ -102,6 +102,10 @@ DHT.prototype.closest = function (query, opts, cb) {
   if (!opts) opts = {}
   opts.token = true
   return collect(queryStream(this, query, opts), cb)
+}
+
+DHT.prototype._pingSome = function () {
+  // console.log('ping some ...')
 }
 
 DHT.prototype._closestNodes = function (target, opts, cb) {
@@ -168,7 +172,7 @@ DHT.prototype._bootstrap = function () {
   var backgroundCon = Math.min(self.concurrency, Math.max(2, Math.floor(self.concurrency / 8)))
   var qs = this.query({
     command: '_find_node',
-    target: this.id,
+    target: this.id
   })
 
   qs.on('data', update)
@@ -196,13 +200,14 @@ DHT.prototype._ping = function (peer, cb) {
 }
 
 DHT.prototype._holepunch = function (peer, referrer, cb) {
-  this._request({command: '_ping', id: this._queryId, forwardRequest: peers.encode([peer])}, referrer, false, cb)
+  this._request({command: '_ping', id: this._queryId, forwardRequest: encodePeer(peer)}, referrer, false, cb)
 }
 
 DHT.prototype._request = function (request, peer, important, cb) {
   if (this.socket.inflight >= this.concurrency || this._pendingRequests.length) {
     this._pendingRequests.push({request: request, peer: peer, callback: cb})
   } else {
+    // console.log('sending', peer)
     this.socket.request(request, peer, cb)
   }
 }
@@ -261,7 +266,7 @@ DHT.prototype._forwardRequest = function (request, peer) {
 
   this.emit('holepunch', peer, to)
   request.forwardRequest = null
-  request.forwardResponse = peers.encode([peer])
+  request.forwardResponse = encodePeer(peer)
   this.socket.forwardRequest(request, peer, to)
 }
 
@@ -284,7 +289,7 @@ DHT.prototype._onquery = function (request, peer) {
   if (!this.emit(method + ':' + request.command, query, callback) && !this.emit(method, query, callback)) callback()
 
   function callback (err, value) {
-    // TODO: support errors?
+    if (err) return
 
     var res = {
       id: self._queryId,
@@ -309,7 +314,7 @@ DHT.prototype._onresponse = function (response, peer) {
 DHT.prototype._onping = function (request, peer) {
   var res = {
     id: this._queryId,
-    value: peers.encode([peer]),
+    value: encodePeer(peer),
     roundtripToken: this._token(peer, 0)
   }
 
@@ -386,24 +391,6 @@ DHT.prototype.listen = function (port, cb) {
 }
 
 function noop () {}
-
-function once (cb) {
-  var called = false
-  return function (err, val) {
-    if (called) return
-    called = true
-    cb(err, val)
-  }
-}
-
-function decodeNodes (buf) {
-  if (!buf) return []
-  try {
-    return nodes.decode(buf)
-  } catch (err) {
-    return []
-  }
-}
 
 function encodePeer (peer) {
   return peer && peers.encode([peer])
