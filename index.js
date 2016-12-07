@@ -45,6 +45,8 @@ function DHT (opts) {
   this._secrets = [crypto.randomBytes(32), crypto.randomBytes(32)]
   this._secretsInterval = setInterval(rotateSecrets, 5 * 60 * 1000)
   this._tickInterval = setInterval(tick, 5 * 1000)
+  this._top = null
+  this._bottom = null
 
   if (opts.nodes) {
     for (var i = 0; i < opts.nodes.length; i++) {
@@ -105,7 +107,17 @@ DHT.prototype.closest = function (query, opts, cb) {
 }
 
 DHT.prototype._pingSome = function () {
-  // console.log('ping some ...')
+  var all = this.nodes.toArray()
+  if (!all.length) return
+
+  var cnt = this.inflightQueries > 2 ? 1 : 3
+  var oldest = this._bottom
+
+  while (cnt--) {
+    if (!oldest || this._tick - oldest.tick < 3) continue
+    this._check(oldest)
+    oldest = oldest.next
+  }
 }
 
 DHT.prototype._closestNodes = function (target, opts, cb) {
@@ -163,7 +175,6 @@ DHT.prototype._rotateSecrets = function () {
 }
 
 DHT.prototype._bootstrap = function () {
-  // TODO: run in the background
   // TODO: check stats, to determine wheather to rerun?
   var self = this
 
@@ -352,6 +363,13 @@ DHT.prototype._onnodeping = function (oldContacts, newContact) {
   if (reping.length) this._reping(reping, newContact)
 }
 
+DHT.prototype._check = function (node) {
+  var self = this
+  this._request({command: '_ping', id: this._queryId}, node, false, function (err) {
+    if (err) self._removeNode(node)
+  })
+}
+
 DHT.prototype._reping = function (oldContacts, newContact) {
   var self = this
   var next = null
@@ -366,7 +384,7 @@ DHT.prototype._reping = function (oldContacts, newContact) {
   function afterPing (err) {
     if (!err) return ping()
 
-    self.nodes.remove(next.id)
+    self._removeNode(next)
     self.nodes.add(newContact)
   }
 }
@@ -377,13 +395,29 @@ DHT.prototype._token = function (peer, i) {
 
 DHT.prototype._addNode = function (id, peer, token) {
   if (bufferEquals(id, this.id)) return
-  this.nodes.add({
-    id: id,
-    port: peer.port,
-    host: peer.host,
-    roundtripToken: token,
-    tick: this._tick
-  })
+
+  var node = this.nodes.get(id)
+  var fresh = !node
+
+  if (!node) node = {}
+
+  node.id = id,
+  node.port = peer.port,
+  node.host = peer.host,
+  node.roundtripToken = token,
+  node.tick = this._tick
+
+  if (!fresh) remove(this, node)
+  add(this, node)
+
+  this.nodes.add(node)
+  if (fresh) this.emit('add-node', node)
+}
+
+DHT.prototype._removeNode = function (node) {
+  remove(this, node)
+  this.nodes.remove(node.id)
+  this.emit('remove-node', node)
 }
 
 DHT.prototype.listen = function (port, cb) {
@@ -417,4 +451,33 @@ function validateId (id) {
 
 function arbiter (incumbant, candidate) {
   return candidate
+}
+
+function remove (self, node) {
+  if (self._bottom !== node && self._top !== node) {
+    node.prev.next = node.next
+    node.next.prev = node.prev
+    node.next = node.prev = null
+  } else {
+    if (self._bottom === node) {
+      self._bottom = node.next
+      if (self._bottom) self._bottom.prev = null
+    }
+    if (self._top === node) {
+      self._top = node.prev
+      if (self._top) self._top.next = null
+    }
+  }
+}
+
+function add (self, node) {
+  if (!self._top && !self._bottom) {
+    self._top = self._bottom = node
+    node.prev = node.next = null
+  } else {
+    self._top.next = node
+    node.prev = self._top
+    node.next = null
+    self._top = node
+  }
 }

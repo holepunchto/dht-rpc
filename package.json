@@ -1,7 +1,7 @@
 {
-  "name": "hyperdht",
+  "name": "dht-rpc",
   "version": "0.0.0",
-  "description": "WIP dht based on kademlia, with a focus on extensibility + modularity",
+  "description": "Make RPC calls over a Kademlia based DHT.",
   "main": "index.js",
   "dependencies": {
     "buffer-equals": "^1.0.4",
@@ -20,7 +20,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/mafintosh/hyperdht.git"
+    "url": "https://github.com/mafintosh/dht-rpc.git"
   },
   "scripts": {
     "test": "standard"
@@ -28,7 +28,7 @@
   "author": "Mathias Buus (@mafintosh)",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/mafintosh/hyperdht/issues"
+    "url": "https://github.com/mafintosh/dht-rpc/issues"
   },
-  "homepage": "https://github.com/mafintosh/hyperdht"
+  "homepage": "https://github.com/mafintosh/dht-rpc"
 }
