@@ -16,14 +16,15 @@
     "xor-distance": "^1.0.0"
   },
   "devDependencies": {
-    "standard": "^8.0.0"
+    "standard": "^8.6.0",
+    "tape": "^4.6.3"
   },
   "repository": {
     "type": "git",
     "url": "https://github.com/mafintosh/dht-rpc.git"
   },
   "scripts": {
-    "test": "standard"
+    "test": "standard && tape test.js"
   },
   "author": "Mathias Buus (@mafintosh)",
   "license": "MIT",

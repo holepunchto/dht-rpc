@@ -90,7 +90,7 @@ function DHT (opts) {
 inherits(DHT, events.EventEmitter)
 
 DHT.prototype.ready = function (cb) {
-  if (this.bootstrapping) this.once('ready', cb)
+  if (!this._bootstrapped) this.once('ready', cb)
   else cb()
 }
 
@@ -285,6 +285,8 @@ DHT.prototype._forwardRequest = function (request, peer) {
 }
 
 DHT.prototype._onquery = function (request, peer) {
+  if (!validateId(request.target)) return
+
   var self = this
   var query = {
     node: {
