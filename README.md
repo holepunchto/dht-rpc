@@ -5,6 +5,7 @@ Make RPC calls over a Kademlia based DHT.
 ```
 npm install dht-rpc
 ```
+[![build status](http://img.shields.io/travis/mafintosh/dht-rpc.svg?style=flat)](http://travis-ci.org/mafintosh/dht-rpc)
 
 ## Usage
 
