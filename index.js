@@ -168,6 +168,10 @@ DHT.prototype.destroy = function () {
   this.socket.destroy()
 }
 
+DHT.prototype.address = function () {
+  return this.socket.address()
+}
+
 DHT.prototype._rotateSecrets = function () {
   var secret = crypto.randomBytes(32)
   this._secrets[1] = this._secrets[0]
@@ -218,7 +222,6 @@ DHT.prototype._request = function (request, peer, important, cb) {
   if (this.socket.inflight >= this.concurrency || this._pendingRequests.length) {
     this._pendingRequests.push({request: request, peer: peer, callback: cb})
   } else {
-    // console.log('sending', peer)
     this.socket.request(request, peer, cb)
   }
 }
