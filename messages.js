@@ -1,21 +1,6 @@
+var fs = require('fs')
+var path = require('path')
 var protobuf = require('protocol-buffers')
-var messages = protobuf(`
-  message Request {
-    required string command = 1;
-    optional bytes id = 2;
-    optional bytes target = 3;
-    optional bytes forwardRequest = 4;
-    optional bytes forwardResponse = 5;
-    optional bytes roundtripToken = 6;
-    optional bytes value = 7;
-  }
-
-  message Response {
-    optional bytes id = 1;
-    optional bytes nodes = 2;
-    optional bytes value = 3;
-    optional bytes roundtripToken = 4;
-  }
-`)
+var messages = protobuf(fs.readFileSync(path.join(__dirname, 'schema.proto'), 'utf-8'))
 
 module.exports = messages
