@@ -401,10 +401,10 @@ DHT.prototype._addNode = function (id, peer, token) {
 
   if (!node) node = {}
 
-  node.id = id,
-  node.port = peer.port,
-  node.host = peer.host,
-  node.roundtripToken = token,
+  node.id = id
+  node.port = peer.port
+  node.host = peer.host
+  node.roundtripToken = token
   node.tick = this._tick
 
   if (!fresh) remove(this, node)
