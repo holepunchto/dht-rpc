@@ -179,6 +179,7 @@ DHT.prototype._rotateSecrets = function () {
 }
 
 DHT.prototype._bootstrap = function () {
+  // TODO: i'm guessing we need to rebootstrap after some timeout
   // TODO: check stats, to determine wheather to rerun?
   var self = this
 
@@ -191,11 +192,7 @@ DHT.prototype._bootstrap = function () {
   })
 
   qs.on('data', update)
-
-  qs.on('error', function (err) {
-    self.emit('error', err)
-  })
-
+  qs.on('error', noop) // noop this out as it'll bootstrap on subsequent runs
   qs.on('end', done)
 
   update()

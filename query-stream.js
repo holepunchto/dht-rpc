@@ -4,6 +4,11 @@ var nodes = require('ipv4-peers').idLength(32)
 var bufferEquals = require('buffer-equals')
 var xor = require('xor-distance')
 
+var BLANK = new Buffer([
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+])
+
 module.exports = QueryStream
 
 function QueryStream (dht, query, opts) {
@@ -275,10 +280,10 @@ function insertSorted (node, max, list) {
 
 function copyNode (node) {
   return {
-    id: node.id,
+    id: node.id || BLANK,
     port: node.port,
     host: node.host,
     roundtripToken: node.roundtripToken,
-    referrer: node.referrer
+    referrer: node.referrer || node.referer
   }
 }

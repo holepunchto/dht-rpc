@@ -64,6 +64,96 @@ tape('simple query', function (t) {
   })
 })
 
+tape('targeted query', function (t) {
+  bootstrap(function (port, node) {
+    var a = dht({bootstrap: port})
+
+    a.on('query:echo', function (data, cb) {
+      t.pass('in echo')
+      cb(null, data.value)
+    })
+
+    var b = dht({bootstrap: port})
+
+    b.on('query:echo', function (data, cb) {
+      t.fail('should not hit me')
+      cb()
+    })
+
+    a.ready(function () {
+      b.ready(function () {
+        var client = dht({bootstrap: port})
+
+        client.query({
+          command: 'echo',
+          value: new Buffer('hi'),
+          target: client.id
+        }, {
+          node: {
+            port: a.address().port,
+            host: '127.0.0.1'
+          }
+        }, function (err, responses) {
+          client.destroy()
+          a.destroy()
+          b.destroy()
+          node.destroy()
+
+          t.error(err, 'no error')
+          t.same(responses.length, 1, 'one response')
+          t.same(responses[0].value, new Buffer('hi'), 'echoed')
+          t.end()
+        })
+      })
+    })
+  })
+})
+
+tape('targeted closest', function (t) {
+  bootstrap(function (port, node) {
+    var a = dht({bootstrap: port})
+
+    a.on('closest:echo', function (data, cb) {
+      t.pass('in echo')
+      cb(null, data.value)
+    })
+
+    var b = dht({bootstrap: port})
+
+    b.on('closest:echo', function (data, cb) {
+      t.fail('should not hit me')
+      cb()
+    })
+
+    a.ready(function () {
+      b.ready(function () {
+        var client = dht({bootstrap: port})
+
+        client.closest({
+          command: 'echo',
+          value: new Buffer('hi'),
+          target: client.id
+        }, {
+          node: {
+            port: a.address().port,
+            host: '127.0.0.1'
+          }
+        }, function (err, responses) {
+          client.destroy()
+          a.destroy()
+          b.destroy()
+          node.destroy()
+
+          t.error(err, 'no error')
+          t.same(responses.length, 1, 'one response')
+          t.same(responses[0].value, new Buffer('hi'), 'echoed')
+          t.end()
+        })
+      })
+    })
+  })
+})
+
 tape('swarm query', function (t) {
   bootstrap(function (port, node) {
     var swarm = []
@@ -124,7 +214,7 @@ function bootstrap (done) {
     ephemeral: true
   })
 
-  node.listen(10000, function () {
+  node.listen(function () {
     done(node.address().port, node)
   })
 }
