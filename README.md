@@ -89,6 +89,72 @@ node.query({command: 'lookup', target: new Buffer(hexFromAbove, 'hex')})
   })
 ```
 
+## API
+
+#### `var node = dht([options])`
+
+Create a new DHT node. Options include
+
+``` js
+{
+  id: nodeId, // id of the node
+  ephemeral: false, // will this node answer queries?
+  bootstrap: ['host:port'], // bootstrap nodes
+  socket: udpSocket // optional udp socket
+}
+```
+
+#### `var stream = node.query(query, [options], [callback])`
+
+Create a new query. Query should look like this
+
+``` js
+{
+  command: 'command-to-run',
+  target: new Buffer('32 byte target'),
+  value: new Buffer('some payload')
+}
+```
+
+And options include
+
+``` js
+{
+  nodes: [{host: 'example.com', port: 4224}], // only contact these nodes
+  holepunching: true // set to false to disable hole punching
+}
+```
+
+The stream will emit query results as they arrive. If you backpressure the query it will backpressure the query as well.
+Call `.destroy()` on the stream to cancel the query. If you pass the callback the streams payload will be buffered and passed to that.
+
+#### `var stream = node.closest(query, [options], [callback])`
+
+Same as a query but will trigger a closest query on the 20 closest nodes (distance between node ids and target) after the query finishes.
+Per default the stream will only contain results from the closest query. To include the query results also pass the `verbose: true` option.
+
+#### `node.on('query:{command}', data, callback)`
+
+Called when a specific query is invoked on a node. `data` contains the same values as in the query above and also a `.node` property with info about the node invoking the query.
+
+Call the callback with `(err, value)` to respond.
+
+#### `node.on('closest:{command}', data, callback)`
+
+Called when a closest query is invoked. The `data.node` is also guaranteed to have roundtripped to this dht before, meaning that you can trust that the host, port was not spoofed.
+
+#### `node.ready(callback)`
+
+Makes sure the initial bootstrap table has been built. You do not need to wait for this before querying.
+
+#### `node.holepunch(peer, referrer, callback)`
+
+UDP hole punch to another peer using the `referrer` as a STUN server.
+
+#### `node.destroy()`
+
+Destroy the dht node. Releases all resources.
+
 ## License
 
 MIT
