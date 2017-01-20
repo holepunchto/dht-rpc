@@ -1,6 +1,6 @@
 # dht-rpc
 
-Make RPC calls over a Kademlia based DHT.
+Make RPC calls over a [Kademlia](https://pdos.csail.mit.edu/~petar/papers/maymounkov-kademlia-lncs.pdf) based DHT.
 
 ```
 npm install dht-rpc
