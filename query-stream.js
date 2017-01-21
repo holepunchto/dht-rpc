@@ -73,6 +73,7 @@ QueryStream.prototype._finalize = function () {
   if (this._finalized) return
   this._finalized = true
   this._dht.inflightQueries--
+  if (!this.responses && !this.destroyed) this.destroy(new Error('No nodes responded'))
   if (!this.commits && this._committing && !this.destroyed) this.destroy(new Error('No close nodes responded'))
   this.push(null)
 }
