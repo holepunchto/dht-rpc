@@ -99,9 +99,10 @@ DHT.prototype.query = function (query, opts, cb) {
   return collect(queryStream(this, query, opts), cb)
 }
 
-DHT.prototype.closest = function (query, opts, cb) {
-  if (typeof opts === 'function') return this.closest(query, null, opts)
+DHT.prototype.update = function (query, opts, cb) {
+  if (typeof opts === 'function') return this.update(query, null, opts)
   if (!opts) opts = {}
+  if (opts.query) opts.verbose = true
   opts.token = true
   return collect(queryStream(this, query, opts), cb)
 }
@@ -118,31 +119,6 @@ DHT.prototype._pingSome = function () {
     this._check(oldest)
     oldest = oldest.next
   }
-}
-
-DHT.prototype._closestNodes = function (target, opts, cb) {
-  var nodes = opts.nodes || opts.node
-
-  if (nodes) {
-    if (!Array.isArray(nodes)) nodes = [nodes]
-    process.nextTick(function () {
-      cb(null, nodes)
-    })
-    return null
-  }
-
-  var qs = this.get({
-    command: '_find_node',
-    target: target
-  })
-
-  qs.resume()
-  qs.on('error', noop)
-  qs.on('end', function () {
-    cb(null, qs.closest)
-  })
-
-  return qs
 }
 
 DHT.prototype.holepunch = function (peer, referrer, cb) {
@@ -297,7 +273,7 @@ DHT.prototype._onquery = function (request, peer) {
     roundtripToken: request.roundtripToken
   }
 
-  var method = request.roundtripToken ? 'closest' : 'query'
+  var method = request.roundtripToken ? 'update' : 'query'
 
   if (!this.emit(method + ':' + request.command, query, callback) && !this.emit(method, query, callback)) callback()
 

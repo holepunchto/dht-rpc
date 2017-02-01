@@ -39,7 +39,7 @@ function createNode () {
   var values = {}
 
   // When we are the closest node and someone is sending us a "store" command
-  node.on('closest:store', function (query, cb) {
+  node.on('update:values', function (query, cb) {
     if (!query.value) return cb()
 
     // Use the hash of the value as the key
@@ -50,7 +50,7 @@ function createNode () {
   })
 
   // When someone is querying for a "lookup" command
-  node.on('query:lookup', function (query, cb) {
+  node.on('query:values', function (query, cb) {
     var value = values[query.target.toString('hex')]
     cb(null, value)
   })
@@ -67,7 +67,7 @@ To insert a value into this dht make another script that does this following
 // Set ephemeral: true as we are not part of the network.
 var node = dht({ephemeral: true})
 
-node.closest({command: 'store', target: sha256(val), value: val}, function (err, res) {
+node.update({command: 'values', target: sha256(val), value: val}, function (err, res) {
   if (err) throw err
   console.log('Inserted', sha256(val).toString('hex'))
 })
@@ -76,7 +76,7 @@ node.closest({command: 'store', target: sha256(val), value: val}, function (err,
 Then after inserting run this script to query for a value
 
 ``` js
-node.query({command: 'lookup', target: new Buffer(hexFromAbove, 'hex')})
+node.query({command: 'values', target: new Buffer(hexFromAbove, 'hex')})
   .on('data', function (data) {
     if (data.value && sha256(data.value).toString('hex') === hexFromAbove) {
       // We found the value! Destroy the query stream as there is no need to continue.
@@ -128,10 +128,10 @@ And options include
 The stream will emit query results as they arrive. If you backpressure the query it will backpressure the query as well.
 Call `.destroy()` on the stream to cancel the query. If you pass the callback the streams payload will be buffered and passed to that.
 
-#### `var stream = node.closest(query, [options], [callback])`
+#### `var stream = node.update(query, [options], [callback])`
 
-Same as a query but will trigger a closest query on the 20 closest nodes (distance between node ids and target) after the query finishes.
-Per default the stream will only contain results from the closest query. To include the query results also pass the `verbose: true` option.
+Same as a query but will trigger an update query on the 20 closest nodes (distance between node ids and target) after the query finishes.
+Per default the stream will only contain results from the closest query. To include the query results also pass the `query: true` option.
 
 #### `node.on('query:{command}', data, callback)`
 
@@ -139,9 +139,9 @@ Called when a specific query is invoked on a node. `data` contains the same valu
 
 Call the callback with `(err, value)` to respond.
 
-#### `node.on('closest:{command}', data, callback)`
+#### `node.on('update:{command}', data, callback)`
 
-Called when a closest query is invoked. The `data.node` is also guaranteed to have roundtripped to this dht before, meaning that you can trust that the host, port was not spoofed.
+Called when an update query is invoked. The `data.node` is also guaranteed to have roundtripped to this dht before, meaning that you can trust that the host, port was not spoofed.
 
 #### `node.ready(callback)`
 

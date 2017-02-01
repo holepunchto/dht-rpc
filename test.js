@@ -2,12 +2,12 @@ var tape = require('tape')
 var dht = require('./')
 var crypto = require('crypto')
 
-tape('simple closest', function (t) {
+tape('simple update', function (t) {
   bootstrap(function (port, node) {
     var a = dht({bootstrap: port})
     var b = dht({bootstrap: port})
 
-    a.on('closest:echo', function (data, callback) {
+    a.on('update:echo', function (data, callback) {
       t.ok(data.roundtripToken, 'has roundtrip token')
       t.same(data.value, new Buffer('Hello, World!'), 'expected data')
       callback(null, data.value)
@@ -20,7 +20,7 @@ tape('simple closest', function (t) {
         value: new Buffer('Hello, World!')
       }
 
-      b.closest(data, function (err, responses) {
+      b.update(data, function (err, responses) {
         a.destroy()
         b.destroy()
         node.destroy()
@@ -109,18 +109,18 @@ tape('targeted query', function (t) {
   })
 })
 
-tape('targeted closest', function (t) {
+tape('targeted update', function (t) {
   bootstrap(function (port, node) {
     var a = dht({bootstrap: port})
 
-    a.on('closest:echo', function (data, cb) {
+    a.on('update:echo', function (data, cb) {
       t.pass('in echo')
       cb(null, data.value)
     })
 
     var b = dht({bootstrap: port})
 
-    b.on('closest:echo', function (data, cb) {
+    b.on('update:echo', function (data, cb) {
       t.fail('should not hit me')
       cb()
     })
@@ -129,7 +129,7 @@ tape('targeted closest', function (t) {
       b.ready(function () {
         var client = dht({bootstrap: port})
 
-        client.closest({
+        client.update({
           command: 'echo',
           value: new Buffer('hi'),
           target: client.id
@@ -166,7 +166,7 @@ tape('swarm query', function (t) {
       var key = crypto.createHash('sha256').update('hello').digest()
       var me = dht({bootstrap: port})
 
-      me.closest({command: 'kv', target: key, value: new Buffer('hello')}, function (err, responses) {
+      me.update({command: 'kv', target: key, value: new Buffer('hello')}, function (err, responses) {
         t.error(err, 'no error')
         t.same(closest, 20, '20 closest nodes')
         t.same(responses.length, 20, '20 responses')
@@ -195,7 +195,7 @@ tape('swarm query', function (t) {
 
       var value = null
 
-      node.on('closest:kv', function (data, cb) {
+      node.on('update:kv', function (data, cb) {
         closest++
         value = data.value
         cb()
