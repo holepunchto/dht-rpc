@@ -45,6 +45,7 @@ function QueryStream (dht, query, opts) {
   this._k = nodes ? Infinity : opts.k || 20
   this._inflight = 0
   this._moveCloser = !nodes
+  this._map = opts.map || echo
   this._bootstrapped = !this._moveCloser
   this._onresponse = onresponse
   this._onresponseholepunch = onresponseholepunch
@@ -164,14 +165,14 @@ QueryStream.prototype._callback = function (err, res, peer) {
     return
   }
 
-  this.push({
+  this.push(this._map({
     node: {
       id: res.id,
       port: peer.port,
       host: peer.host
     },
     value: res.value
-  })
+  }))
 }
 
 QueryStream.prototype._sendAll = function (nodes, force, useToken) {
@@ -286,4 +287,8 @@ function copyNode (node) {
     roundtripToken: node.roundtripToken,
     referrer: node.referrer || node.referer
   }
+}
+
+function echo (a) {
+  return a
 }
