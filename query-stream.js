@@ -165,14 +165,21 @@ QueryStream.prototype._callback = function (err, res, peer) {
     return
   }
 
-  this.push(this._map({
+  var data = this._map({
     node: {
       id: res.id,
       port: peer.port,
       host: peer.host
     },
     value: res.value
-  }))
+  })
+
+  if (!data) {
+    this._readMaybe()
+    return
+  }
+
+  this.push(data)
 }
 
 QueryStream.prototype._sendAll = function (nodes, force, useToken) {
