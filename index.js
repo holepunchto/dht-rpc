@@ -21,7 +21,6 @@ function DHT (opts) {
   var self = this
 
   this.concurrency = opts.concurrency || 16
-  this.bootstrap = [].concat(opts.bootstrap || []).map(parseAddr)
   this.id = opts.id || crypto.randomBytes(32)
   this.ephemeral = !!opts.ephemeral
   this.nodes = new KBucket({localNodeId: this.id, arbiter: arbiter})
@@ -38,6 +37,7 @@ function DHT (opts) {
   this.socket.on('response', onresponse)
   this.socket.on('close', onclose)
 
+  this._bootstrap = [].concat(opts.bootstrap || []).map(parseAddr)
   this._queryId = this.ephemeral ? null : this.id
   this._bootstrapped = false
   this._pendingRequests = []
@@ -55,7 +55,7 @@ function DHT (opts) {
   }
 
   process.nextTick(function () {
-    self._bootstrap()
+    self.bootstrap()
   })
 
   function rotateSecrets () {
@@ -108,9 +108,6 @@ DHT.prototype.update = function (query, opts, cb) {
 }
 
 DHT.prototype._pingSome = function () {
-  var all = this.nodes.toArray()
-  if (!all.length) return
-
   var cnt = this.inflightQueries > 2 ? 1 : 3
   var oldest = this._bottom
 
@@ -154,12 +151,10 @@ DHT.prototype._rotateSecrets = function () {
   this._secrets[0] = secret
 }
 
-DHT.prototype._bootstrap = function () {
-  // TODO: i'm guessing we need to rebootstrap after some timeout
-  // TODO: check stats, to determine wheather to rerun?
+DHT.prototype.bootstrap = function (cb) {
   var self = this
 
-  if (!this.bootstrap.length) return process.nextTick(done)
+  if (!this._bootstrap.length) return process.nextTick(done)
 
   var backgroundCon = Math.min(self.concurrency, Math.max(2, Math.floor(self.concurrency / 8)))
   var qs = this.query({
@@ -168,14 +163,21 @@ DHT.prototype._bootstrap = function () {
   })
 
   qs.on('data', update)
-  qs.on('error', noop) // noop this out as it'll bootstrap on subsequent runs
+  qs.on('error', onerror)
   qs.on('end', done)
 
   update()
 
+  function onerror (err) {
+    if (cb) cb(err)
+  }
+
   function done () {
-    self._bootstrapped = true
-    self.emit('ready')
+    if (!self._bootstrapped) {
+      self._bootstrapped = true
+      self.emit('ready')
+    }
+    if (cb) cb()
   }
 
   function update () {
@@ -401,8 +403,6 @@ DHT.prototype._removeNode = function (node) {
 DHT.prototype.listen = function (port, cb) {
   this.socket.listen(port, cb)
 }
-
-function noop () {}
 
 function encodePeer (peer) {
   return peer && peers.encode([peer])

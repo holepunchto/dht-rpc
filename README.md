@@ -147,6 +147,10 @@ Called when an update query is invoked. The `data.node` is also guaranteed to ha
 
 Makes sure the initial bootstrap table has been built. You do not need to wait for this before querying.
 
+#### `node.bootstrap([callback])`
+
+Rebootstrap your node. Call this at regular intervals if you aren't doing any other queries.
+
 #### `node.holepunch(peer, referrer, callback)`
 
 UDP hole punch to another peer using the `referrer` as a STUN server.

@@ -90,9 +90,9 @@ QueryStream.prototype._bootstrap = function () {
     this._addPending({id: b.id, port: b.port, host: b.host}, null)
   }
 
-  if (bootstrap.length < this._dht.bootstrap.length) {
-    for (i = 0; i < this._dht.bootstrap.length; i++) {
-      this._send(this._dht.bootstrap[i], true, false)
+  if (bootstrap.length < this._dht._bootstrap.length) {
+    for (i = 0; i < this._dht._bootstrap.length; i++) {
+      this._send(this._dht._bootstrap[i], true, false)
     }
   }
 }
@@ -145,6 +145,10 @@ QueryStream.prototype._callback = function (err, res, peer) {
   if (this.destroyed) return
 
   if (err) {
+    if (res && res.id) {
+      var node = this._dht.nodes.get(res.id)
+      if (node) this._dht._removeNode(node)
+    }
     this.errors++
     this.emit('warning', err)
     this._readMaybe()
