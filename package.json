@@ -7,7 +7,7 @@
     "duplexify": "^3.5.0",
     "inherits": "^2.0.3",
     "ipv4-peers": "^1.1.1",
-    "k-bucket": "^3.2.1",
+    "k-bucket": "^5.0.0",
     "protocol-buffers-encodings": "^1.1.0",
     "readable-stream": "^2.1.5",
     "sodium-universal": "^2.0.0",
