@@ -1,14 +1,14 @@
 var udp = require('udp-request')
-var crypto = require('crypto')
 var KBucket = require('k-bucket')
 var inherits = require('inherits')
 var events = require('events')
 var peers = require('ipv4-peers')
-var bufferEquals = require('buffer-equals')
 var collect = require('stream-collector')
+var sodium = require('sodium-universal')
 var nodes = peers.idLength(32)
 var messages = require('./messages')
 var queryStream = require('./query-stream')
+var blake2b = require('./blake2b')
 
 module.exports = DHT
 
@@ -21,7 +21,7 @@ function DHT (opts) {
   var self = this
 
   this.concurrency = opts.concurrency || 16
-  this.id = opts.id || crypto.randomBytes(32)
+  this.id = opts.id || randomBytes(32)
   this.ephemeral = !!opts.ephemeral
   this.nodes = new KBucket({localNodeId: this.id, arbiter: arbiter})
   this.nodes.on('ping', onnodeping)
@@ -42,7 +42,7 @@ function DHT (opts) {
   this._bootstrapped = false
   this._pendingRequests = []
   this._tick = 0
-  this._secrets = [crypto.randomBytes(32), crypto.randomBytes(32)]
+  this._secrets = [randomBytes(32), randomBytes(32)]
   this._secretsInterval = setInterval(rotateSecrets, 5 * 60 * 1000)
   this._tickInterval = setInterval(tick, 5 * 1000)
   this._top = null
@@ -146,7 +146,7 @@ DHT.prototype.address = function () {
 }
 
 DHT.prototype._rotateSecrets = function () {
-  var secret = crypto.randomBytes(32)
+  var secret = randomBytes(32)
   this._secrets[1] = this._secrets[0]
   this._secrets[0] = secret
 }
@@ -205,8 +205,8 @@ DHT.prototype._onrequest = function (request, peer) {
   if (validateId(request.id)) this._addNode(request.id, peer, request.roundtripToken)
 
   if (request.roundtripToken) {
-    if (!bufferEquals(request.roundtripToken, this._token(peer, 0))) {
-      if (!bufferEquals(request.roundtripToken, this._token(peer, 1))) {
+    if (!request.roundtripToken.equals(this._token(peer, 0))) {
+      if (!request.roundtripToken.equals(this._token(peer, 1))) {
         request.roundtripToken = null
       }
     }
@@ -370,11 +370,11 @@ DHT.prototype._reping = function (oldContacts, newContact) {
 }
 
 DHT.prototype._token = function (peer, i) {
-  return crypto.createHash('sha256').update(this._secrets[i]).update(peer.host).digest()
+  return blake2b.batch([this._secrets[i], Buffer.from(peer.host)])
 }
 
 DHT.prototype._addNode = function (id, peer, token) {
-  if (bufferEquals(id, this.id)) return
+  if (id.equals(this.id)) return
 
   var node = this.nodes.get(id)
   var fresh = !node
@@ -458,4 +458,10 @@ function add (self, node) {
     node.next = null
     self._top = node
   }
+}
+
+function randomBytes (n) {
+  var buf = Buffer.allocUnsafe(n)
+  sodium.randombytes_buf(buf)
+  return buf
 }

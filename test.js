@@ -1,6 +1,6 @@
 var tape = require('tape')
 var dht = require('./')
-var crypto = require('crypto')
+var blake2b = require('./blake2b')
 
 tape('simple update', function (t) {
   bootstrap(function (port, node) {
@@ -9,7 +9,7 @@ tape('simple update', function (t) {
 
     a.on('update:echo', function (data, callback) {
       t.ok(data.roundtripToken, 'has roundtrip token')
-      t.same(data.value, new Buffer('Hello, World!'), 'expected data')
+      t.same(data.value, Buffer.from('Hello, World!'), 'expected data')
       callback(null, data.value)
     })
 
@@ -17,7 +17,7 @@ tape('simple update', function (t) {
       var data = {
         command: 'echo',
         target: a.id,
-        value: new Buffer('Hello, World!')
+        value: Buffer.from('Hello, World!')
       }
 
       b.update(data, function (err, responses) {
@@ -27,7 +27,7 @@ tape('simple update', function (t) {
 
         t.error(err, 'no errors')
         t.same(responses.length, 1, 'one response')
-        t.same(responses[0].value, new Buffer('Hello, World!'), 'echoed data')
+        t.same(responses[0].value, Buffer.from('Hello, World!'), 'echoed data')
         t.end()
       })
     })
@@ -41,7 +41,7 @@ tape('simple query', function (t) {
 
     a.on('query:hello', function (data, callback) {
       t.same(data.value, null, 'expected data')
-      callback(null, new Buffer('world'))
+      callback(null, Buffer.from('world'))
     })
 
     a.ready(function () {
@@ -57,7 +57,7 @@ tape('simple query', function (t) {
 
         t.error(err, 'no errors')
         t.same(responses.length, 1, 'one response')
-        t.same(responses[0].value, new Buffer('world'), 'responded')
+        t.same(responses[0].value, Buffer.from('world'), 'responded')
         t.end()
       })
     })
@@ -86,7 +86,7 @@ tape('targeted query', function (t) {
 
         client.query({
           command: 'echo',
-          value: new Buffer('hi'),
+          value: Buffer.from('hi'),
           target: client.id
         }, {
           node: {
@@ -101,7 +101,7 @@ tape('targeted query', function (t) {
 
           t.error(err, 'no error')
           t.same(responses.length, 1, 'one response')
-          t.same(responses[0].value, new Buffer('hi'), 'echoed')
+          t.same(responses[0].value, Buffer.from('hi'), 'echoed')
           t.end()
         })
       })
@@ -131,7 +131,7 @@ tape('targeted update', function (t) {
 
         client.update({
           command: 'echo',
-          value: new Buffer('hi'),
+          value: Buffer.from('hi'),
           target: client.id
         }, {
           node: {
@@ -146,7 +146,7 @@ tape('targeted update', function (t) {
 
           t.error(err, 'no error')
           t.same(responses.length, 1, 'one response')
-          t.same(responses[0].value, new Buffer('hi'), 'echoed')
+          t.same(responses[0].value, Buffer.from('hi'), 'echoed')
           t.end()
         })
       })
@@ -163,10 +163,10 @@ tape('swarm query', function (t) {
 
     function done () {
       t.pass('created swarm')
-      var key = crypto.createHash('sha256').update('hello').digest()
+      var key = blake2b(Buffer.from('hello'))
       var me = dht({bootstrap: port})
 
-      me.update({command: 'kv', target: key, value: new Buffer('hello')}, function (err, responses) {
+      me.update({command: 'kv', target: key, value: Buffer.from('hello')}, function (err, responses) {
         t.error(err, 'no error')
         t.same(closest, 20, '20 closest nodes')
         t.same(responses.length, 20, '20 responses')
@@ -175,7 +175,7 @@ tape('swarm query', function (t) {
 
         stream.on('data', function (data) {
           if (data.value) {
-            t.same(data.value, new Buffer('hello'), 'echoed value')
+            t.same(data.value, Buffer.from('hello'), 'echoed value')
             t.end()
             swarm.forEach(function (node) {
               node.destroy()

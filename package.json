@@ -4,21 +4,21 @@
   "description": "Make RPC calls over a Kademlia based DHT.",
   "main": "index.js",
   "dependencies": {
-    "buffer-equals": "^1.0.4",
     "duplexify": "^3.5.0",
     "inherits": "^2.0.3",
     "ipv4-peers": "^1.1.1",
     "k-bucket": "^3.2.1",
     "protocol-buffers-encodings": "^1.1.0",
     "readable-stream": "^2.1.5",
+    "sodium-universal": "^2.0.0",
     "stream-collector": "^1.0.1",
     "udp-request": "^1.3.0",
     "xor-distance": "^1.0.0"
   },
   "devDependencies": {
     "protocol-buffers": "^3.2.1",
-    "standard": "^8.6.0",
-    "tape": "^4.6.3"
+    "standard": "^11.0.1",
+    "tape": "^4.9.0"
   },
   "repository": {
     "type": "git",

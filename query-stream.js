@@ -1,10 +1,9 @@
 var stream = require('readable-stream')
 var inherits = require('inherits')
 var nodes = require('ipv4-peers').idLength(32)
-var bufferEquals = require('buffer-equals')
 var xor = require('xor-distance')
 
-var BLANK = new Buffer([
+var BLANK = Buffer.from([
   0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
   0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
 ])
@@ -227,14 +226,14 @@ QueryStream.prototype._send = function (node, force, useToken) {
 }
 
 QueryStream.prototype._addPending = function (node, ref) {
-  if (bufferEquals(node.id, this._dht.id)) return
+  if (node.id.equals(this._dht.id)) return
   node.distance = xor(this.target, node.id)
   node.referrer = ref
   insertSorted(node, this._k, this._pending)
 }
 
 QueryStream.prototype._addClosest = function (res, peer) {
-  if (!res.id || !res.roundtripToken || bufferEquals(res.id, this._dht.id)) return
+  if (!res.id || !res.roundtripToken || res.id.equals(this._dht.id)) return
 
   var prev = getNode(res.id, this._pending)
 
@@ -265,7 +264,7 @@ function getNode (id, list) {
   // technically this would be faster with binary search (against distance)
   // but this list is always small, so meh
   for (var i = 0; i < list.length; i++) {
-    if (bufferEquals(list[i].id, id)) return list[i]
+    if (list[i].id.equals(id)) return list[i]
   }
 
   return null
