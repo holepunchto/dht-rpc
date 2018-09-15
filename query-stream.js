@@ -81,7 +81,7 @@ QueryStream.prototype._finalize = function () {
 QueryStream.prototype._bootstrap = function () {
   this._bootstrapped = true
 
-  var bootstrap = this._dht.nodes.closest(this.target, this._k)
+  var bootstrap = this._dht.bucket.closest(this.target, this._k)
   var i = 0
 
   for (i = 0; i < bootstrap.length; i++) {
@@ -145,7 +145,7 @@ QueryStream.prototype._callback = function (err, res, peer) {
 
   if (err) {
     if (res && res.id) {
-      var node = this._dht.nodes.get(res.id)
+      var node = this._dht.bucket.get(res.id)
       if (node) this._dht._removeNode(node)
     }
     this.errors++
