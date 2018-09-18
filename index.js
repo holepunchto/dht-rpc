@@ -120,7 +120,11 @@ DHT.prototype._pingSome = function () {
 }
 
 DHT.prototype.holepunch = function (peer, referrer, cb) {
-  this._holepunch(parseAddr(peer), parseAddr(referrer), cb)
+  peer = parseAddr(peer)
+  referrer = parseAddr(referrer)
+
+  this._ping(peer, noop)
+  this._holepunch(peer, referrer, cb)
 }
 
 DHT.prototype.ping = function (peer, cb) {
@@ -191,6 +195,7 @@ DHT.prototype._ping = function (peer, cb) {
 }
 
 DHT.prototype._holepunch = function (peer, referrer, cb) {
+  // Expects the caller to have already sent a message to peer to open the firewall session
   this._request({command: '_ping', id: this._queryId, forwardRequest: encodePeer(peer)}, referrer, false, cb)
 }
 
@@ -437,3 +442,5 @@ function randomBytes (n) {
   sodium.randombytes_buf(buf)
   return buf
 }
+
+function noop () {}
