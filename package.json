@@ -32,6 +32,7 @@
     "protocol-buffers-encodings": "^1.1.0",
     "sodium-universal": "^2.0.0",
     "stream-collector": "^1.0.1",
+    "time-ordered-set": "^1.0.1",
     "xor-distance": "^1.0.0"
   }
 }
