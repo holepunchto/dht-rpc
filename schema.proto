@@ -1,16 +1,20 @@
-message Request {
-  required string command = 1;
-  optional bytes id = 2;
-  optional bytes target = 3;
-  optional bytes forwardRequest = 4;
-  optional bytes forwardResponse = 5;
-  optional bytes roundtripToken = 6;
-  optional bytes value = 7;
+message Holepunch {
+  optional bytes from = 2;
+  optional bytes to = 3;
 }
 
-message Response {
-  optional bytes id = 1;
-  optional bytes nodes = 2;
-  optional bytes value = 3;
-  optional bytes roundtripToken = 4;
+message Message {
+  // request/response id
+  required uint64 rid = 1;
+
+  // kademlia stuff
+  optional bytes id = 2;
+  optional bytes target = 3;
+  optional bytes closerNodes = 4;
+  optional bytes roundtripToken = 5;
+
+  // rpc stuff (if command is set this is a request)
+  optional string command = 6;
+  optional string error = 7;
+  optional bytes value = 8;
 }
