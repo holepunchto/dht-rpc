@@ -30,7 +30,7 @@
     "ipv4-peers": "^1.1.1",
     "k-bucket": "^5.0.0",
     "protocol-buffers-encodings": "^1.1.0",
-    "sodium-native": "^2.2.1",
+    "sodium-universal": "^2.0.0",
     "stream-collector": "^1.0.1",
     "xor-distance": "^1.0.0"
   }
