@@ -3,18 +3,25 @@ message Holepunch {
   optional bytes to = 3;
 }
 
+enum TYPE {
+  QUERY = 1;
+  UPDATE = 2;
+  RESPONSE = 3;
+}
+
 message Message {
-  // request/response id
-  required uint64 rid = 1;
+  // request/response type + id
+  required TYPE type = 1;
+  required uint64 rid = 2;
 
   // kademlia stuff
-  optional bytes id = 2;
-  optional bytes target = 3;
-  optional bytes closerNodes = 4;
-  optional bytes roundtripToken = 5;
+  optional bytes id = 3;
+  optional bytes target = 4;
+  optional bytes closerNodes = 5;
+  optional bytes roundtripToken = 6;
 
-  // rpc stuff (if command is set this is a request)
-  optional string command = 6;
-  optional string error = 7;
-  optional bytes value = 8;
+  // rpc stuff
+  optional string command = 7;
+  optional string error = 8;
+  optional bytes value = 0;
 }

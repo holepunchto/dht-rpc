@@ -7,13 +7,16 @@ const tos = require('time-ordered-set')
 const collect = require('stream-collector')
 const codecs = require('codecs')
 
-const { Message, Holepunch } = require('./lib/messages')
+const { TYPE, Message, Holepunch } = require('./lib/messages')
+const { UPDATE } = TYPE
 const IO = require('./lib/io')
 const QueryStream = require('./lib/query-stream')
 const blake2b = require('./lib/blake2b')
 const nodes = peers.idLength(32)
 
 exports = module.exports = opts => new DHT(opts)
+exports.UPDATE = Symbol.for('UPDATE')
+exports.QUERY = Symbol.for('QUERY')
 
 class DHT extends EventEmitter {
   constructor (opts) {
@@ -69,8 +72,13 @@ class DHT extends EventEmitter {
   }
 
   command (name, opts) {
+    const valueEncoding = opts.valueEncoding && codecs(opts.valueEncoding)
+    const inputEncoding = opts.inputEncoding ? codecs(opts.inputEncoding) : valueEncoding
+    const outputEncoding = opts.outputEncoding ? codecs(opts.outputEncoding) : valueEncoding
+
     this._commands.set(name, {
-      valueEncoding: opts.valueEncoding && codecs(opts.valueEncoding),
+      inputEncoding,
+      outputEncoding,
       query: opts.query || queryNotSupported,
       update: opts.update || updateNotSupported
     })
@@ -113,6 +121,7 @@ class DHT extends EventEmitter {
     if (message.value && !this.id.equals(message.value)) return
 
     this._io.response({
+      type: 0,
       rid: message.rid,
       id: this._queryId,
       roundtripToken: this._token(peer, 0),
@@ -140,6 +149,7 @@ class DHT extends EventEmitter {
     }
 
     this._io.response({
+      type: 0,
       rid: message.rid,
       id: this._queryId
     }, peer)
@@ -149,6 +159,7 @@ class DHT extends EventEmitter {
     if (!validateId(message.target)) return
 
     this._io.response({
+      type: 0,
       rid: message.rid,
       id: this._queryId,
       closerNodes: nodes.encode(this.bucket.closest(message.target, 20)),
@@ -160,8 +171,9 @@ class DHT extends EventEmitter {
     if (!message.target) return
 
     const self = this
-
     const cmd = this._commands.get(message.command)
+    const enc = cmd && cmd.outputEncoding
+
     if (!cmd) return reply(new Error('Unsupported command'))
 
     const query = {
@@ -172,17 +184,23 @@ class DHT extends EventEmitter {
       value: message.value
     }
 
-    if (message.roundtripToken) cmd.update(query, reply)
-    else cmd.query(query, reply)
+    if (message.type === UPDATE) {
+      if (!message.roundtripToken) return reply(new Error('Valid roundtrip token needed'))
+      cmd.update(query, reply)
+      return
+    }
+
+    cmd.query(query, reply)
 
     function reply (err, value) {
       self._io.response({
+        type: 0,
         rid: message.rid,
         id: self._queryId,
         closerNodes: nodes.encode(self.bucket.closest(message.target, 20)),
         roundtripToken: self._token(peer, 0),
         error: err ? err.message : undefined,
-        value
+        value: enc ? enc.encode(value) : value
       }, peer)
     }
   }
@@ -195,11 +213,7 @@ class DHT extends EventEmitter {
 
   holepunch (peer, cb) {
     if (!peer.referrer) throw new Error('peer.referrer is required')
-    this.request({ command: '_holepunch', id: this._queryId }, peer, cb)
-  }
-
-  request (message, peer, cb) {
-    this._io.request(message, peer, false, cb)
+    this._io.query({ type: 0, command: '_holepunch', id: this._queryId }, peer, false, cb)
   }
 
   destroy () {
@@ -211,7 +225,8 @@ class DHT extends EventEmitter {
   }
 
   ping (peer, cb) {
-    this._io.request({
+    this._io.query({
+      type: 0,
       rid: 0,
       command: '_ping',
       id: this._queryId,
@@ -295,7 +310,8 @@ class DHT extends EventEmitter {
     function ping () {
       const next = oldContacts.shift()
       if (!next) return
-      self._io.request({
+      self._io.query({
+        type: 0,
         rid: 0,
         command: '_ping',
         id,
@@ -338,7 +354,7 @@ class DHT extends EventEmitter {
 
   runCommand (command, target, value, opts) {
     const cmd = this._commands.get(command)
-    const enc = cmd && cmd.valueEncoding
+    const enc = cmd && cmd.inputEncoding
     const query = {
       id: this._queryId,
       command,

@@ -1,10 +1,10 @@
 const dht = require('./')
 
 const bootstrap = dht()
-bootstrap.bind(10001)
+bootstrap.listen(10001)
 
 const nodes = []
-var swarm = 2500
+var swarm = 1000
 loop(null)
 
 function loop (err) {
@@ -17,10 +17,7 @@ function done () {
   console.log('executing hi update')
 
   const i = Math.floor(Math.random() * nodes.length)
-  const rs = nodes[i].update({
-    command: 'hi',
-    target: Buffer.alloc(32)
-  })
+  const rs = nodes[i].update('hi', Buffer.alloc(32))
 
   rs.resume()
   rs.on('end', function () {

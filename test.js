@@ -8,6 +8,10 @@ tape('simple update', function (t) {
     const b = dht({ bootstrap: port })
 
     a.command('echo', {
+      query (data, callback) {
+        t.fail('should not query')
+        callback(new Error('nope'))
+      },
       update (data, callback) {
         t.ok(data.roundtripToken, 'has roundtrip token')
         t.same(data.value, Buffer.from('Hello, World!'), 'expected data')
@@ -51,6 +55,39 @@ tape('simple query', function (t) {
         t.error(err, 'no errors')
         t.same(responses.length, 1, 'one response')
         t.same(responses[0].value, Buffer.from('world'), 'responded')
+        t.end()
+      })
+    })
+  })
+})
+
+tape('query and update', function (t) {
+  bootstrap(function (port, node) {
+    const a = dht({ bootstrap: port })
+    const b = dht({ bootstrap: port })
+
+    a.command('hello', {
+      query (data, callback) {
+        t.same(data.value, null, 'expected query data')
+        callback(null, Buffer.from('world'))
+      },
+      update (data, callback) {
+        t.same(data.value, null, 'expected update data')
+        callback(null, Buffer.from('world'))
+      }
+    })
+
+    a.ready(function () {
+      b.queryAndUpdate('hello', a.id, function (err, responses) {
+        a.destroy()
+        b.destroy()
+        node.destroy()
+
+        t.error(err, 'no errors')
+        t.same(responses.length, 2, 'two responses')
+        t.same(responses[0].value, Buffer.from('world'), 'responded')
+        t.same(responses[1].value, Buffer.from('world'), 'responded')
+        t.ok(responses[0].type !== responses[1].type, 'not the same type')
         t.end()
       })
     })
