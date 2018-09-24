@@ -23,5 +23,5 @@ message Message {
   // rpc stuff
   optional string command = 7;
   optional string error = 8;
-  optional bytes value = 0;
+  optional bytes value = 9;
 }

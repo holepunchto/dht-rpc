@@ -6,17 +6,15 @@ const KBucket = require('k-bucket')
 const tos = require('time-ordered-set')
 const collect = require('stream-collector')
 const codecs = require('codecs')
-
-const { TYPE, Message, Holepunch } = require('./lib/messages')
-const { UPDATE } = TYPE
+const { Message, Holepunch } = require('./lib/messages')
 const IO = require('./lib/io')
 const QueryStream = require('./lib/query-stream')
 const blake2b = require('./lib/blake2b')
+
+const UNSUPPORTED_COMMAND = new Error('Unsupported command')
 const nodes = peers.idLength(32)
 
 exports = module.exports = opts => new DHT(opts)
-exports.UPDATE = Symbol.for('UPDATE')
-exports.QUERY = Symbol.for('QUERY')
 
 class DHT extends EventEmitter {
   constructor (opts) {
@@ -40,19 +38,14 @@ class DHT extends EventEmitter {
     this.socket.on('listening', this.emit.bind(this, 'listening'))
     this.socket.on('close', this.emit.bind(this, 'close'))
 
-    const timeout = opts.timeout || 1000
-    const tick = Math.floor(timeout / 4)
-    const io = new IO(this.socket, this)
+    const queryId = this.ephemeral ? null : this.id
+    const io = new IO(this.socket, queryId, this)
 
     this._io = io
-    this._queryId = this.ephemeral ? null : this.id
     this._commands = new Map()
     this._secrets = [ randomBytes(32), randomBytes(32) ]
     this._tick = 0
-
-    this._timeoutInterval = setInterval(this._io.tick.bind(this._io), tick)
     this._tickInterval = setInterval(this._ontick.bind(this), 5000)
-    this._rotateInterval = setInterval(this._onrotate.bind(this), 300000)
 
     process.nextTick(this.bootstrap.bind(this))
   }
@@ -62,23 +55,14 @@ class DHT extends EventEmitter {
     if ((this._tick & 7) === 0) this._pingSome()
   }
 
-  _onrotate () {
-    this._secrets[1] = this._secrets[0]
-    this._secrets[0] = randomBytes(32)
-  }
-
   address () {
     return this.socket.address()
   }
 
   command (name, opts) {
-    const valueEncoding = opts.valueEncoding && codecs(opts.valueEncoding)
-    const inputEncoding = opts.inputEncoding ? codecs(opts.inputEncoding) : valueEncoding
-    const outputEncoding = opts.outputEncoding ? codecs(opts.outputEncoding) : valueEncoding
-
     this._commands.set(name, {
-      inputEncoding,
-      outputEncoding,
+      inputEncoding: codecs(opts.inputEncoding || opts.valueEncoding),
+      outputEncoding: codecs(opts.outputEncoding || opts.valueEncoding),
       query: opts.query || queryNotSupported,
       update: opts.update || updateNotSupported
     })
@@ -89,15 +73,7 @@ class DHT extends EventEmitter {
     else onready()
   }
 
-  onrequest (message, peer) {
-    if (message.roundtripToken) {
-      if (!message.roundtripToken.equals(this._token(peer, 0))) {
-        if (!message.roundtripToken.equals(this._token(peer, 1))) {
-          message.roundtripToken = null
-        }
-      }
-    }
-
+  onrequest (type, message, peer) {
     if (validateId(message.id)) {
       this._addNode(message.id, peer, null)
     }
@@ -113,20 +89,13 @@ class DHT extends EventEmitter {
         return this._onholepunch(message, peer)
 
       default:
-        return this._oncommand(message, peer)
+        return this._oncommand(type, message, peer)
     }
   }
 
   _onping (message, peer) {
     if (message.value && !this.id.equals(message.value)) return
-
-    this._io.response({
-      type: 0,
-      rid: message.rid,
-      id: this._queryId,
-      roundtripToken: this._token(peer, 0),
-      value: peers.encode([ peer ])
-    }, peer)
+    this._io.response(message, peers.encode([ peer ]), null, peer)
   }
 
   _onholepunch (message, peer) {
@@ -136,7 +105,7 @@ class DHT extends EventEmitter {
     if (value.to) {
       const to = decodePeer(value.to)
       if (!to && samePeer(to, peer)) return
-      message.id = this._queryId
+      message.id = this._io.id
       message.value = Holepunch.encode({ from: peers.encode([ peer ]) })
       this.emit('holepunch', peer, to)
       this._io.send(Message.encode(message), to)
@@ -148,60 +117,39 @@ class DHT extends EventEmitter {
       if (from) peer = from
     }
 
-    this._io.response({
-      type: 0,
-      rid: message.rid,
-      id: this._queryId
-    }, peer)
+    this._io.response(message, null, null, peer)
   }
 
   _onfindnode (message, peer) {
     if (!validateId(message.target)) return
 
-    this._io.response({
-      type: 0,
-      rid: message.rid,
-      id: this._queryId,
-      closerNodes: nodes.encode(this.bucket.closest(message.target, 20)),
-      roundtripToken: this._token(peer, 0)
-    }, peer)
+    const closerNodes = nodes.encode(this.bucket.closest(message.target, 20))
+    this._io.response(message, null, closerNodes, peer)
   }
 
-  _oncommand (message, peer) {
+  _oncommand (type, message, peer) {
     if (!message.target) return
 
     const self = this
     const cmd = this._commands.get(message.command)
-    const enc = cmd && cmd.outputEncoding
 
-    if (!cmd) return reply(new Error('Unsupported command'))
+    if (!cmd) return reply(UNSUPPORTED_COMMAND)
 
     const query = {
+      type,
       command: message.command,
       node: peer,
       target: message.target,
-      roundtripToken: message.roundtripToken,
-      value: message.value
+      value: cmd.inputEncoding.decode(message.value)
     }
 
-    if (message.type === UPDATE) {
-      if (!message.roundtripToken) return reply(new Error('Valid roundtrip token needed'))
-      cmd.update(query, reply)
-      return
-    }
-
-    cmd.query(query, reply)
+    if (type === IO.UPDATE) cmd.update(query, reply)
+    else cmd.query(query, reply)
 
     function reply (err, value) {
-      self._io.response({
-        type: 0,
-        rid: message.rid,
-        id: self._queryId,
-        closerNodes: nodes.encode(self.bucket.closest(message.target, 20)),
-        roundtripToken: self._token(peer, 0),
-        error: err ? err.message : undefined,
-        value: enc ? enc.encode(value) : value
-      }, peer)
+      const closerNodes = nodes.encode(self.bucket.closest(message.target, 20))
+      if (err) return self._io.error(message, err, closerNodes, peer)
+      self._io.response(message, value && cmd.outputEncoding.encode(value), closerNodes, peer)
     }
   }
 
@@ -213,25 +161,17 @@ class DHT extends EventEmitter {
 
   holepunch (peer, cb) {
     if (!peer.referrer) throw new Error('peer.referrer is required')
-    this._io.query({ type: 0, command: '_holepunch', id: this._queryId }, peer, false, cb)
+    this._io.query('_holepunch', null, null, peer, cb)
   }
 
   destroy () {
     this.destroyed = true
     this._io.destroy()
-    clearInterval(this._rotateInterval)
-    clearInterval(this._timeoutInterval)
     clearInterval(this._tickInterval)
   }
 
   ping (peer, cb) {
-    this._io.query({
-      type: 0,
-      rid: 0,
-      command: '_ping',
-      id: this._queryId,
-      value: peer.id
-    }, peer, false, function (err, res) {
+    this._io.query('_ping', null, peer.id, peer, function (err, res) {
       if (err) return cb(err)
       if (res.error) return cb(new Error(res.error))
       const pong = decodePeer(res.value)
@@ -303,20 +243,13 @@ class DHT extends EventEmitter {
 
   _reping (oldContacts, newContact) {
     const self = this
-    const id = this._queryId
 
     ping()
 
     function ping () {
       const next = oldContacts.shift()
       if (!next) return
-      self._io.query({
-        type: 0,
-        rid: 0,
-        command: '_ping',
-        id,
-        value: next.id
-      }, next, true, afterPing)
+      self._io.queryImmediately('_ping', null, next.id, next, afterPing)
     }
 
     function afterPing (err, res, node) {
@@ -353,15 +286,7 @@ class DHT extends EventEmitter {
   }
 
   runCommand (command, target, value, opts) {
-    const cmd = this._commands.get(command)
-    const enc = cmd && cmd.inputEncoding
-    const query = {
-      id: this._queryId,
-      command,
-      target,
-      value: enc ? enc.encode(value) : value
-    }
-    return new QueryStream(this, query, opts)
+    return new QueryStream(this, command, target, value, opts)
   }
 
   listen (port, addr, cb) {
@@ -403,6 +328,8 @@ class DHT extends EventEmitter {
   }
 }
 
+exports.QUERY = DHT.QUERY = IO.QUERY
+exports.UPDATE = DHT.UPDATE = IO.UPDATE
 exports.DHT = DHT
 
 function validateId (id) {

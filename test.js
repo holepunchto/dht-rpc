@@ -13,7 +13,6 @@ tape('simple update', function (t) {
         callback(new Error('nope'))
       },
       update (data, callback) {
-        t.ok(data.roundtripToken, 'has roundtrip token')
         t.same(data.value, Buffer.from('Hello, World!'), 'expected data')
         callback(null, data.value)
       }
