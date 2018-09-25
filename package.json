@@ -1,11 +1,8 @@
 {
   "name": "dht-rpc",
-  "version": "0.0.0",
+  "version": "3.0.1",
   "description": "Make RPC calls over a Kademlia based DHT",
   "main": "index.js",
-  "directories": {
-    "lib": "lib"
-  },
   "scripts": {
     "test": "standard && tape test.js",
     "protobuf": "protocol-buffers schema.proto -o lib/messages.js"
