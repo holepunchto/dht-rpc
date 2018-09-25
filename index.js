@@ -104,7 +104,7 @@ class DHT extends EventEmitter {
 
     if (value.to) {
       const to = decodePeer(value.to)
-      if (!to && samePeer(to, peer)) return
+      if (!to || samePeer(to, peer)) return
       message.id = this._io.id
       message.value = Holepunch.encode({ from: peers.encode([ peer ]) })
       this.emit('holepunch', peer, to)

@@ -151,6 +151,67 @@ tape('swarm query', function (t) {
   })
 })
 
+tape('holepunch api', function (t) {
+  bootstrap(function (port, node) {
+    const a = dht({ bootstrap: port })
+    const b = dht({ bootstrap: port })
+    var holepunched = false
+
+    a.ready(function () {
+      b.ready(function () {
+        node.on('holepunch', function (from, to) {
+          t.same(from.port, a.address().port)
+          t.same(to.port, b.address().port)
+          holepunched = true
+        })
+        a.holepunch({
+          host: '127.0.0.1',
+          port: b.address().port,
+          referrer: {
+            host: '127.0.0.1',
+            port: node.address().port
+          }
+        }, function (err) {
+          t.error(err, 'no error')
+          t.ok(holepunched)
+          t.end()
+
+          node.destroy()
+          a.destroy()
+          b.destroy()
+        })
+      })
+    })
+  })
+})
+
+tape('timeouts', function (t) {
+  bootstrap(function (port, node) {
+    const a = dht({ bootstrap: port, ephemeral: true })
+    const b = dht({ bootstrap: port })
+
+    var tries = 0
+
+    b.command('nope', {
+      update (query, cb) {
+        tries++
+        t.pass('ignoring update')
+      }
+    })
+
+    b.ready(function () {
+      a.update('nope', Buffer.alloc(32), function (err) {
+        t.ok(err, 'errored')
+        t.same(tries, 3)
+        t.end()
+        node.destroy()
+        a.destroy()
+        b.destroy()
+      })
+    })
+  })
+})
+
 function bootstrap (done) {
   const node = dht({
     ephemeral: true
