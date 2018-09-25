@@ -1,26 +1,25 @@
-var tape = require('tape')
-var dht = require('./')
-var blake2b = require('./blake2b')
+const tape = require('tape')
+const dht = require('./')
+const blake2b = require('./lib/blake2b')
 
 tape('simple update', function (t) {
   bootstrap(function (port, node) {
-    var a = dht({bootstrap: port})
-    var b = dht({bootstrap: port})
+    const a = dht({ bootstrap: port })
+    const b = dht({ bootstrap: port })
 
-    a.on('update:echo', function (data, callback) {
-      t.ok(data.roundtripToken, 'has roundtrip token')
-      t.same(data.value, Buffer.from('Hello, World!'), 'expected data')
-      callback(null, data.value)
+    a.command('echo', {
+      query (data, callback) {
+        t.fail('should not query')
+        callback(new Error('nope'))
+      },
+      update (data, callback) {
+        t.same(data.value, Buffer.from('Hello, World!'), 'expected data')
+        callback(null, data.value)
+      }
     })
 
     a.ready(function () {
-      var data = {
-        command: 'echo',
-        target: a.id,
-        value: Buffer.from('Hello, World!')
-      }
-
-      b.update(data, function (err, responses) {
+      b.update('echo', a.id, Buffer.from('Hello, World!'), function (err, responses) {
         a.destroy()
         b.destroy()
         node.destroy()
@@ -36,21 +35,18 @@ tape('simple update', function (t) {
 
 tape('simple query', function (t) {
   bootstrap(function (port, node) {
-    var a = dht({bootstrap: port})
-    var b = dht({bootstrap: port})
+    const a = dht({ bootstrap: port })
+    const b = dht({ bootstrap: port })
 
-    a.on('query:hello', function (data, callback) {
-      t.same(data.value, null, 'expected data')
-      callback(null, Buffer.from('world'))
+    a.command('hello', {
+      query (data, callback) {
+        t.same(data.value, null, 'expected data')
+        callback(null, Buffer.from('world'))
+      }
     })
 
     a.ready(function () {
-      var data = {
-        command: 'hello',
-        target: a.id
-      }
-
-      b.query(data, function (err, responses) {
+      b.query('hello', a.id, function (err, responses) {
         a.destroy()
         b.destroy()
         node.destroy()
@@ -64,91 +60,34 @@ tape('simple query', function (t) {
   })
 })
 
-tape('targeted query', function (t) {
+tape('query and update', function (t) {
   bootstrap(function (port, node) {
-    var a = dht({bootstrap: port})
+    const a = dht({ bootstrap: port })
+    const b = dht({ bootstrap: port })
 
-    a.on('query:echo', function (data, cb) {
-      t.pass('in echo')
-      cb(null, data.value)
-    })
-
-    var b = dht({bootstrap: port})
-
-    b.on('query:echo', function (data, cb) {
-      t.fail('should not hit me')
-      cb()
+    a.command('hello', {
+      query (data, callback) {
+        t.same(data.value, null, 'expected query data')
+        callback(null, Buffer.from('world'))
+      },
+      update (data, callback) {
+        t.same(data.value, null, 'expected update data')
+        callback(null, Buffer.from('world'))
+      }
     })
 
     a.ready(function () {
-      b.ready(function () {
-        var client = dht({bootstrap: port})
+      b.queryAndUpdate('hello', a.id, function (err, responses) {
+        a.destroy()
+        b.destroy()
+        node.destroy()
 
-        client.query({
-          command: 'echo',
-          value: Buffer.from('hi'),
-          target: client.id
-        }, {
-          node: {
-            port: a.address().port,
-            host: '127.0.0.1'
-          }
-        }, function (err, responses) {
-          client.destroy()
-          a.destroy()
-          b.destroy()
-          node.destroy()
-
-          t.error(err, 'no error')
-          t.same(responses.length, 1, 'one response')
-          t.same(responses[0].value, Buffer.from('hi'), 'echoed')
-          t.end()
-        })
-      })
-    })
-  })
-})
-
-tape('targeted update', function (t) {
-  bootstrap(function (port, node) {
-    var a = dht({bootstrap: port})
-
-    a.on('update:echo', function (data, cb) {
-      t.pass('in echo')
-      cb(null, data.value)
-    })
-
-    var b = dht({bootstrap: port})
-
-    b.on('update:echo', function (data, cb) {
-      t.fail('should not hit me')
-      cb()
-    })
-
-    a.ready(function () {
-      b.ready(function () {
-        var client = dht({bootstrap: port})
-
-        client.update({
-          command: 'echo',
-          value: Buffer.from('hi'),
-          target: client.id
-        }, {
-          node: {
-            port: a.address().port,
-            host: '127.0.0.1'
-          }
-        }, function (err, responses) {
-          client.destroy()
-          a.destroy()
-          b.destroy()
-          node.destroy()
-
-          t.error(err, 'no error')
-          t.same(responses.length, 1, 'one response')
-          t.same(responses[0].value, Buffer.from('hi'), 'echoed')
-          t.end()
-        })
+        t.error(err, 'no errors')
+        t.same(responses.length, 2, 'two responses')
+        t.same(responses[0].value, Buffer.from('world'), 'responded')
+        t.same(responses[1].value, Buffer.from('world'), 'responded')
+        t.ok(responses[0].type !== responses[1].type, 'not the same type')
+        t.end()
       })
     })
   })
@@ -156,22 +95,23 @@ tape('targeted update', function (t) {
 
 tape('swarm query', function (t) {
   bootstrap(function (port, node) {
-    var swarm = []
+    const swarm = []
     var closest = 0
 
     loop()
 
     function done () {
       t.pass('created swarm')
-      var key = blake2b(Buffer.from('hello'))
-      var me = dht({bootstrap: port})
 
-      me.update({command: 'kv', target: key, value: Buffer.from('hello')}, function (err, responses) {
+      const key = blake2b(Buffer.from('hello'))
+      const me = dht({ bootstrap: port })
+
+      me.update('kv', key, Buffer.from('hello'), function (err, responses) {
         t.error(err, 'no error')
         t.same(closest, 20, '20 closest nodes')
         t.same(responses.length, 20, '20 responses')
 
-        var stream = me.query({command: 'kv', target: key})
+        const stream = me.query('kv', key)
 
         stream.on('data', function (data) {
           if (data.value) {
@@ -190,18 +130,20 @@ tape('swarm query', function (t) {
 
     function loop () {
       if (swarm.length === 256) return done()
-      var node = dht({bootstrap: port})
+      const node = dht({ bootstrap: port })
       swarm.push(node)
 
       var value = null
 
-      node.on('update:kv', function (data, cb) {
-        closest++
-        value = data.value
-        cb()
-      })
-      node.on('query:kv', function (data, cb) {
-        cb(null, value)
+      node.command('kv', {
+        update (data, cb) {
+          closest++
+          value = data.value
+          cb()
+        },
+        query (data, cb) {
+          cb(null, value)
+        }
       })
 
       node.ready(loop)
@@ -209,12 +151,73 @@ tape('swarm query', function (t) {
   })
 })
 
+tape('holepunch api', function (t) {
+  bootstrap(function (port, node) {
+    const a = dht({ bootstrap: port })
+    const b = dht({ bootstrap: port })
+    var holepunched = false
+
+    a.ready(function () {
+      b.ready(function () {
+        node.on('holepunch', function (from, to) {
+          t.same(from.port, a.address().port)
+          t.same(to.port, b.address().port)
+          holepunched = true
+        })
+        a.holepunch({
+          host: '127.0.0.1',
+          port: b.address().port,
+          referrer: {
+            host: '127.0.0.1',
+            port: node.address().port
+          }
+        }, function (err) {
+          t.error(err, 'no error')
+          t.ok(holepunched)
+          t.end()
+
+          node.destroy()
+          a.destroy()
+          b.destroy()
+        })
+      })
+    })
+  })
+})
+
+tape('timeouts', function (t) {
+  bootstrap(function (port, node) {
+    const a = dht({ bootstrap: port, ephemeral: true })
+    const b = dht({ bootstrap: port })
+
+    var tries = 0
+
+    b.command('nope', {
+      update (query, cb) {
+        tries++
+        t.pass('ignoring update')
+      }
+    })
+
+    b.ready(function () {
+      a.update('nope', Buffer.alloc(32), function (err) {
+        t.ok(err, 'errored')
+        t.same(tries, 3)
+        t.end()
+        node.destroy()
+        a.destroy()
+        b.destroy()
+      })
+    })
+  })
+})
+
 function bootstrap (done) {
-  var node = dht({
+  const node = dht({
     ephemeral: true
   })
 
-  node.listen(function () {
+  node.listen(0, function () {
     done(node.address().port, node)
   })
 }

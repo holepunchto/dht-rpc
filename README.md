@@ -5,7 +5,14 @@ Make RPC calls over a [Kademlia](https://pdos.csail.mit.edu/~petar/papers/maymou
 ```
 npm install dht-rpc
 ```
+
 [![build status](http://img.shields.io/travis/mafintosh/dht-rpc.svg?style=flat)](http://travis-ci.org/mafintosh/dht-rpc)
+
+## Key Features
+
+* UDP hole punching support
+* Easily add any command to your DHT
+* Streaming queries and updates
 
 ## Usage
 
@@ -14,10 +21,10 @@ Here is an example implementing a simple key value store
 First spin up a bootstrap node. You can make multiple if you want for redundancy.
 
 ``` js
-var dht = require('dht-rpc')
+const dht = require('dht-rpc')
 
 // Set ephemeral: true so other peers do not add us to the peer list, simply bootstrap
-var bootstrap = dht({ephemeral: true})
+const bootstrap = dht({ ephemeral: true })
 
 bootstrap.listen(10001)
 ```
@@ -25,39 +32,42 @@ bootstrap.listen(10001)
 Now lets make some dht nodes that can store values in our key value store.
 
 ``` js
-var dht = require('dht-rpc')
-var crypto = require('crypto')
+const dht = require('dht-rpc')
+const crypto = require('crypto')
 
 // Let's create 100 dht nodes for our example.
 for (var i = 0; i < 100; i++) createNode()
 
 function createNode () {
-  var node = dht({
-    bootstrap: ['localhost:10001']
+  const node = dht({
+    bootstrap: [
+      'localhost:10001'
+    ]
   })
 
-  var values = {}
+  const values = new Map()
 
-  // When we are the closest node and someone is sending us a "store" command
-  node.on('update:values', function (query, cb) {
-    if (!query.value) return cb()
+  node.command('values', {
+    // When we are the closest node and someone is sending us a "store" command
+    update (query, cb) {
+      if (!query.value) return cb()
 
-    // Use the hash of the value as the key
-    var key = sha256(query.value).toString('hex')
-    values[key] = query.value
-    console.log('Storing', key, '-->', query.value.toString())
-    cb()
-  })
-
-  // When someone is querying for a "lookup" command
-  node.on('query:values', function (query, cb) {
-    var value = values[query.target.toString('hex')]
-    cb(null, value)
+      // Use the hash of the value as the key
+      const key = sha256(query.value).toString('hex')
+      values.set(key, query.value)
+      console.log('Storing', key, '-->', query.value.toString())
+      cb()
+    },
+    // When someone is querying for a "lookup" command
+    query (query, cb) {
+      const value = values[query.target.toString('hex')]
+      cb(null, value)
+    }
   })
 }
 
 function sha256 (val) {
-  return crypto.createHash('sha256').update(val).digest('hex')
+  return crypto.createHash('sha256').update(val).digest()
 }
 ```
 
@@ -65,9 +75,9 @@ To insert a value into this dht make another script that does this following
 
 ``` js
 // Set ephemeral: true as we are not part of the network.
-var node = dht({ephemeral: true})
+const node = dht({ ephemeral: true })
 
-node.update({command: 'values', target: sha256(val), value: val}, function (err, res) {
+node.update('values', sha256(val), value, function (err, res) {
   if (err) throw err
   console.log('Inserted', sha256(val).toString('hex'))
 })
@@ -76,7 +86,7 @@ node.update({command: 'values', target: sha256(val), value: val}, function (err,
 Then after inserting run this script to query for a value
 
 ``` js
-node.query({command: 'values', target: new Buffer(hexFromAbove, 'hex')})
+node.query('values', Buffer.from(hexFromAbove, 'hex'))
   .on('data', function (data) {
     if (data.value && sha256(data.value).toString('hex') === hexFromAbove) {
       // We found the value! Destroy the query stream as there is no need to continue.
@@ -91,74 +101,135 @@ node.query({command: 'values', target: new Buffer(hexFromAbove, 'hex')})
 
 ## API
 
-#### `var node = dht([options])`
+#### `const node = dht([options])`
 
-Create a new DHT node. Options include
+Create a new DHT node.
 
-``` js
+Options include:
+
+```js
 {
-  id: nodeId, // id of the node
-  ephemeral: false, // will this node answer queries?
-  bootstrap: ['host:port'], // bootstrap nodes
-  socket: udpSocket // optional udp socket
+  // Whether or not this node is ephemeral or should join the routing table
+  ephemeral: false,
+  // A list of bootstrap nodes
+  bootstrap: [ 'bootstrap-node.com:24242', ... ],
+  // Optionally pass in your own UDP socket to use.
+  socket: udpSocket
 }
 ```
 
-#### `var stream = node.query(query, [options], [callback])`
+#### `node.command(name, cmd)`
 
-Create a new query. Query should look like this
+Define a new RPC command. `cmd` should look like this
 
-``` js
+```js
 {
-  command: 'command-to-run',
-  target: new Buffer('32 byte target'),
-  value: new Buffer('some payload')
+  // Query handler
+  query (query, cb),
+  // Update handler. only triggered when we are one of the closest nodes to the target
+  update (query, cb),
+  // Optional value encoding for the query/update incoming value. Defaults to binary.
+  inputEncoding: 'json', 'utf-8', object,
+  // Optional value encoding for the query/update outgoing value. Defaults to binary.
+  outputEncoding: (same as above),
+  valueEncoding: (sets both input/output encoding to this)
 }
 ```
 
-And options include
+The `query` object in the query/update function looks like this:
 
-``` js
+```js
 {
-  nodes: [{host: 'example.com', port: 4224}], // only contact these nodes
-  holepunching: true // set to false to disable hole punching
+  // always the same as your command def
+  command: 'command-name',
+  // the node who sent the query/update
+  node: { port, host, id },
+  // the query/update target (32 byte target)
+  target: Buffer,
+  // the query/update payload decoded with the inputEncoding
+  value
 }
 ```
 
-The stream will emit query results as they arrive. If you backpressure the query it will backpressure the query as well.
-Call `.destroy()` on the stream to cancel the query. If you pass the callback the streams payload will be buffered and passed to that.
+You should call the query/update callback with `(err, value)` where
+value will be encoded using the outputEncoding and returned to the node.
 
-#### `var stream = node.update(query, [options], [callback])`
+#### `const stream = node.query(name, target, [value], [callback])`
 
-Same as a query but will trigger an update query on the 20 closest nodes (distance between node ids and target) after the query finishes.
-Per default the stream will only contain results from the closest query. To include the query results also pass the `query: true` option.
+Send a query command.
 
-#### `node.on('query:{command}', data, callback)`
+If you set a valueEncoding when defining the command the value will be encoded.
 
-Called when a specific query is invoked on a node. `data` contains the same values as in the query above and also a `.node` property with info about the node invoking the query.
+Returns a result stream that emits data that looks like this:
 
-Call the callback with `(err, value)` to respond.
+```js
+{
+  // was this a query/update response
+  type: dht.QUERY,
+  // who sent this response
+  node: { peer, host, id },
+  // the response payload decoded using the outputEncoding
+  value
+}
+```
 
-#### `node.on('update:{command}', data, callback)`
+If you pass a callback the stream will be error handled and buffered
+and the content passed as an array.
 
-Called when an update query is invoked. The `data.node` is also guaranteed to have roundtripped to this dht before, meaning that you can trust that the host, port was not spoofed.
+#### `const stream = node.update(name, target, [value], [callback])`
 
-#### `node.ready(callback)`
+Send a update command
 
-Makes sure the initial bootstrap table has been built. You do not need to wait for this before querying.
+Same options/results as above but the response data will have `type`
+set to `dht.UPDATE`.
 
-#### `node.bootstrap([callback])`
+#### `const stream = node.queryAndUpdate(name, target, [value], [callback])`
 
-Rebootstrap your node. Call this at regular intervals if you aren't doing any other queries.
+Send a combined query and update command.
 
-#### `node.holepunch(peer, referrer, callback)`
+Will keep querying until it finds the closest nodes to the target and then
+issue an update. More efficient than doing a query/update yourself.
 
-UDP hole punch to another peer using the `referrer` as a STUN server.
+Same options/results as above but the response data will include both
+query and update results.
 
-#### `node.destroy()`
+#### `node.destroy(onclose)`
 
-Destroy the dht node. Releases all resources.
+Fully destroys the dht node.
 
-## License
+#### `node.bootstrap(cb)`
 
-MIT
+Re-bootstrap the DHT node. Normally you shouldn't have to call this.
+
+#### `node.holepunch(peer, cb)`
+
+UDP holepunch to another peer. The DHT does this automatically
+when it cannot reach another peer but you can use this yourself also.
+
+Peer should look like this:
+
+```js
+{
+  port,
+  host,
+  // referrer should be the node/peer that
+  // told you about this node.
+  referrer: { port, host }
+}
+```
+
+#### `node.listen([port], [address], [onlistening])`
+
+Explicitly bind the dht node to a certain port/address.
+
+#### `node.on('listening')`
+
+Emitted when the node starts listening on a udp port.
+
+#### `node.on('close')`
+
+Emitted when the node is fully closed.
+
+#### `node.on('holepunch', fromPeer, toPeer)`
+
+Emitted when the node is helping `fromPeer` udp holepunch to `toPeer`.

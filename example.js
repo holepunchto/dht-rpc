@@ -1,46 +1,50 @@
-var dht = require('./')
-var blake2b = require('./blake2b')
+const dht = require('./')
 
-var node = dht({
-  bootstrap: 'localhost:49737',
-  ephemeral: !!process.argv[2]
-})
+const bootstrap = dht()
+bootstrap.listen(10001)
 
-var values = {}
+const nodes = []
+var swarm = 1000
+loop(null)
 
-node.on('update:store', function (query, cb) {
-  console.log('(onupdate)')
-  if (!query.value) return cb()
-  var key = blake2b(query.value).toString('hex')
-  values[key] = query.value
-  console.log('Storing', key, '-->', query.value.toString())
-  cb()
-})
+function loop (err) {
+  if (err) throw err
+  if (swarm--) addNode(loop)
+  else done()
+}
 
-node.on('query:lookup', function (query, cb) {
-  console.log('(onquery)')
-  var value = values[query.target.toString('hex')]
-  cb(null, value)
-})
+function done () {
+  console.log('executing hi update')
 
-if (process.argv.length > 3) {
-  var val = process.argv.slice(3).join(' ')
-  if (process.argv[2] === 'put') {
-    node.update({command: 'store', target: blake2b(Buffer.from(val)), value: val}, function (err) {
-      if (err) throw err
-      console.log('Inserted', blake2b(Buffer.from(val)).toString('hex'))
-    })
-  }
-  if (process.argv[2] === 'get') {
-    node.query({command: 'lookup', target: Buffer.from(val, 'hex')})
-      .on('data', function (data) {
-        if (data.value && blake2b(data.value).toString('hex') === val) {
-          console.log(val, '-->', data.value.toString())
-          this.destroy()
-        }
-      })
-      .on('end', function () {
-        console.log('(query finished)')
-      })
-  }
+  const i = Math.floor(Math.random() * nodes.length)
+  const rs = nodes[i].update('hi', Buffer.alloc(32))
+
+  rs.resume()
+  rs.on('end', function () {
+    setTimeout(done, 2000)
+  })
+}
+
+function addNode (cb) {
+  const node = dht({
+    bootstrap: [
+      10001
+    ]
+  })
+
+  var hits = 0
+  node.command('hi', {
+    update (query, cb) {
+      console.log('hi', ++hits)
+      cb(null)
+    },
+    query (query, cb) {
+      cb(null)
+    }
+  })
+
+  node.once('ready', function () {
+    nodes.push(node)
+    cb()
+  })
 }
