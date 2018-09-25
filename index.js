@@ -43,7 +43,6 @@ class DHT extends EventEmitter {
 
     this._io = io
     this._commands = new Map()
-    this._secrets = [ randomBytes(32), randomBytes(32) ]
     this._tick = 0
     this._tickInterval = setInterval(this._ontick.bind(this), 5000)
 
