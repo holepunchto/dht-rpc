@@ -37,6 +37,7 @@ class DHT extends EventEmitter {
 
     this.socket.on('listening', this.emit.bind(this, 'listening'))
     this.socket.on('close', this.emit.bind(this, 'close'))
+    this.socket.on('error', this._onsocketerror.bind(this))
 
     const queryId = this.ephemeral ? null : this.id
     const io = new IO(this.socket, queryId, this)
@@ -47,6 +48,11 @@ class DHT extends EventEmitter {
     this._tickInterval = setInterval(this._ontick.bind(this), 5000)
 
     process.nextTick(this.bootstrap.bind(this))
+  }
+
+  _onsocketerror (err) {
+    if (err.code === 'EADDRINUSE' || err.code === 'EPERM' || err.code === 'EACCES') this.emit('error', err)
+    else this.emit('warning', err)
   }
 
   _ontick () {
