@@ -197,7 +197,10 @@ class DHT extends EventEmitter {
     if (token) node.roundtripToken = token
     node.tick = this._tick
 
-    if (!fresh) this.nodes.remove(node)
+    if (!fresh) {
+      // Makes sure that the node is re-added. This which will mark the node as "newer".
+      this.nodes.remove(node)
+    }
     this.nodes.add(node)
     this.bucket.add(node)
     if (fresh) this.emit('add-node', node)
