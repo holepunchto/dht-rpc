@@ -9,7 +9,6 @@ const codecs = require('codecs')
 const { Message, Holepunch } = require('./lib/messages')
 const IO = require('./lib/io')
 const QueryStream = require('./lib/query-stream')
-const blake2b = require('./lib/blake2b')
 
 const UNSUPPORTED_COMMAND = new Error('Unsupported command')
 const nodes = peers.idLength(32)
@@ -209,13 +208,6 @@ class DHT extends EventEmitter {
     this.nodes.remove(node)
     this.bucket.remove(node.id)
     this.emit('remove-node')
-  }
-
-  _token (peer, i) {
-    return blake2b.batch([
-      this._secrets[i],
-      Buffer.from(peer.host)
-    ])
   }
 
   _onnodeping (oldContacts, newContact) {
