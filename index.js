@@ -190,9 +190,8 @@ class DHT extends EventEmitter {
     var node = this.bucket.get(id)
     const fresh = !node
 
-    if (!node) node = {}
+    if (!node) node = { id: id }
 
-    node.id = id
     node.port = peer.port
     node.host = peer.host
     if (token) node.roundtripToken = token
