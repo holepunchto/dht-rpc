@@ -206,7 +206,7 @@ class DHT extends EventEmitter {
   _removeNode (node) {
     this.nodes.remove(node)
     this.bucket.remove(node.id)
-    this.emit('remove-node')
+    this.emit('remove-node', node)
   }
 
   _onnodeping (oldContacts, newContact) {
