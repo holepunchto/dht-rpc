@@ -39,7 +39,7 @@ class DHT extends EventEmitter {
     this.socket.on('error', this._onsocketerror.bind(this))
 
     const queryId = this.ephemeral ? null : this.id
-    const io = new IO(this.socket, queryId, this)
+    const io = new IO(this.socket, queryId, this, opts._keyRotation || 300000)
 
     this._io = io
     this._commands = new Map()

@@ -246,6 +246,46 @@ tape('pings', function (t) {
   })
 })
 
+tape('key rotation', function (t) {
+  bootstrap(function (port, node) {
+    // This test reduces the keyRotation period to 5 milliseconds
+    // If the key rotation works there should be no error happening
+    // else one of the update commands should fail
+    const a = dht({ bootstrap: port, _keyRotation: 5 })
+    const b = dht({ bootstrap: port })
+    a.command('hello', {
+      query: (_, callback) => callback()
+    })
+
+    const tokens = new Set()
+
+    a.ready(function () {
+      b.ready(function () {
+        let count = 0
+        function cmd () {
+          b.queryAndUpdate('hello', a.id, function (err) {
+            t.error(err, 'no errors')
+            if (b.nodes.latest) { // TODO: why is there sometimes no token?
+              tokens.add(b.nodes.latest.roundtripToken.toString('base64'))
+            }
+            count += 1
+            if (count < 10) {
+              setTimeout(cmd, 1)
+            } else {
+              t.ok(tokens.size > 1, 'More than one token received.')
+              a.destroy()
+              b.destroy()
+              node.destroy()
+              t.end()
+            }
+          })
+        }
+        cmd()
+      })
+    })
+  })
+})
+
 function bootstrap (done) {
   const node = dht({
     ephemeral: true
