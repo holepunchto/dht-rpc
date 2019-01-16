@@ -1,6 +1,7 @@
 const tape = require('tape')
 const dht = require('./')
 const blake2b = require('./lib/blake2b')
+const QUERY = require('./lib/io').QUERY
 
 tape('simple update', function (t) {
   bootstrap(function (port, node) {
@@ -281,6 +282,37 @@ tape('key rotation', function (t) {
           })
         }
         cmd()
+      })
+    })
+  })
+})
+
+tape('Alternative mapping in a query stream', function (t) {
+  bootstrap(function (port, node) {
+    const a = dht({ bootstrap: port })
+    const b = dht({ bootstrap: port })
+    a.command('hello', {
+      query: (_, callback) => callback(null, Buffer.from('world'))
+    })
+    let mapUsed = false
+    a.ready(function () {
+      b.ready(function () {
+        b.query('hello', a.id, 'xxx', function (err, data) {
+          t.error(err)
+          t.same(data[0].value, Buffer.from('ldrow'))
+          t.ok(mapUsed, 'map was being called')
+          a.destroy()
+          b.destroy()
+          node.destroy()
+          t.end()
+        }).map(function (message) {
+          mapUsed = true
+          t.equals(message.type, QUERY)
+          t.same(message.node.id, a.id)
+          t.same(message.value, Buffer.from('world'))
+          message.value = Buffer.from('ldrow')
+          return message
+        })
       })
     })
   })
