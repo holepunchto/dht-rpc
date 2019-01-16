@@ -212,6 +212,40 @@ tape('timeouts', function (t) {
   })
 })
 
+tape('pings', function (t) {
+  bootstrap(function (port, node) {
+    const a = dht({ bootstrap: port })
+    const b = dht({ bootstrap: port, _tickInterval: 1 })
+    a.command('hello', {
+      query (data, callback) {
+        t.same(data.value, null, 'expected data')
+        callback(null, Buffer.from('world'))
+      }
+    })
+    let pingCount = 0
+    a.on('ping', function (peer) {
+      t.equals(peer.port, b.address().port, 'b pinged!')
+      pingCount += 1
+    })
+
+    a.ready(function () {
+      b.query('hello', a.id, function (err, responses) {
+        t.error(err, 'no errors')
+        t.same(responses.length, 1, 'one response')
+        t.same(responses[0].value, Buffer.from('world'), 'responded')
+
+        setTimeout(function () {
+          t.equals(pingCount, 1, 'ping after 10 seconds.')
+          a.destroy()
+          b.destroy()
+          node.destroy()
+          t.end()
+        }, 10)
+      })
+    })
+  })
+})
+
 function bootstrap (done) {
   const node = dht({
     ephemeral: true

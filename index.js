@@ -44,7 +44,7 @@ class DHT extends EventEmitter {
     this._io = io
     this._commands = new Map()
     this._tick = 0
-    this._tickInterval = setInterval(this._ontick.bind(this), 5000)
+    this._tickInterval = setInterval(this._ontick.bind(this), opts._tickInterval || 5000)
 
     process.nextTick(this.bootstrap.bind(this))
   }
@@ -100,6 +100,7 @@ class DHT extends EventEmitter {
   _onping (message, peer) {
     if (message.value && !this.id.equals(message.value)) return
     this._io.response(message, peers.encode([ peer ]), null, peer)
+    this.emit('ping', peer)
   }
 
   _onholepunch (message, peer) {
