@@ -2,8 +2,7 @@ const { EventEmitter } = require('events')
 const peers = require('ipv4-peers')
 const dgram = require('dgram')
 const sodium = require('sodium-universal')
-// const KBucket = require('k-bucket')
-const KBtable = require('kademlia-routing-table')
+const KRTable = require('kademlia-routing-table')
 const tos = require('time-ordered-set')
 const collect = require('stream-collector')
 const codecs = require('codecs')
@@ -32,8 +31,7 @@ class DHT extends EventEmitter {
     this.ephemeral = !!opts.ephemeral
 
     this.nodes = tos()
-    this.bucket = new KBtable(this.id)
-    // this.bucket.on('ping', this._onnodeping.bind(this))
+    this.bucket = new KRTable(this.id)
     this.bootstrapNodes = [].concat(opts.bootstrap || []).map(parsePeer)
 
     this.socket.on('listening', this.emit.bind(this, 'listening'))
@@ -222,7 +220,6 @@ class DHT extends EventEmitter {
 
   _onnodeping (oldContacts, newContact) {
     // if bootstrapping, we've recently pinged all nodes
-    console.log('ping')
     if (!this.bootstrapped) return
 
     const reping = []
