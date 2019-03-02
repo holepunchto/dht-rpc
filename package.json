@@ -25,7 +25,7 @@
   "dependencies": {
     "codecs": "^1.2.1",
     "ipv4-peers": "^1.1.1",
-    "k-bucket": "^5.0.0",
+    "kademlia-routing-table": "^0.0.0",
     "protocol-buffers-encodings": "^1.1.0",
     "sodium-universal": "^2.0.0",
     "stream-collector": "^1.0.1",
