@@ -60,7 +60,7 @@ function createNode () {
     },
     // When someone is querying for a "lookup" command
     query (query, cb) {
-      const value = values[query.target.toString('hex')]
+      const value = values.get(query.target.toString('hex'))
       cb(null, value)
     }
   })
