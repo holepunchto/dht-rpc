@@ -338,6 +338,12 @@ class DHT extends EventEmitter {
       qs._concurrency = self.inflightQueries === 1 ? self.concurrency : backgroundCon
     }
   }
+
+  turnNonEphemeral () {
+    if (this.ephemeral === false) return
+    this.ephemeral = false
+    this.io._updateId(this.id)
+  }
 }
 
 exports.QUERY = DHT.QUERY = IO.QUERY
