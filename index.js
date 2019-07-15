@@ -58,6 +58,7 @@ class DHT extends EventEmitter {
   _ontick () {
     this._tick++
     if ((this._tick & 7) === 0) this._pingSome()
+    if ((this._tick & 63) === 0 && this.nodes.length < 20) this.bootstrap()
   }
 
   address () {
@@ -267,6 +268,9 @@ class DHT extends EventEmitter {
   _pingSome () {
     var cnt = this.inflightQueries > 2 ? 1 : 3
     var oldest = this.nodes.oldest
+
+    // tiny dht, ping the bootstrap again
+    if (!oldest) return this.bootstrap()
 
     while (cnt--) {
       if (!oldest || this._tick === oldest.tick) continue
