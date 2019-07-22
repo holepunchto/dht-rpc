@@ -23,8 +23,8 @@
     "tape": "^4.9.1"
   },
   "dependencies": {
-    "codecs": "^1.2.1",
-    "ipv4-peers": "^1.1.1",
+    "codecs": "^2.0.0",
+    "ipv4-peers": "^2.0.0",
     "k-bucket": "^5.0.0",
     "protocol-buffers-encodings": "^1.1.0",
     "sodium-universal": "^2.0.0",
