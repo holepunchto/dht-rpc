@@ -24,6 +24,7 @@
   },
   "dependencies": {
     "codecs": "^2.0.0",
+    "debug": "^4.1.1",
     "ipv4-peers": "^2.0.0",
     "k-bucket": "^5.0.0",
     "protocol-buffers-encodings": "^1.1.0",

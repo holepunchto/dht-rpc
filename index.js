@@ -11,6 +11,8 @@ const IO = require('./lib/io')
 const QueryStream = require('./lib/query-stream')
 const blake2b = require('./lib/blake2b')
 
+const debug = require('debug')('dht-rpc')
+
 const UNSUPPORTED_COMMAND = new Error('Unsupported command')
 const nodes = peers.idLength(32)
 
@@ -50,13 +52,21 @@ class DHT extends EventEmitter {
     process.nextTick(this.bootstrap.bind(this))
   }
 
+  _debug (fmt, ...args) {
+    if (debug.enabled) {
+      debug(`id=%j ${fmt}`, ...[ debugId(this.id) ].concat(args))
+    }
+  }
+
   _onsocketerror (err) {
+    this._debug('socket error code=%j message=%j', err.code, err.message)
     if (err.code === 'EADDRINUSE' || err.code === 'EPERM' || err.code === 'EACCES') this.emit('error', err)
     else this.emit('warning', err)
   }
 
   _ontick () {
     this._tick++
+    this._debug('tick=%d', this._tick)
     if ((this._tick & 7) === 0) this._pingSome()
     if ((this._tick & 63) === 0 && this.nodes.length < 20) this.bootstrap()
   }
@@ -101,6 +111,7 @@ class DHT extends EventEmitter {
 
   _onping (message, peer) {
     if (message.value && !this.id.equals(message.value)) return
+    this._debug('onping from=%j', debugId(message.value))
     this._io.response(message, peers.encode([ peer ]), null, peer)
   }
 
@@ -111,6 +122,9 @@ class DHT extends EventEmitter {
     if (value.to) {
       const to = decodePeer(value.to)
       if (!to || samePeer(to, peer)) return
+
+      this._debug('holepunch peer=%j to=%j', debugPeer(peer), debugPeer(to))
+
       message.id = this._io.id
       message.value = Holepunch.encode({ from: peers.encode([ peer ]) })
       this.emit('holepunch', peer, to)
@@ -123,12 +137,15 @@ class DHT extends EventEmitter {
       if (from) peer = from
     }
 
+    this._debug('holepunch peer=%j', debugPeer(peer))
     this._io.response(message, null, null, peer)
   }
 
   _onfindnode (message, peer) {
     if (!validateId(message.target)) return
 
+    this._debug('onfindnode target=%j peer=%j',
+      debugId(message.target), debugPeer(peer))
     const closerNodes = nodes.encode(this.bucket.closest(message.target, 20))
     this._io.response(message, null, closerNodes, peer)
   }
@@ -139,7 +156,12 @@ class DHT extends EventEmitter {
     const self = this
     const cmd = this._commands.get(message.command)
 
-    if (!cmd) return reply(UNSUPPORTED_COMMAND)
+    if (!cmd) {
+      this._debug('unsupported command=%j', message.command)
+      return reply(UNSUPPORTED_COMMAND)
+    }
+
+    this._debug('got command=%j', message.command)
 
     const query = {
       type,
@@ -167,16 +189,19 @@ class DHT extends EventEmitter {
 
   holepunch (peer, cb) {
     if (!peer.referrer) throw new Error('peer.referrer is required')
+    this._debug('holepunch peer=%j', debugPeer(peer))
     this._io.query('_holepunch', null, null, peer, cb)
   }
 
   destroy () {
+    this._debug('destroy')
     this.destroyed = true
     this._io.destroy()
     clearInterval(this._tickInterval)
   }
 
   ping (peer, cb) {
+    this._debug('_check peer=%j', debugPeer(peer))
     this._io.query('_ping', null, peer.id, peer, function (err, res) {
       if (err) return cb(err)
       if (res.error) return cb(new Error(res.error))
@@ -203,10 +228,15 @@ class DHT extends EventEmitter {
     if (!fresh) this.nodes.remove(node)
     this.nodes.add(node)
     this.bucket.add(node)
-    if (fresh) this.emit('add-node', node)
+    if (fresh) {
+      this._debug('add-node id=%j peer=%j', debugId(id), debugPeer(peer))
+      this.emit('add-node', node)
+    }
   }
 
   _removeNode (node) {
+    this._debug('_removeNode id=%j peer=%j', debugId(node.id), debugPeer(node))
+
     this.nodes.remove(node)
     this.bucket.remove(node.id)
     this.emit('remove-node')
@@ -306,6 +336,7 @@ class DHT extends EventEmitter {
   }
 
   bootstrap (cb) {
+    this._debug('bootstrap start')
     const self = this
     const backgroundCon = Math.min(this.concurrency, Math.max(2, Math.floor(this.concurrency / 8)))
 
@@ -326,6 +357,7 @@ class DHT extends EventEmitter {
     function done () {
       if (!self.bootstrapped) {
         self.bootstrapped = true
+        self._debug('ready')
         self.emit('ready')
       }
       if (cb) cb()
@@ -340,6 +372,22 @@ class DHT extends EventEmitter {
 exports.QUERY = DHT.QUERY = IO.QUERY
 exports.UPDATE = DHT.UPDATE = IO.UPDATE
 exports.DHT = DHT
+
+function debugId (id) {
+  if (!debug.enabled) {
+    return null
+  }
+
+  return id.toString('hex').slice(0, 8)
+}
+
+function debugPeer (peer) {
+  if (!debug.enabled) {
+    return null
+  }
+
+  return `${peer.host}:${peer.port}`
+}
 
 function validateId (id) {
   return id && id.length === 32
