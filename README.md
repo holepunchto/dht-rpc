@@ -166,6 +166,8 @@ Returns a result stream that emits data that looks like this:
 {
   // was this a query/update response
   type: dht.QUERY,
+  // the round trip token for the request
+  token,
   // who sent this response
   node: { peer, host, id },
   // the response payload decoded using the outputEncoding
