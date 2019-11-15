@@ -154,7 +154,9 @@ class DHT extends EventEmitter {
 
     function reply (err, value) {
       const closerNodes = nodes.encode(self.bucket.closest(message.target, 20))
-      if (err) return self._io.error(message, err, closerNodes, peer)
+      if (err) {
+        return self._io.error(message, err, closerNodes, peer, value && cmd.outputEncoding.encode(value))
+      }
       self._io.response(message, value && cmd.outputEncoding.encode(value), closerNodes, peer)
     }
   }
