@@ -212,6 +212,40 @@ tape('timeouts', function (t) {
   })
 })
 
+tape('joinDht', function (t) {
+  bootstrap(function (port, node) {
+    const a = dht({ bootstrap: port, ephemeral: true })
+    const b = dht({ bootstrap: port })
+    a.command('hello', {
+      query (data, callback) {
+        callback(null, Buffer.from('world'))
+      }
+    })
+
+    a.ready(function () {
+      b.ready(function () {
+        const key = blake2b(Buffer.from('hello'))
+        b.query('hello', key, (err, result) => {
+          t.error(err)
+          t.is(result.length, 0)
+          a.joinDht((err) => {
+            t.error(err)
+            b.query('hello', key, (err, result) => {
+              t.error(err)
+              t.is(result.length, 1)
+              t.is(Buffer.compare(result[0].node.id, a.id), 0)
+              a.destroy()
+              b.destroy()
+              node.destroy()
+              t.end()
+            })
+          })
+        })
+      })
+    })
+  })
+})
+
 function bootstrap (done) {
   const node = dht({
     ephemeral: true
