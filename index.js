@@ -339,7 +339,7 @@ class DHT extends EventEmitter {
     }
   }
 
-  turnNonEphemeral () {
+  joinDht () {
     if (this.ephemeral === false) return
     this.ephemeral = false
     this.io._updateId(this.id)
