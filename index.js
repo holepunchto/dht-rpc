@@ -271,7 +271,6 @@ class DHT extends EventEmitter {
   _pingSome () {
     var cnt = this.inflightQueries > 2 ? 1 : 3
     var oldest = this.nodes.oldest
-
     // tiny dht, ping the bootstrap again
     if (!oldest) return this.bootstrap()
 
@@ -339,8 +338,12 @@ class DHT extends EventEmitter {
     }
   }
 
-  joinDht (cb) {
-    if (this.ephemeral === false) return
+  setEphemeral (ephemeral = false, cb) {
+    if (ephemeral === true) {
+      this._io._updateId(null)
+      if (cb) process.nextTick(cb)
+      return
+    }
     this._io._updateId(this.id)
     this.bootstrap((err) => {
       if (err) {
