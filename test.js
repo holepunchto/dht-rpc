@@ -212,6 +212,32 @@ tape('timeouts', function (t) {
   })
 })
 
+tape('ping should error if response id does not match pinged peer id', function (t) {
+  bootstrap(function (port, node) {
+    const a = dht({ bootstrap: port })
+    const b = dht({ bootstrap: port })
+
+    a.ready(function () {
+      b.ready(function () {
+        a.ping(a.nodes.oldest, (err) => {
+          t.error(err)
+          b._io.id = Buffer.alloc(32) // bad id
+          a.ping(a.nodes.oldest, (err) => {
+            t.ok(err)
+            t.is(err.message, 'Invalid ID')
+            t.end()
+            a.destroy()
+            b.destroy()
+            node.destroy()
+          })
+        })
+      })
+    })
+  })
+})
+
+
+
 function bootstrap (done) {
   const node = dht({
     ephemeral: true
