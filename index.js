@@ -183,7 +183,7 @@ class DHT extends EventEmitter {
     this._io.query('_ping', null, peer.id, peer, function (err, res) {
       if (err) return cb(err)
 
-      if (!Buffer.isBuffer(res.id) || !peer.id.equals(res.id)) {
+      if (peer.id && (!Buffer.isBuffer(res.id) || !peer.id.equals(res.id))) {
         return cb(new Error('Invalid ID'))
       }
       if (res.error) return cb(new Error(res.error))
