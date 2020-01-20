@@ -250,6 +250,8 @@ tape('setEphemeral(true)', function (t) {
   bootstrap(function (port, node) {
     const a = dht({ bootstrap: port, ephemeral: false })
     const b = dht({ bootstrap: port })
+    a.name = 'a'
+    b.name = 'b'
     a.command('hello', {
       query (data, callback) {
         callback(null, Buffer.from('world'))
@@ -265,10 +267,9 @@ tape('setEphemeral(true)', function (t) {
           t.is(Buffer.compare(result[0].node.id, a.id), 0)
           a.setEphemeral(true, (err) => {
             t.error(err)
-            // wait a tick interval
-            setTimeout(() => {
+            setTimeout(() => { // wait for a tick interval
               b._pingSome()
-              b.bootstrap(() => {
+              b.once('remove-node', () => {
                 b.query('hello', key, (err, result) => {
                   t.error(err)
                   t.is(result.length, 0)
@@ -277,7 +278,7 @@ tape('setEphemeral(true)', function (t) {
                   node.destroy()
                   t.end()
                 })
-              })
+              }, 5000)
             }, 5000)
           })
         })

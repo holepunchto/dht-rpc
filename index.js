@@ -100,6 +100,7 @@ class DHT extends EventEmitter {
   }
 
   _onping (message, peer) {
+    if (this.ephemeral === true) return
     if (message.value && !this.id.equals(message.value)) return
     this._io.response(message, peers.encode([ peer ]), null, peer)
   }
@@ -225,7 +226,6 @@ class DHT extends EventEmitter {
   _onnodeping (oldContacts, newContact) {
     // if bootstrapping, we've recently pinged all nodes
     if (!this.bootstrapped) return
-
     const reping = []
 
     for (var i = 0; i < oldContacts.length; i++) {
@@ -244,9 +244,13 @@ class DHT extends EventEmitter {
   }
 
   _check (node) {
+    console.log('CHECK!!!')
     const self = this
     this.ping(node, function (err) {
-      if (err) self._removeNode(node)
+      if (err) {
+        console.log('REMOVE NODE!')
+        self._removeNode(node)
+      }
     })
   }
 
@@ -341,6 +345,7 @@ class DHT extends EventEmitter {
   setEphemeral (ephemeral = false, cb) {
     if (ephemeral === true) {
       this._io._updateId(null)
+      this.ephemeral = true
       if (cb) process.nextTick(cb)
       return
     }
