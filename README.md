@@ -222,12 +222,9 @@ Peer should look like this:
 
 Explicitly bind the dht node to a certain port/address.
 
-#### `node.joinDht()`
+#### `node.setEpehemeral(boolean)`
 
-This method is only useful for ephemeral nodes that we want to upgrade to non-ephemeral nodes.
-
-Dynamically and irreversibly begin allowing other nodes to add
-this node to their peer lists.
+Dynamically convert the node into ephemeral (leave the DHT) or non-ephemeral (join the DHT).
 
 #### `node.on('listening')`
 
