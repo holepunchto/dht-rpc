@@ -250,8 +250,7 @@ tape('setEphemeral(true)', function (t) {
   bootstrap(function (port, node) {
     const a = dht({ bootstrap: port, ephemeral: false })
     const b = dht({ bootstrap: port })
-    a.name = 'a'
-    b.name = 'b'
+
     a.command('hello', {
       query (data, callback) {
         callback(null, Buffer.from('world'))
