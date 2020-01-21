@@ -278,7 +278,7 @@ tape('setEphemeral(true)', function (t) {
                   node.destroy()
                   t.end()
                 })
-              }, 5000)
+              })
             }, 5000)
           })
         })

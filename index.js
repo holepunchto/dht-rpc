@@ -102,7 +102,7 @@ class DHT extends EventEmitter {
   _onping (message, peer) {
     if (this.ephemeral === true) return
     if (message.value && !this.id.equals(message.value)) return
-    this._io.response(message, peers.encode([ peer ]), null, peer)
+    this._io.response(message, peers.encode([peer]), null, peer)
   }
 
   _onholepunch (message, peer) {
@@ -113,7 +113,7 @@ class DHT extends EventEmitter {
       const to = decodePeer(value.to)
       if (!to || samePeer(to, peer)) return
       message.id = this._io.id
-      message.value = Holepunch.encode({ from: peers.encode([ peer ]) })
+      message.value = Holepunch.encode({ from: peers.encode([peer]) })
       this.emit('holepunch', peer, to)
       this._io.send(Message.encode(message), to)
       return
@@ -244,11 +244,9 @@ class DHT extends EventEmitter {
   }
 
   _check (node) {
-    console.log('CHECK!!!')
     const self = this
     this.ping(node, function (err) {
       if (err) {
-        console.log('REMOVE NODE!')
         self._removeNode(node)
       }
     })
