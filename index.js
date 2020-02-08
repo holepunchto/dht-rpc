@@ -100,7 +100,6 @@ class DHT extends EventEmitter {
   }
 
   _onping (message, peer) {
-    if (this.ephemeral === true) return
     if (message.value && !this.id.equals(message.value)) return
     this._io.response(message, peers.encode([peer]), null, peer)
   }

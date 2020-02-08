@@ -266,19 +266,19 @@ tape('setEphemeral(true)', function (t) {
           t.is(Buffer.compare(result[0].node.id, a.id), 0)
           a.setEphemeral(true, (err) => {
             t.error(err)
-            setTimeout(() => { // wait for a tick interval
-              b._pingSome()
-              b.once('remove-node', () => {
-                b.query('hello', key, (err, result) => {
-                  t.error(err)
-                  t.is(result.length, 0)
-                  a.destroy()
-                  b.destroy()
-                  node.destroy()
-                  t.end()
-                })
+            b.query('hello', key, (err, result) => {
+              t.ok(err)
+            })
+            b.once('remove-node', () => {
+              b.query('hello', key, (err, result) => {
+                t.error(err)
+                t.is(result.length, 0)
+                a.destroy()
+                b.destroy()
+                node.destroy()
+                t.end()
               })
-            }, 5000)
+            })
           })
         })
       })
