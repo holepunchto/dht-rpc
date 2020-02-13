@@ -341,12 +341,12 @@ class DHT extends EventEmitter {
 
   setEphemeral (ephemeral = false, cb) {
     if (ephemeral === true) {
-      this._io._updateId(null)
+      this._io.id = null
       this.ephemeral = true
       if (cb) process.nextTick(cb)
       return
     }
-    this._io._updateId(this.id)
+    this._io.id = this.id
     this.bootstrap((err) => {
       if (err) {
         if (cb) cb(err)
