@@ -222,6 +222,10 @@ Peer should look like this:
 
 Explicitly bind the dht node to a certain port/address.
 
+#### `node.setEpehemeral(boolean)`
+
+Dynamically convert the node into ephemeral (leave the DHT) or non-ephemeral (join the DHT).
+
 #### `node.on('listening')`
 
 Emitted when the node starts listening on a udp port.

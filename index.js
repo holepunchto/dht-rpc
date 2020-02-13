@@ -101,7 +101,7 @@ class DHT extends EventEmitter {
 
   _onping (message, peer) {
     if (message.value && !this.id.equals(message.value)) return
-    this._io.response(message, peers.encode([ peer ]), null, peer)
+    this._io.response(message, peers.encode([peer]), null, peer)
   }
 
   _onholepunch (message, peer) {
@@ -112,7 +112,7 @@ class DHT extends EventEmitter {
       const to = decodePeer(value.to)
       if (!to || samePeer(to, peer)) return
       message.id = this._io.id
-      message.value = Holepunch.encode({ from: peers.encode([ peer ]) })
+      message.value = Holepunch.encode({ from: peers.encode([peer]) })
       this.emit('holepunch', peer, to)
       this._io.send(Message.encode(message), to)
       return
@@ -225,7 +225,6 @@ class DHT extends EventEmitter {
   _onnodeping (oldContacts, newContact) {
     // if bootstrapping, we've recently pinged all nodes
     if (!this.bootstrapped) return
-
     const reping = []
 
     for (var i = 0; i < oldContacts.length; i++) {
@@ -246,7 +245,9 @@ class DHT extends EventEmitter {
   _check (node) {
     const self = this
     this.ping(node, function (err) {
-      if (err) self._removeNode(node)
+      if (err) {
+        self._removeNode(node)
+      }
     })
   }
 
@@ -271,7 +272,6 @@ class DHT extends EventEmitter {
   _pingSome () {
     var cnt = this.inflightQueries > 2 ? 1 : 3
     var oldest = this.nodes.oldest
-
     // tiny dht, ping the bootstrap again
     if (!oldest) return this.bootstrap()
 
@@ -337,6 +337,24 @@ class DHT extends EventEmitter {
     function update () {
       qs._concurrency = self.inflightQueries === 1 ? self.concurrency : backgroundCon
     }
+  }
+
+  setEphemeral (ephemeral = false, cb) {
+    if (ephemeral === true) {
+      this._io._updateId(null)
+      this.ephemeral = true
+      if (cb) process.nextTick(cb)
+      return
+    }
+    this._io._updateId(this.id)
+    this.bootstrap((err) => {
+      if (err) {
+        if (cb) cb(err)
+        return
+      }
+      this.ephemeral = false
+      if (cb) cb()
+    })
   }
 }
 
