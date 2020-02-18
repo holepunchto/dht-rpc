@@ -218,6 +218,26 @@ Peer should look like this:
 }
 ```
 
+#### `node.holepunchable()`
+
+Returns `true` if your current network is holepunchable.
+Relies on a heuristic interally based on remote node information.
+
+It's usually best to wait for the `initial-nodes` or `ready` event before checking this
+as it is more reliable the more routing information the node has.
+
+#### `{ host, port } = node.remoteAddress()`
+
+Returns your remote IP and port.
+Relies on a heuristic interally based on remote node information.
+
+If your IP could not be inferred `null` is returned.
+If your IP could be inferred but your port not, `{ host, port: 0 }` is returned.
+
+It's usually best to wait for the `initial-nodes` or `ready` event before checking this
+as it is more reliable the more routing information the node has.
+
+
 #### `node.listen([port], [address], [onlistening])`
 
 Explicitly bind the dht node to a certain port/address.
@@ -225,6 +245,14 @@ Explicitly bind the dht node to a certain port/address.
 #### `node.setEpehemeral(boolean)`
 
 Dynamically convert the node into ephemeral (leave the DHT) or non-ephemeral (join the DHT).
+
+#### `node.on('ready')`
+
+Emitted when the node is fully bootstrapped. You can make queries/updates before.
+
+#### `node.on('initial-nodes')`
+
+Emitted when the routing table has been initially populated.
 
 #### `node.on('listening')`
 
