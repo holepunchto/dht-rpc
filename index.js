@@ -81,7 +81,7 @@ class DHT extends EventEmitter {
 
   onrequest (type, message, peer) {
     if (validateId(message.id)) {
-      this._addNode(message.id, peer, null)
+      this._addNode(message.id, peer, null, message.to)
     }
 
     switch (message.command) {
@@ -163,7 +163,7 @@ class DHT extends EventEmitter {
 
   onresponse (message, peer) {
     if (validateId(message.id)) {
-      this._addNode(message.id, peer, message.roundtripToken)
+      this._addNode(message.id, peer, message.roundtripToken, message.to)
     }
   }
 
@@ -189,7 +189,30 @@ class DHT extends EventEmitter {
     })
   }
 
-  _addNode (id, peer, token) {
+  get holepunchable () {
+    var sum = new Map()
+    var node = this.nodes.latest
+    var cnt = 0
+    var good = 0
+
+    for (; node && cnt < 10; node = node.prev) {
+      if (!node.to) continue
+      const to = node.to.toString('hex')
+      const hits = 1 + (sum.get(to) || 0)
+      if (hits > good) good = hits
+      sum.set(to, hits)
+      cnt++
+    }
+
+    // We want at least 3 samples all with the same ip:port from
+    // different remotes (the to field) to be holepunchable
+    // If we get >=3 samples with conflicting info we are not (or under attack) (Subject for tweaking)
+
+    const bad = cnt - good
+    return bad < 3 && good >= 3
+  }
+
+  _addNode (id, peer, token, to) {
     if (id.equals(this.id)) return
 
     var node = this.bucket.get(id)
@@ -202,6 +225,7 @@ class DHT extends EventEmitter {
     node.host = peer.host
     if (token) node.roundtripToken = token
     node.tick = this._tick
+    node.to = to
 
     if (!fresh) this.nodes.remove(node)
     this.nodes.add(node)
