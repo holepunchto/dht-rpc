@@ -13,6 +13,7 @@ message Message {
   // request/response type + id
   required TYPE type = 1;
   required uint64 rid = 2;
+  optional bytes to = 10;
 
   // kademlia stuff
   optional bytes id = 3;
