@@ -46,6 +46,7 @@ class DHT extends EventEmitter {
     this._commands = new Map()
     this._tick = 0
     this._tickInterval = setInterval(this._ontick.bind(this), 5000)
+    this._initialNodes = false
 
     process.nextTick(this.bootstrap.bind(this))
   }
@@ -246,7 +247,13 @@ class DHT extends EventEmitter {
     if (!fresh) this.nodes.remove(node)
     this.nodes.add(node)
     this.bucket.add(node)
-    if (fresh) this.emit('add-node', node)
+    if (fresh) {
+      this.emit('add-node', node)
+      if (!this._initialNodes && this.nodes.length >= 5) {
+        this._initialNodes = true
+        this.emit('initial-nodes')
+      }
+    }
   }
 
   _removeNode (node) {
