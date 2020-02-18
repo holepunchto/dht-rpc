@@ -183,7 +183,7 @@ class DHT extends EventEmitter {
     this._io.query('_ping', null, peer.id, peer, function (err, res) {
       if (err) return cb(err)
       if (res.error) return cb(new Error(res.error))
-      const pong = decodePeer(res.value)
+      const pong = decodePeer(res.to || res.value) // res.value will be deprecated
       if (!pong) return cb(new Error('Invalid pong'))
       cb(null, pong)
     })
