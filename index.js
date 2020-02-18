@@ -189,27 +189,43 @@ class DHT extends EventEmitter {
     })
   }
 
-  get holepunchable () {
-    var sum = new Map()
+  _tally (onlyIp) {
+    const sum = new Map()
+    var result = null
     var node = this.nodes.latest
     var cnt = 0
     var good = 0
 
     for (; node && cnt < 10; node = node.prev) {
-      if (!node.to) continue
-      const to = node.to.toString('hex')
+      if (!node.to || node.to.length !== 6) continue
+      const to = onlyIp ? node.to.toString('hex').slice(0, 8) + '0000' : node.to.toString('hex')
       const hits = 1 + (sum.get(to) || 0)
-      if (hits > good) good = hits
+      if (hits > good) {
+        good = hits
+        result = node.to
+      }
       sum.set(to, hits)
       cnt++
     }
 
     // We want at least 3 samples all with the same ip:port from
-    // different remotes (the to field) to be holepunchable
+    // different remotes (the to field) to be consider it consistent
     // If we get >=3 samples with conflicting info we are not (or under attack) (Subject for tweaking)
 
     const bad = cnt - good
-    return bad < 3 && good >= 3
+    return bad < 3 && good >= 3 ? result : null
+  }
+
+  remoteAddress () {
+    const both = this._tally(false)
+    if (both) return peers.decode(both)[0]
+    const onlyIp = this._tally(true)
+    if (onlyIp) return peers.decode(onlyIp)[0]
+    return null
+  }
+
+  holepunchable () {
+    return this._tally(false) !== null
   }
 
   _addNode (id, peer, token, to) {
