@@ -46,6 +46,7 @@ class DHT extends EventEmitter {
     this._commands = new Map()
     this._tick = 0
     this._tickInterval = setInterval(this._ontick.bind(this), 5000)
+    this._initialNodes = false
 
     process.nextTick(this.bootstrap.bind(this))
   }
@@ -81,7 +82,7 @@ class DHT extends EventEmitter {
 
   onrequest (type, message, peer) {
     if (validateId(message.id)) {
-      this._addNode(message.id, peer, null)
+      this._addNode(message.id, peer, null, message.to)
     }
 
     switch (message.command) {
@@ -163,7 +164,7 @@ class DHT extends EventEmitter {
 
   onresponse (message, peer) {
     if (validateId(message.id)) {
-      this._addNode(message.id, peer, message.roundtripToken)
+      this._addNode(message.id, peer, message.roundtripToken, message.to)
     }
   }
 
@@ -183,13 +184,52 @@ class DHT extends EventEmitter {
     this._io.query('_ping', null, peer.id, peer, function (err, res) {
       if (err) return cb(err)
       if (res.error) return cb(new Error(res.error))
-      const pong = decodePeer(res.value)
+      const pong = decodePeer(res.to || res.value) // res.value will be deprecated
       if (!pong) return cb(new Error('Invalid pong'))
       cb(null, pong)
     })
   }
 
-  _addNode (id, peer, token) {
+  _tally (onlyIp) {
+    const sum = new Map()
+    var result = null
+    var node = this.nodes.latest
+    var cnt = 0
+    var good = 0
+
+    for (; node && cnt < 10; node = node.prev) {
+      if (!node.to || node.to.length !== 6) continue
+      const to = onlyIp ? node.to.toString('hex').slice(0, 8) + '0000' : node.to.toString('hex')
+      const hits = 1 + (sum.get(to) || 0)
+      if (hits > good) {
+        good = hits
+        result = node.to
+      }
+      sum.set(to, hits)
+      cnt++
+    }
+
+    // We want at least 3 samples all with the same ip:port from
+    // different remotes (the to field) to be consider it consistent
+    // If we get >=3 samples with conflicting info we are not (or under attack) (Subject for tweaking)
+
+    const bad = cnt - good
+    return bad < 3 && good >= 3 ? result : null
+  }
+
+  remoteAddress () {
+    const both = this._tally(false)
+    if (both) return peers.decode(both)[0]
+    const onlyIp = this._tally(true)
+    if (onlyIp) return peers.decode(onlyIp)[0]
+    return null
+  }
+
+  holepunchable () {
+    return this._tally(false) !== null
+  }
+
+  _addNode (id, peer, token, to) {
     if (id.equals(this.id)) return
 
     var node = this.bucket.get(id)
@@ -202,11 +242,18 @@ class DHT extends EventEmitter {
     node.host = peer.host
     if (token) node.roundtripToken = token
     node.tick = this._tick
+    node.to = to
 
     if (!fresh) this.nodes.remove(node)
     this.nodes.add(node)
     this.bucket.add(node)
-    if (fresh) this.emit('add-node', node)
+    if (fresh) {
+      this.emit('add-node', node)
+      if (!this._initialNodes && this.nodes.length >= 5) {
+        this._initialNodes = true
+        this.emit('initial-nodes')
+      }
+    }
   }
 
   _removeNode (node) {
