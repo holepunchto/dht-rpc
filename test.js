@@ -212,7 +212,7 @@ tape('timeouts', function (t) {
   })
 })
 
-tape('setEphemeral(false)', function (t) {
+tape('persistent', function (t) {
   bootstrap(function (port, node) {
     const a = dht({ bootstrap: port, ephemeral: true })
     const b = dht({ bootstrap: port })
@@ -228,7 +228,7 @@ tape('setEphemeral(false)', function (t) {
         b.query('hello', key, (err, result) => {
           t.error(err)
           t.is(result.length, 0)
-          a.setEphemeral(false, (err) => {
+          a.persistent((err) => {
             t.error(err)
             b.query('hello', key, (err, result) => {
               t.error(err)
