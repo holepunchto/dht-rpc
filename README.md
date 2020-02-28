@@ -242,9 +242,9 @@ as it is more reliable the more routing information the node has.
 
 Explicitly bind the dht node to a certain port/address.
 
-#### `node.setEpehemeral(boolean)`
+#### `node.persistent()`
 
-Dynamically convert the node into ephemeral (leave the DHT) or non-ephemeral (join the DHT).
+Dynamically convert the node from ephemeral to non-ephemeral (join the DHT).
 
 #### `node.on('ready')`
 
