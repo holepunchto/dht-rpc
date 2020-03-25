@@ -25,6 +25,7 @@ class DHT extends EventEmitter {
     this.bootstrapped = false
     this.destroyed = false
     this.concurrency = 16
+    this.concurrencyRPS = 50
     this.socket = opts.socket || dgram.createSocket('udp4')
     this.id = randomBytes(32)
     this.inflightQueries = 0
