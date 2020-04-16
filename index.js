@@ -49,6 +49,10 @@ class DHT extends EventEmitter {
     this._tickInterval = setInterval(this._ontick.bind(this), 5000)
     this._initialNodes = false
 
+    this.bucket.on('removed', (node) => {
+      if (this.nodes.has(node)) throw new Error('stop')
+    })
+
     process.nextTick(this.bootstrap.bind(this))
   }
 
@@ -169,6 +173,10 @@ class DHT extends EventEmitter {
     }
   }
 
+  onbadid (peer) {
+    this._removeNode(peer)
+  }
+
   holepunch (peer, cb) {
     if (!peer.referrer) throw new Error('peer.referrer is required')
     this._io.query('_holepunch', null, null, peer, cb)
@@ -246,8 +254,9 @@ class DHT extends EventEmitter {
     node.to = to
 
     if (!fresh) this.nodes.remove(node)
-    this.nodes.add(node)
     this.bucket.add(node)
+    if (this.bucket.get(node.id) !== node) return // in a ping
+    this.nodes.add(node)
     if (fresh) {
       this.emit('add-node', node)
       if (!this._initialNodes && this.nodes.length >= 5) {
@@ -258,9 +267,10 @@ class DHT extends EventEmitter {
   }
 
   _removeNode (node) {
+    if (!this.nodes.has(node)) return
     this.nodes.remove(node)
     this.bucket.remove(node.id)
-    this.emit('remove-node')
+    this.emit('remove-node', node)
   }
 
   _token (peer, i) {
@@ -279,7 +289,7 @@ class DHT extends EventEmitter {
       const old = oldContacts[i]
 
       // check if we recently talked to this peer ...
-      if (this._tick === old.tick) {
+      if (this._tick === old.tick && this.nodes.has(oldContacts[i])) {
         this.bucket.add(oldContacts[i])
         continue
       }
@@ -313,12 +323,12 @@ class DHT extends EventEmitter {
     function afterPing (err, res, node) {
       if (!err) return ping()
       self._removeNode(node)
-      self.bucket.add(newContact)
+      self._addNode(newContact)
     }
   }
 
   _pingSome () {
-    var cnt = this.inflightQueries > 2 ? 1 : 3
+    var cnt = this.inflightQueries > 2 ? 2 : 5
     var oldest = this.nodes.oldest
     // tiny dht, ping the bootstrap again
     if (!oldest) return this.bootstrap()
