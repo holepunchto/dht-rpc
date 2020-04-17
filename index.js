@@ -27,7 +27,7 @@ class DHT extends EventEmitter {
     this.concurrency = 16
     this.concurrencyRPS = 50
     this.socket = opts.socket || dgram.createSocket('udp4')
-    this.id = randomBytes(32)
+    this.id = opts.id || randomBytes(32)
     this.inflightQueries = 0
     this.ephemeral = !!opts.ephemeral
 
@@ -410,6 +410,7 @@ class DHT extends EventEmitter {
   }
 }
 
+exports.id = () => randomBytes(32)
 exports.QUERY = DHT.QUERY = IO.QUERY
 exports.UPDATE = DHT.UPDATE = IO.UPDATE
 exports.DHT = DHT
