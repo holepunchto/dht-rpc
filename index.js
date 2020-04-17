@@ -328,7 +328,7 @@ class DHT extends EventEmitter {
   }
 
   _pingSome () {
-    var cnt = this.inflightQueries > 2 ? 2 : 5
+    var cnt = this.inflightQueries > 2 ? 3 : 5
     var oldest = this.nodes.oldest
     // tiny dht, ping the bootstrap again
     if (!oldest) return this.bootstrap()
