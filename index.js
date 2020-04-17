@@ -49,10 +49,6 @@ class DHT extends EventEmitter {
     this._tickInterval = setInterval(this._ontick.bind(this), 5000)
     this._initialNodes = false
 
-    this.bucket.on('removed', (node) => {
-      if (this.nodes.has(node)) throw new Error('stop')
-    })
-
     process.nextTick(this.bootstrap.bind(this))
   }
 
@@ -323,7 +319,7 @@ class DHT extends EventEmitter {
     function afterPing (err, res, node) {
       if (!err) return ping()
       self._removeNode(node)
-      self._addNode(newContact)
+      self._addNode(newContact.id, newContact, newContact.roundtripToken || null, newContact.to || null)
     }
   }
 
