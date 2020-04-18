@@ -10,6 +10,8 @@ enum TYPE {
 }
 
 message Message {
+  optional uint64 version = 11;
+
   // request/response type + id
   required TYPE type = 1;
   required uint64 rid = 2;
