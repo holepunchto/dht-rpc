@@ -405,6 +405,14 @@ class DHT extends EventEmitter {
       if (cb) cb()
     })
   }
+
+  getNodes () {
+    return this.nodes.toArray().map(({ id, host, port }) => ({ id, host, port }))
+  }
+
+  addNodes (nodes) {
+    for (const { id, host, port } of nodes) this._addNode(id, { host, port })
+  }
 }
 
 exports.id = () => randomBytes(32)
