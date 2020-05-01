@@ -246,6 +246,61 @@ tape('persistent', function (t) {
   })
 })
 
+tape('getNodes', function (t) {
+  bootstrap(function (port, node) {
+    const a = dht({ bootstrap: port })
+    const b = dht({ bootstrap: port })
+    a.ready(function () {
+      b.ready(function () {
+        const aNodes = a.getNodes()
+        const bNodes = b.getNodes()
+        t.deepEqual([{ id: b.id, host: '127.0.0.1', port: b.address().port }], aNodes)
+        t.deepEqual([{ id: a.id, host: '127.0.0.1', port: a.address().port }], bNodes)
+        b.destroy()
+        a.destroy()
+        node.destroy()
+        t.end()
+      })
+    })
+  })
+})
+
+tape('addNodes', function (t) {
+  bootstrap(function (port, node) {
+    const a = dht({ bootstrap: port })
+    const b = dht({ bootstrap: [] })
+    b.listen() // https://github.com/hyperswarm/dht/issues/22
+
+    a.command('hello', {
+      query (data, callback) {
+        t.same(data.value, null, 'expected data')
+        callback(null, Buffer.from('world'))
+      }
+    })
+
+    a.ready(function () {
+      b.ready(function () {
+        setTimeout(function () {
+          const bNodes = b.getNodes()
+          t.deepEqual(bNodes, [{ id: a.id, host: '127.0.0.1', port: a.address().port }])
+          b.query('hello', a.id, function (err, responses) {
+            t.error(err, 'no errors')
+            t.same(responses.length, 1, 'one response')
+            t.same(responses[0].value, Buffer.from('world'), 'responded')
+            const aNodes = a.getNodes()
+            t.deepEqual(aNodes, [{ id: b.id, host: '127.0.0.1', port: b.address().port }])
+            b.destroy()
+            a.destroy()
+            node.destroy()
+            t.end()
+          })
+        }, 1)
+      })
+      b.addNodes([{ id: a.id, host: '127.0.0.1', port: a.address().port }])
+    })
+  })
+})
+
 function bootstrap (done) {
   const node = dht({
     ephemeral: true
