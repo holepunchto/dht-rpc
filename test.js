@@ -280,7 +280,7 @@ tape('addNodes', function (t) {
 
     a.ready(function () {
       b.ready(function () {
-        setTimeout(function () {
+        process.nextTick(function () {
           const bNodes = b.getNodes()
           t.deepEqual(bNodes, [{ id: a.id, host: '127.0.0.1', port: a.address().port }])
           b.query('hello', a.id, function (err, responses) {
@@ -294,7 +294,7 @@ tape('addNodes', function (t) {
             node.destroy()
             t.end()
           })
-        }, 1)
+        })
       })
       b.addNodes([{ id: a.id, host: '127.0.0.1', port: a.address().port }])
     })
