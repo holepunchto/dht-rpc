@@ -246,6 +246,15 @@ Explicitly bind the dht node to a certain port/address.
 
 Dynamically convert the node from ephemeral to non-ephemeral (join the DHT).
 
+#### `const nodes = node.getNodes()`
+
+Get the list of peer nodes as an array of objects with fields `{ id, host, port }`.
+
+#### `node.addNodes(nodes)`
+
+Given an array of `{ id, host, port }` objects, adds those in the list of
+peer nodes.
+
 #### `node.on('ready')`
 
 Emitted when the node is fully bootstrapped. You can make queries/updates before.
