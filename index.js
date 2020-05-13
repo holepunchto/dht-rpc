@@ -1,7 +1,7 @@
 const { EventEmitter } = require('events')
 const peers = require('ipv4-peers')
 const dgram = require('dgram')
-const sodium = require('sodium-universal')
+const sodium = require('sodium-native')
 const KBucket = require('k-bucket')
 const tos = require('time-ordered-set')
 const collect = require('stream-collector')
@@ -9,7 +9,7 @@ const codecs = require('codecs')
 const { Message, Holepunch } = require('./lib/messages')
 const IO = require('./lib/io')
 const QueryStream = require('./lib/query-stream')
-const blake2b = require('./lib/blake2b')
+const blake2b = require('blake2b-universal')
 
 const UNSUPPORTED_COMMAND = new Error('Unsupported command')
 const nodes = peers.idLength(32)
@@ -271,10 +271,12 @@ class DHT extends EventEmitter {
   }
 
   _token (peer, i) {
-    return blake2b.batch([
+    const out = Buffer.allocUnsafe(32)
+    blake2b.batch(out, [
       this._secrets[i],
       Buffer.from(peer.host)
     ])
+    return out
   }
 
   _onnodeping (oldContacts, newContact) {

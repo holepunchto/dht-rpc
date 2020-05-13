@@ -1,6 +1,6 @@
 const tape = require('tape')
 const dht = require('./')
-const blake2b = require('./lib/blake2b')
+const blake2b = require('blake2b-universal')
 
 tape('simple update', function (t) {
   bootstrap(function (port, node) {
@@ -103,7 +103,8 @@ tape('swarm query', function (t) {
     function done () {
       t.pass('created swarm')
 
-      const key = blake2b(Buffer.from('hello'))
+      const key = Buffer.allocUnsafe(32)
+      blake2b(key, Buffer.from('hello'))
       const me = dht({ bootstrap: port })
 
       me.update('kv', key, Buffer.from('hello'), function (err, responses) {
@@ -224,7 +225,8 @@ tape('persistent', function (t) {
 
     a.ready(function () {
       b.ready(function () {
-        const key = blake2b(Buffer.from('hello'))
+        const key = Buffer.allocUnsafe(32)
+        blake2b(key, Buffer.from('hello'))
         b.query('hello', key, (err, result) => {
           t.error(err)
           t.is(result.length, 0)
