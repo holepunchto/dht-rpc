@@ -115,6 +115,7 @@ class DHT extends EventEmitter {
       if (!to || samePeer(to, peer)) return
       message.version = IO.VERSION
       message.id = this._io.id
+      message.to = peers.encode([to])
       message.value = Holepunch.encode({ from: peers.encode([peer]) })
       this.emit('holepunch', peer, to)
       this._io.send(Message.encode(message), to)
@@ -248,7 +249,7 @@ class DHT extends EventEmitter {
     node.host = peer.host
     if (token) node.roundtripToken = token
     node.tick = this._tick
-    node.to = to
+    if (to) node.to = to
 
     if (!fresh) this.nodes.remove(node)
     this.bucket.add(node)
