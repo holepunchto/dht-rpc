@@ -28,7 +28,7 @@
     "ipv4-peers": "^2.0.0",
     "k-bucket": "^5.0.0",
     "protocol-buffers-encodings": "^1.1.0",
-    "sodium-universal": "^3.0.2",
+    "sodium-javascript": "^0.7.1",
     "speedometer": "^1.1.0",
     "stream-collector": "^1.0.1",
     "time-ordered-set": "^1.0.1",
