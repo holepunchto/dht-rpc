@@ -1,7 +1,7 @@
 const { EventEmitter } = require('events')
 const peers = require('ipv4-peers')
 const dgram = require('dgram')
-const sodium = require('sodium-universal')
+const sodium = require('sodium-javascript')
 const KBucket = require('k-bucket')
 const tos = require('time-ordered-set')
 const collect = require('stream-collector')
