@@ -23,7 +23,7 @@
     "tape": "^4.13.0"
   },
   "dependencies": {
-    "blake2b-universal": "^1.0.0",
+    "blake2b-universal": "nezzard/blake2b-universal",
     "codecs": "^2.0.0",
     "ipv4-peers": "^2.0.0",
     "k-bucket": "^5.0.0",
