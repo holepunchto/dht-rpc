@@ -147,7 +147,7 @@ class DHT extends EventEmitter {
 
     let value = null
     try {
-      value = cmd.inputEncoding.decode(message.value)
+      value = message.value && cmd.inputEncoding.decode(message.value)
     } catch (_) {
       return
     }
