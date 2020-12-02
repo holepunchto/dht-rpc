@@ -145,12 +145,19 @@ class DHT extends EventEmitter {
 
     if (!cmd) return reply(UNSUPPORTED_COMMAND)
 
+    let value = null
+    try {
+      value = cmd.inputEncoding.decode(message.value)
+    } catch (_) {
+      return
+    }
+
     const query = {
       type,
       command: message.command,
       node: peer,
       target: message.target,
-      value: cmd.inputEncoding.decode(message.value)
+      value
     }
 
     if (type === IO.UPDATE) cmd.update(query, reply)
