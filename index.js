@@ -43,7 +43,7 @@ class DHT extends EventEmitter {
 
     const id = opts.id || randomBytes(32)
 
-    this.bootstrapNodes = (opts.bootstrapNodes || []).map(parseNode)
+    this.bootstrapNodes = opts.bootstrap === false ? [] : (opts.bootstrap || []).map(parseNode)
     this.nodes = new TOS()
     this.table = new Table(id)
     this.rpc = new RPC({
@@ -66,6 +66,10 @@ class DHT extends EventEmitter {
     this._tickInterval = setInterval(this._ontick.bind(this), TICK_INTERVAL)
 
     this.table.on('row', (row) => row.on('full', (node) => this._onfullrow(node, row)))
+  }
+
+  get id () {
+    return this.table.id
   }
 
   static createRPCSocket (opts) {
@@ -166,6 +170,32 @@ class DHT extends EventEmitter {
   refresh () {
     const node = this.table.random()
     this._backgroundQuery(node ? node.id : this.table.id, 'find_node', null)
+  }
+
+  _tally (onlyIp) {
+    const sum = new Map()
+    let result = null
+    let node = this.nodes.latest
+    let cnt = 0
+    let good = 0
+
+    for (; node && cnt < 10; node = node.prev) {
+      const to = node.to.host + ':' + (onlyIp ? 0 : node.to.port)
+      const hits = 1 + (sum.get(to) || 0)
+      if (hits > good) {
+        good = hits
+        result = node.to
+      }
+      sum.set(to, hits)
+      cnt++
+    }
+
+    // We want at least 3 samples all with the same ip:port from
+    // different remotes (the to field) to be consider it consistent
+    // If we get >=3 samples with conflicting info we are not (or under attack) (Subject for tweaking)
+
+    const bad = cnt - good
+    return bad < 3 && good >= 3 ? result : null
   }
 
   _pingSome () {
@@ -294,6 +324,7 @@ class DHT extends EventEmitter {
     if (oldNode) {
       if (oldNode.port === m.from.port && oldNode.host === m.from.host) {
         // refresh it
+        oldNode.to = m.to
         oldNode.seen = this._tick
         this.nodes.add(oldNode)
       }
@@ -302,9 +333,10 @@ class DHT extends EventEmitter {
 
     this._addNode({
       id: m.nodeId,
+      token: null,
       port: m.from.port,
       host: m.from.host,
-      token: null,
+      to: m.to,
       added: this._tick,
       seen: this._tick,
       prev: null,
@@ -345,6 +377,10 @@ class DHT extends EventEmitter {
     return this.rpc.bind(...args)
   }
 
+  address () {
+    return this.rpc.address()
+  }
+
   _reply (rpc, tid, target, status, value, token, to) {
     const closerNodes = target ? this.table.closest(target) : null
     const persistent = !this.ephemeral && rpc === this.rpc
@@ -379,7 +415,7 @@ function parseNode (s) {
   return {
     id: id ? Buffer.from(id.slice(0, -1), 'hex') : null,
     host,
-    port
+    port: Number(port.slice(1))
   }
 }
 

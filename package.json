@@ -12,10 +12,11 @@
     "time-ordered-set": "^1.0.2"
   },
   "devDependencies": {
-    "standard": "^16.0.3"
+    "standard": "^16.0.3",
+    "tape": "^5.2.2"
   },
   "scripts": {
-    "test": "standard"
+    "test": "standard && tape test.js"
   },
   "repository": {
     "type": "git",
