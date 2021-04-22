@@ -14,6 +14,9 @@
   "devDependencies": {
     "standard": "^16.0.3"
   },
+  "scripts": {
+    "test": "standard"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/mafintosh/dht-rpc.git"
