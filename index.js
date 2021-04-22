@@ -1,483 +1,394 @@
+const dns = require('dns')
+const RPC = require('./lib/rpc')
+const createKeyPair = require('./lib/key-pair')
+const Query = require('./lib/query')
+const Table = require('kademlia-routing-table')
+const TOS = require('time-ordered-set')
+const FIFO = require('fast-fifo/fixed-size')
+const sodium = require('sodium-universal')
 const { EventEmitter } = require('events')
-const peers = require('ipv4-peers')
-const dgram = require('dgram')
-const sodium = require('sodium-native')
-const KBucket = require('k-bucket')
-const tos = require('time-ordered-set')
-const collect = require('stream-collector')
-const codecs = require('codecs')
-const { Message, Holepunch } = require('./lib/messages')
-const IO = require('./lib/io')
-const QueryStream = require('./lib/query-stream')
-const blake2b = require('blake2b-universal')
 
-const UNSUPPORTED_COMMAND = new Error('Unsupported command')
-const nodes = peers.idLength(32)
+const TICK_INTERVAL = 5000
+const REFRESH_TICKS = 60 // refresh every ~5min when idle
+const RECENT_NODE = 20 // we've heard from a node less than 1min ago
+const OLD_NODE = 360 // if an node has been around more than 30 min we consider it old...
 
-exports = module.exports = opts => new DHT(opts)
+class Request {
+  constructor (dht, m) {
+    this.rpc = dht.rpc
+    this.dht = dht
+    this.tid = m.tid
+    this.from = m.from
+    this.to = m.to
+    this.nodeId = m.nodeId
+    this.target = m.target
+    this.closerNodes = m.closerNodes
+    this.status = m.status
+    this.token = m.token
+    this.command = m.command
+    this.value = m.value
+  }
 
-class DHT extends EventEmitter {
-  constructor (opts) {
-    if (!opts) opts = {}
+  error (code) {
+    this.dht._reply(this.rpc, this.tid, this.target, code, null, false, this.from)
+  }
 
+  reply (value, token = false) {
+    this.dht._reply(this.rpc, this.tid, this.target, 0, value, token, this.from)
+  }
+}
+
+module.exports = class DHT extends EventEmitter {
+  constructor (opts = {}) {
     super()
 
+    this.bootstrapNodes = (opts.bootstrapNodes || []).map(parseNode)
+    this.keyPair = opts.keyPair || createKeyPair(opts.seed)
+    this.nodes = new TOS()
+    this.table = new Table(this.keyPair.publicKey)
+    this.rpc = new RPC({
+      socket: opts.socket,
+      onwarning: opts.onwarning,
+      onrequest: this._onrequest.bind(this),
+      onresponse: this._onresponse.bind(this)
+    })
+
     this.bootstrapped = false
-    this.destroyed = false
-    this.concurrency = 16
-    this.concurrencyRPS = 50
-    this.socket = opts.socket || dgram.createSocket('udp4')
-    this.id = opts.id || randomBytes(32)
-    this.inflightQueries = 0
-    this.ephemeral = !!opts.ephemeral
+    this.concurrency = opts.concurrency || 16
+    this.persistent = opts.ephemeral ? false : true
 
-    this.nodes = tos()
-    this.bucket = new KBucket({ localNodeId: this.id })
-    this.bucket.on('ping', this._onnodeping.bind(this))
-    this.bootstrapNodes = [].concat(opts.bootstrap || []).map(parsePeer)
+    this._repinging = 0
+    this._reping = new FIFO(128)
+    this._bootstrapping = this.bootstrap()
+    this._secrets = [randomBytes(32), randomBytes(32)]
+    this._tick = (Math.random() * 1024) | 0 // random offset it
+    this._refreshTick = REFRESH_TICKS
+    this._tickInterval = setInterval(this._ontick.bind(this), TICK_INTERVAL)
 
-    this.socket.on('listening', this.emit.bind(this, 'listening'))
-    this.socket.on('close', this.emit.bind(this, 'close'))
-    this.socket.on('error', this._onsocketerror.bind(this))
-
-    const queryId = this.ephemeral ? null : this.id
-    const io = new IO(this.socket, queryId, this)
-
-    this._io = io
-    this._commands = new Map()
-    this._tick = 0
-    this._tickInterval = setInterval(this._ontick.bind(this), 5000)
-    this._initialNodes = false
-
-    process.nextTick(this.bootstrap.bind(this))
+    this.table.on('row', (row) => row.on('full', (node) => this._onfullrow(node, row)))
   }
 
-  _onsocketerror (err) {
-    if (err.code === 'EADDRINUSE' || err.code === 'EPERM' || err.code === 'EACCES') this.emit('error', err)
-    else this.emit('warning', err)
+  static OK = 0
+  static UNKNOWN_COMMAND = 1
+  static BAD_TOKEN = 2
+
+  static createRPCSocket (opts) {
+    return new RPC(opts)
   }
 
-  _ontick () {
-    this._tick++
-    if ((this._tick & 7) === 0) this._pingSome()
-    if ((this._tick & 63) === 0 && this.nodes.length < 20) this.bootstrap()
+  static keyPair (seed) {
+    return createKeyPair(seed)
   }
 
-  address () {
-    return this.socket.address()
+  ready () {
+    return this._bootstrapping
   }
 
-  command (name, opts) {
-    this._commands.set(name, {
-      inputEncoding: codecs(opts.inputEncoding || opts.valueEncoding),
-      outputEncoding: codecs(opts.outputEncoding || opts.valueEncoding),
-      query: opts.query || queryNotSupported,
-      update: opts.update || updateNotSupported
+  query (target, command, value, opts) {
+    this._refreshTick = this._tick + REFRESH_TICKS
+    return new Query(this, target, command, value, opts)
+  }
+
+  ping (node) {
+    return this.request(null, 'ping', null, node)
+  }
+
+  request (target, command, value, to) {
+    return this.rpc.request({
+      version: 1,
+      tid: 0,
+      from: null,
+      to,
+      token: to.token || null,
+      nodeId: this.persistent ? this.table.id : null,
+      target,
+      closerNodes: null,
+      command,
+      status: 0,
+      value
     })
   }
 
-  ready (onready) {
-    if (!this.bootstrapped) this.once('ready', onready)
-    else onready()
-  }
+  requestAll (target, command, value, nodes, opts = {}) {
+    if (nodes instanceof Table) nodes = nodes.closest(nodes.id)
+    if (nodes instanceof Query) nodes = nodes.table.closest(nodes.table.id)
+    if (nodes.length === 0) return Promise.resolve([])
 
-  onrequest (type, message, peer) {
-    if (validateId(message.id)) {
-      this._addNode(message.id, peer, null, message.to)
-    }
+    const p = []
+    for (const node of nodes) p.push(this.request(target, command, value, node))
 
-    switch (message.command) {
-      case '_ping':
-        return this._onping(message, peer)
+    let errors = 0
+    const results = []
+    const min = typeof opts.min === 'number' ? opts.min : 1
+    const max = typeof opts.max === 'number' ? opts.max : p.length
 
-      case '_find_node':
-        return this._onfindnode(message, peer)
+    return new Promise((resolve, reject) => {
+      for (let i = 0; i < p.length; i++) p[i].then(ondone, onerror)
 
-      case '_holepunch':
-        return this._onholepunch(message, peer)
-
-      default:
-        return this._oncommand(type, message, peer)
-    }
-  }
-
-  _onping (message, peer) {
-    if (message.value && !this.id.equals(message.value)) return
-    this._io.response(message, peers.encode([peer]), null, peer)
-  }
-
-  _onholepunch (message, peer) {
-    const value = decodeHolepunch(message.value)
-    if (!value) return
-
-    if (value.to) {
-      const to = decodePeer(value.to)
-      if (!to || samePeer(to, peer)) return
-      message.version = IO.VERSION
-      message.id = this._io.id
-      message.to = peers.encode([to])
-      message.value = Holepunch.encode({ from: peers.encode([peer]) })
-      this.emit('holepunch', peer, to)
-      this._io.send(Message.encode(message), to)
-      return
-    }
-
-    if (value.from) {
-      const from = decodePeer(value.from)
-      if (from) peer = from
-    }
-
-    this._io.response(message, null, null, peer)
-  }
-
-  _onfindnode (message, peer) {
-    if (!validateId(message.target)) return
-
-    const closerNodes = nodes.encode(this.bucket.closest(message.target, 20))
-    this._io.response(message, null, closerNodes, peer)
-  }
-
-  _oncommand (type, message, peer) {
-    if (!message.target) return
-
-    const self = this
-    const cmd = this._commands.get(message.command)
-
-    if (!cmd) return reply(UNSUPPORTED_COMMAND)
-
-    let value = null
-    try {
-      value = message.value && cmd.inputEncoding.decode(message.value)
-    } catch (_) {
-      return
-    }
-
-    const query = {
-      type,
-      command: message.command,
-      node: peer,
-      target: message.target,
-      value
-    }
-
-    if (type === IO.UPDATE) cmd.update(query, reply)
-    else cmd.query(query, reply)
-
-    function reply (err, value) {
-      const closerNodes = nodes.encode(self.bucket.closest(message.target, 20))
-      if (err) {
-        return self._io.error(message, err, closerNodes, peer, value && cmd.outputEncoding.encode(value))
+      function ondone (res) {
+        if (results.length < max) results.push(res)
+        if (results.length >= max) return resolve(results)
+        if (results.length + errors === p.length) return resolve(results)
       }
-      self._io.response(message, value && cmd.outputEncoding.encode(value), closerNodes, peer)
-    }
-  }
 
-  onresponse (message, peer) {
-    if (validateId(message.id)) {
-      this._addNode(message.id, peer, message.roundtripToken, message.to)
-    }
-  }
-
-  onbadid (peer) {
-    this._removeNode(peer)
-  }
-
-  holepunch (peer, cb) {
-    if (!peer.referrer) throw new Error('peer.referrer is required')
-    this._io.query('_holepunch', null, null, peer, cb)
+      function onerror (err) {
+        if ((p.length - ++errors) < min) reject(new Error('Too many requests failed'))
+      }
+    })
   }
 
   destroy () {
-    if (this.destroyed) return
-    this.destroyed = true
-    this._io.destroy()
+    this.rpc.destroy()
     clearInterval(this._tickInterval)
   }
 
-  ping (peer, cb) {
-    this._io.query('_ping', null, peer.id, peer, function (err, res) {
-      if (err) return cb(err)
-      if (res.error) return cb(new Error(res.error))
-      const pong = decodePeer(res.to || res.value) // res.value will be deprecated
-      if (!pong) return cb(new Error('Invalid pong'))
-      cb(null, pong)
+  async bootstrap () {
+    return new Promise((resolve) => {
+      this._backgroundQuery(this.table.id, 'find_node', null)
+        .on('close', () => {
+          if (!this.bootstrapped) {
+            this.bootstrapped = true
+            this.emit('ready')
+          }
+          resolve()
+        })
     })
   }
 
-  _tally (onlyIp) {
-    const sum = new Map()
-    var result = null
-    var node = this.nodes.latest
-    var cnt = 0
-    var good = 0
-
-    for (; node && cnt < 10; node = node.prev) {
-      if (!node.to || node.to.length !== 6) continue
-      const to = onlyIp ? node.to.toString('hex').slice(0, 8) + '0000' : node.to.toString('hex')
-      const hits = 1 + (sum.get(to) || 0)
-      if (hits > good) {
-        good = hits
-        result = node.to
-      }
-      sum.set(to, hits)
-      cnt++
-    }
-
-    // We want at least 3 samples all with the same ip:port from
-    // different remotes (the to field) to be consider it consistent
-    // If we get >=3 samples with conflicting info we are not (or under attack) (Subject for tweaking)
-
-    const bad = cnt - good
-    return bad < 3 && good >= 3 ? result : null
-  }
-
-  remoteAddress () {
-    const both = this._tally(false)
-    if (both) return peers.decode(both)[0]
-    const onlyIp = this._tally(true)
-    if (onlyIp) return peers.decode(onlyIp)[0]
-    return null
-  }
-
-  holepunchable () {
-    return this._tally(false) !== null
-  }
-
-  _addNode (id, peer, token, to) {
-    if (id.equals(this.id)) return
-
-    var node = this.bucket.get(id)
-    const fresh = !node
-
-    if (!node) node = {}
-
-    node.id = id
-    node.port = peer.port
-    node.host = peer.host
-    if (token) node.roundtripToken = token
-    node.tick = this._tick
-    if (to) node.to = to
-
-    if (!fresh) this.nodes.remove(node)
-    this.bucket.add(node)
-    if (this.bucket.get(node.id) !== node) return // in a ping
-    this.nodes.add(node)
-    if (fresh) {
-      this.emit('add-node', node)
-      if (!this._initialNodes && this.nodes.length >= 5) {
-        this._initialNodes = true
-        this.emit('initial-nodes')
-      }
-    }
-  }
-
-  _removeNode (node) {
-    if (!this.nodes.has(node)) return
-    this.nodes.remove(node)
-    this.bucket.remove(node.id)
-    this.emit('remove-node', node)
-  }
-
-  _token (peer, i) {
-    const out = Buffer.allocUnsafe(32)
-    blake2b.batch(out, [
-      this._secrets[i],
-      Buffer.from(peer.host)
-    ])
-    return out
-  }
-
-  _onnodeping (oldContacts, newContact) {
-    // if bootstrapping, we've recently pinged all nodes
-    if (!this.bootstrapped) return
-    const reping = []
-
-    for (var i = 0; i < oldContacts.length; i++) {
-      const old = oldContacts[i]
-
-      // check if we recently talked to this peer ...
-      if (this._tick === old.tick && this.nodes.has(oldContacts[i])) {
-        this.bucket.add(oldContacts[i])
-        continue
-      }
-
-      reping.push(old)
-    }
-
-    if (reping.length) this._reping(reping, newContact)
-  }
-
-  _check (node) {
-    const self = this
-    this.ping(node, function (err) {
-      if (err) {
-        self._removeNode(node)
-      }
+  _backgroundQuery (target, command, value) {
+    const backgroundCon = Math.min(this.concurrency, Math.max(2, (this.concurrency / 8) | 0))
+    const q = this.query(target, command, value, {
+      concurrency: backgroundCon
     })
+
+    q.on('data', () => {
+      // yield to other traffic
+      q.concurrency = this.rpc.inflightRequests < 3
+        ? this.concurrency
+        : backgroundCon
+    })
+
+    return q
   }
 
-  _reping (oldContacts, newContact) {
-    const self = this
-
-    ping()
-
-    function ping () {
-      const next = oldContacts.shift()
-      if (!next) return
-      self._io.queryImmediately('_ping', null, next.id, next, afterPing)
-    }
-
-    function afterPing (err, res, node) {
-      if (!err) return ping()
-      self._removeNode(node)
-      self._addNode(newContact.id, newContact, newContact.roundtripToken || null, newContact.to || null)
-    }
+  refresh () {
+    const node = this.table.random()
+    this._backgroundQuery(node ? node.id : this.table.id, 'find_node', null)
   }
 
   _pingSome () {
-    var cnt = this.inflightQueries > 2 ? 3 : 5
-    var oldest = this.nodes.oldest
+    let cnt = this.rpc.inflightRequests > 2 ? 3 : 5
+    let oldest = this.nodes.oldest
+
     // tiny dht, ping the bootstrap again
-    if (!oldest) return this.bootstrap()
+    if (!oldest) {
+      this.refresh()
+      return
+    }
+
+    // we've recently pinged the oldest one, so only trigger a couple of repings
+    if ((this._tick - oldest.seen) < RECENT_NODE) {
+      cnt = 2
+    }
 
     while (cnt--) {
-      if (!oldest || this._tick === oldest.tick) continue
+      if (!oldest || this._tick === oldest.seen) continue
       this._check(oldest)
       oldest = oldest.next
     }
   }
 
-  query (command, target, value, cb) {
-    if (typeof value === 'function') return this.query(command, target, null, value)
-    return collect(this.runCommand(command, target, value, { query: true, update: false }), cb)
+  _check (node) {
+    this.ping(node).catch(() => this._removeNode(node))
   }
 
-  update (command, target, value, cb) {
-    if (typeof value === 'function') return this.update(command, target, null, value)
-    return collect(this.runCommand(command, target, value, { query: false, update: true }), cb)
+  _token (peer, i) {
+    const out = Buffer.allocUnsafe(32)
+    sodium.crypto_generichash(out, Buffer.from(peer.host), this._secrets[i])
+    return out
   }
 
-  queryAndUpdate (command, target, value, cb) {
-    if (typeof value === 'function') return this.queryAndUpdate(command, target, null, value)
-    return collect(this.runCommand(command, target, value, { query: true, update: true }), cb)
+  _ontick () {
+    // rotate secrets
+    const tmp = this._secrets[0]
+    this._secrets[0] = this._secrets[1]
+    this._secrets[1] = tmp
+    sodium.randombytes_buf(tmp)
+
+    if (!this.bootstrapped) return
+    this._tick++
+    if ((this._tick & 7) === 0) this._pingSome()
+    if (((this._tick & 63) === 0 && this.nodes.length < 20) || this._tick === this._refreshTick) this.refresh()
   }
 
-  runCommand (command, target, value, opts) {
-    return new QueryStream(this, command, target, value, opts)
+  _onfullrow (newNode, row) {
+    if (this.bootstrapped && this._reping.push({ newNode, row })) this._repingMaybe()
   }
 
-  listen (port, addr, cb) {
-    if (typeof port === 'function') return this.listen(0, null, port)
-    if (typeof addr === 'function') return this.listen(port, null, addr)
-    if (cb) this.once('listening', cb)
-    this.socket.bind(port, addr)
+  _repingMaybe () {
+    while (this._repinging < 3 && this._reping.isEmpty() === false) {
+      const { newNode, row } = this._reping.shift()
+      if (this.table.get(newNode.id)) continue
+
+      let oldest = null
+      for (const node of row.nodes) {
+        if (node.seen === this._tick) continue
+        if (oldest === null || oldest.seen > node.seen || (oldest.seen === node.seen && oldest.added > node.added)) oldest = node
+      }
+
+      if (oldest === null) continue
+      if ((this._tick - oldest.seen) < RECENT_NODE && (this._tick - oldest.added) > OLD_NODE) continue
+
+      this._repingAndSwap(newNode, oldest)
+    }
   }
 
-  bootstrap (cb) {
+  _repingAndSwap (newNode, oldNode) {
     const self = this
-    const backgroundCon = Math.min(this.concurrency, Math.max(2, Math.floor(this.concurrency / 8)))
 
-    if (!this.bootstrapNodes.length) return process.nextTick(done)
+    this._repinging++
+    this.ping(oldNode).then(onsuccess, onswap)
 
-    const qs = this.query('_find_node', this.id)
-
-    qs.on('data', update)
-    qs.on('error', onerror)
-    qs.on('end', done)
-
-    update()
-
-    function onerror (err) {
-      if (cb) cb(err)
+    function onsuccess () {
+      self._repinging--
+      self._repingMaybe()
     }
 
-    function done () {
-      if (!self.bootstrapped) {
-        self.bootstrapped = true
-        self.emit('ready')
-      }
-      if (cb) cb()
-    }
-
-    function update () {
-      qs._concurrency = self.inflightQueries === 1 ? self.concurrency : backgroundCon
+    function onswap () {
+      self._repinging--
+      self._repingMaybe()
+      self._removeNode(oldNode)
+      self._addNode(newNode)
     }
   }
 
-  persistent (cb) {
-    this._io.id = this.id
-    this.bootstrap((err) => {
-      if (err) {
-        if (cb) cb(err)
-        return
+  _resolveBootstrapNodes (cb) {
+    if (!this.bootstrapNodes.length) return cb([])
+
+    let missing = this.bootstrapNodes.length
+    const nodes = []
+
+    for (const node of this.bootstrapNodes) {
+      dns.lookup(node.host, (_, host) => {
+        if (host) nodes.push({ id: node.id || null, host, port: node.port })
+        if (--missing === 0) cb(nodes)
+      })
+    }
+  }
+
+  _addNode (node) {
+    if (this.nodes.has(node)) return
+
+    node.added = node.seen = this._tick
+
+    this.nodes.add(node)
+    this.table.add(node)
+
+    this.emit('add-node', node)
+  }
+
+  _removeNode (node) {
+    if (!this.nodes.has(node)) return
+
+    this.nodes.remove(node)
+    this.table.remove(node.id)
+
+    this.emit('remove-node', node)
+  }
+
+  _addNodeFromMessage (m) {
+    const oldNode = this.table.get(m.nodeId)
+
+    if (oldNode) {
+      if (oldNode.port === m.from.port && oldNode.host === m.from.host) {
+        // refresh it
+        oldNode.seen = this._tick
+        this.nodes.add(oldNode)
       }
-      this.ephemeral = false
-      if (cb) cb()
+      return
+    }
+
+    this._addNode({
+      id: m.nodeId,
+      port: m.from.port,
+      host: m.from.host,
+      token: null,
+      added: this._tick,
+      seen: this._tick,
+      prev: null,
+      next: null,
     })
   }
 
-  getNodes () {
-    return this.nodes.toArray().map(({ id, host, port }) => ({ id, host, port }))
+  _onrequest (req) {
+    if (req.nodeId !== null) this._addNodeFromMessage(req)
+
+    if (req.token !== null) {
+      if (!req.token.equals(this._token(req.from, 1)) && !req.token.equals(this._token(req.from, 0))) {
+        req.token = null
+      }
+    }
+
+    // empty reply back
+    if (req.command === 'ping') {
+      this._reply(this.rpc, req.tid, null, 0, null, false, req.from)
+      return
+    }
+
+    if (req.command === 'find_node') {
+      this._reply(this.rpc, req.tid, req.target, 0, null, false, req.from)
+      return
+    }
+
+    if (this.emit('request', new Request(this, req)) === false) {
+      this._reply(this.rpc, req.tid, req.target, 1, null, false, req.from)
+    }
   }
 
-  addNodes (nodes) {
-    for (const { id, host, port } of nodes) this._addNode(id, { host, port })
+  _onresponse (res) {
+    if (res.nodeId !== null) this._addNodeFromMessage(res)
+  }
+
+  bind (...args) {
+    return this.rpc.bind(...args)
+  }
+
+  _reply (rpc, tid, target, status, value, token, to) {
+    const closerNodes = target ? this.table.closest(target) : null
+    const persistent = this.persistent && rpc === this.rpc
+
+    rpc.send({
+      version: 1,
+      tid,
+      from: null,
+      to,
+      token: token ? this._token(to, 1) : null,
+      nodeId: persistent ? this.table.id : null,
+      target: null,
+      closerNodes,
+      command: null,
+      status,
+      value
+    })
   }
 }
 
-exports.id = () => randomBytes(32)
-exports.QUERY = DHT.QUERY = IO.QUERY
-exports.UPDATE = DHT.UPDATE = IO.UPDATE
-exports.DHT = DHT
+function parseNode (s) {
+  if (typeof s === 'object') return s
+  const [_, id, host, port] = s.match(/([a-f0-9]{64}@)?([^:@]+)(:\d+)?$/i)
+  if (!port) throw new Error('Node format is id@?host:port')
 
-function validateId (id) {
-  return id && id.length === 32
+  return {
+    id: id ? Buffer.from(id.slice(0, -1), 'hex') : null,
+    host,
+    port
+  }
 }
 
 function randomBytes (n) {
-  const buf = Buffer.allocUnsafe(n)
-  sodium.randombytes_buf(buf)
-  return buf
+  const b = Buffer.alloc(n)
+  sodium.randombytes_buf(b)
+  return b
 }
 
-function decodeHolepunch (buf) {
-  try {
-    return Holepunch.decode(buf)
-  } catch (err) {
-    return null
-  }
-}
-
-function decodePeer (buf) {
-  try {
-    const p = peers.decode(buf)[0]
-    if (!p) throw new Error('No peer in buffer')
-    return p
-  } catch (err) {
-    return null
-  }
-}
-
-function parsePeer (peer) {
-  if (typeof peer === 'object' && peer) return peer
-  if (typeof peer === 'number') return parsePeer(':' + peer)
-  if (peer[0] === ':') return parsePeer('127.0.0.1' + peer)
-
-  const parts = peer.split(':')
-  return {
-    host: parts[0],
-    port: parseInt(parts[1], 10)
-  }
-}
-
-function samePeer (a, b) {
-  return a.port === b.port && a.host === b.host
-}
-
-function updateNotSupported (query, cb) {
-  cb(new Error('Update not supported'))
-}
-
-function queryNotSupported (query, cb) {
-  cb(null, null)
-}
+function noop () {}

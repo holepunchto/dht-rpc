@@ -1,37 +1,27 @@
 {
   "name": "dht-rpc",
-  "version": "4.9.6",
+  "version": "5.0.0-beta1",
   "description": "Make RPC calls over a Kademlia based DHT",
   "main": "index.js",
-  "scripts": {
-    "test": "standard && tape test.js",
-    "protobuf": "protocol-buffers schema.proto -o lib/messages.js"
+  "dependencies": {
+    "compact-encoding": "^2.1.0",
+    "fast-fifo": "^1.0.0",
+    "kademlia-routing-table": "^1.0.0",
+    "sodium-universal": "^3.0.4",
+    "streamx": "^2.10.3",
+    "time-ordered-set": "^1.0.2"
+  },
+  "devDependencies": {
+    "standard": "^16.0.3"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/mafintosh/dht-rpc.git"
+    "url": "https://github.com/mafintosh/dht-rpc.git"
   },
   "author": "Mathias Buus (@mafintosh)",
   "license": "MIT",
   "bugs": {
     "url": "https://github.com/mafintosh/dht-rpc/issues"
   },
-  "homepage": "https://github.com/mafintosh/dht-rpc#readme",
-  "devDependencies": {
-    "protocol-buffers": "^4.1.1",
-    "standard": "^14.3.1",
-    "tape": "^4.13.0"
-  },
-  "dependencies": {
-    "blake2b-universal": "^1.0.0",
-    "codecs": "^2.0.0",
-    "ipv4-peers": "^2.0.0",
-    "k-bucket": "^5.0.0",
-    "protocol-buffers-encodings": "^1.1.0",
-    "sodium-native": "^3.1.1",
-    "speedometer": "^1.1.0",
-    "stream-collector": "^1.0.1",
-    "time-ordered-set": "^1.0.1",
-    "xor-distance": "^2.0.0"
-  }
+  "homepage": "https://github.com/mafintosh/dht-rpc"
 }
