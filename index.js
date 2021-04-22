@@ -1,6 +1,5 @@
 const dns = require('dns')
 const RPC = require('./lib/rpc')
-const createKeyPair = require('./lib/key-pair')
 const Query = require('./lib/query')
 const Table = require('kademlia-routing-table')
 const TOS = require('time-ordered-set')
@@ -38,14 +37,15 @@ class Request {
   }
 }
 
-module.exports = class DHT extends EventEmitter {
+class DHT extends EventEmitter {
   constructor (opts = {}) {
     super()
 
+    const id = opts.id || randomBytes(32)
+
     this.bootstrapNodes = (opts.bootstrapNodes || []).map(parseNode)
-    this.keyPair = opts.keyPair || createKeyPair(opts.seed)
     this.nodes = new TOS()
-    this.table = new Table(this.keyPair.publicKey)
+    this.table = new Table(id)
     this.rpc = new RPC({
       socket: opts.socket,
       onwarning: opts.onwarning,
@@ -55,7 +55,7 @@ module.exports = class DHT extends EventEmitter {
 
     this.bootstrapped = false
     this.concurrency = opts.concurrency || 16
-    this.persistent = opts.ephemeral ? false : true
+    this.ephemeral = !!opts.ephemeral
 
     this._repinging = 0
     this._reping = new FIFO(128)
@@ -68,16 +68,8 @@ module.exports = class DHT extends EventEmitter {
     this.table.on('row', (row) => row.on('full', (node) => this._onfullrow(node, row)))
   }
 
-  static OK = 0
-  static UNKNOWN_COMMAND = 1
-  static BAD_TOKEN = 2
-
   static createRPCSocket (opts) {
     return new RPC(opts)
-  }
-
-  static keyPair (seed) {
-    return createKeyPair(seed)
   }
 
   ready () {
@@ -100,7 +92,7 @@ module.exports = class DHT extends EventEmitter {
       from: null,
       to,
       token: to.token || null,
-      nodeId: this.persistent ? this.table.id : null,
+      nodeId: this.ephemeral ? null : this.table.id,
       target,
       closerNodes: null,
       command,
@@ -131,7 +123,7 @@ module.exports = class DHT extends EventEmitter {
         if (results.length + errors === p.length) return resolve(results)
       }
 
-      function onerror (err) {
+      function onerror () {
         if ((p.length - ++errors) < min) reject(new Error('Too many requests failed'))
       }
     })
@@ -262,8 +254,8 @@ module.exports = class DHT extends EventEmitter {
     }
   }
 
-  _resolveBootstrapNodes (cb) {
-    if (!this.bootstrapNodes.length) return cb([])
+  _resolveBootstrapNodes (done) {
+    if (!this.bootstrapNodes.length) return done([])
 
     let missing = this.bootstrapNodes.length
     const nodes = []
@@ -271,7 +263,7 @@ module.exports = class DHT extends EventEmitter {
     for (const node of this.bootstrapNodes) {
       dns.lookup(node.host, (_, host) => {
         if (host) nodes.push({ id: node.id || null, host, port: node.port })
-        if (--missing === 0) cb(nodes)
+        if (--missing === 0) done(nodes)
       })
     }
   }
@@ -316,7 +308,7 @@ module.exports = class DHT extends EventEmitter {
       added: this._tick,
       seen: this._tick,
       prev: null,
-      next: null,
+      next: null
     })
   }
 
@@ -355,7 +347,7 @@ module.exports = class DHT extends EventEmitter {
 
   _reply (rpc, tid, target, status, value, token, to) {
     const closerNodes = target ? this.table.closest(target) : null
-    const persistent = this.persistent && rpc === this.rpc
+    const persistent = !this.ephemeral && rpc === this.rpc
 
     rpc.send({
       version: 1,
@@ -373,9 +365,15 @@ module.exports = class DHT extends EventEmitter {
   }
 }
 
+DHT.OK = 0
+DHT.UNKNOWN_COMMAND = 1
+DHT.BAD_TOKEN = 2
+
+module.exports = DHT
+
 function parseNode (s) {
   if (typeof s === 'object') return s
-  const [_, id, host, port] = s.match(/([a-f0-9]{64}@)?([^:@]+)(:\d+)?$/i)
+  const [, id, host, port] = s.match(/([a-f0-9]{64}@)?([^:@]+)(:\d+)?$/i)
   if (!port) throw new Error('Node format is id@?host:port')
 
   return {
@@ -390,5 +388,3 @@ function randomBytes (n) {
   sodium.randombytes_buf(b)
   return b
 }
-
-function noop () {}
