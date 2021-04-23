@@ -40,6 +40,12 @@ tape('make bigger swarm', async function (t) {
 
   t.ok(found, 'found target again in ' + messages + ' message(s)')
 
+  const { type, host, port } = swarm[490].remoteAddress()
+
+  t.same(type, DHT.NAT_PORT_CONSISTENT)
+  t.same(port, swarm[490].address().port)
+  t.ok(host)
+
   destroy(swarm)
 })
 

@@ -1,6 +1,7 @@
 const dns = require('dns')
 const RPC = require('./lib/rpc')
 const Query = require('./lib/query')
+const NatAnalyzer = require('./lib/nat-analyzer')
 const Table = require('kademlia-routing-table')
 const TOS = require('time-ordered-set')
 const FIFO = require('fast-fifo/fixed-size')
@@ -73,6 +74,7 @@ class DHT extends EventEmitter {
     this._refreshTick = this._tick + REFRESH_TICKS
     this._stableTick = this._tick + STABLE_TICKS
     this._tickInterval = setInterval(this._ontick.bind(this), TICK_INTERVAL)
+    this._nat = new NatAnalyzer(opts.natSampleSize || 16)
 
     this.table.on('row', (row) => row.on('full', (node) => this._onfullrow(node, row)))
   }
@@ -341,19 +343,20 @@ class DHT extends EventEmitter {
     if (oldNode) {
       if (oldNode.port === m.from.port && oldNode.host === m.from.host) {
         // refresh it
-        oldNode.to = m.to
         oldNode.seen = this._tick
         this.nodes.add(oldNode)
       }
       return
     }
 
+    // add a sample of our address from the remote nodes pov
+    this._nat.add(m.to)
+
     this._addNode({
       id: m.nodeId,
       token: null,
       port: m.from.port,
       host: m.from.host,
-      to: m.to,
       added: this._tick,
       seen: this._tick,
       prev: null,
@@ -399,6 +402,10 @@ class DHT extends EventEmitter {
     return this.rpc.address()
   }
 
+  remoteAddress () {
+    return this._nat.analyze()
+  }
+
   _reply (rpc, tid, target, status, value, token, to) {
     const closerNodes = target ? this.table.closest(target) : null
     const persistent = !this.ephemeral && rpc === this.rpc
@@ -422,6 +429,10 @@ class DHT extends EventEmitter {
 DHT.OK = 0
 DHT.UNKNOWN_COMMAND = 1
 DHT.BAD_TOKEN = 2
+DHT.NAT_UNKNOWN = NatAnalyzer.UNKNOWN
+DHT.NAT_PORT_CONSISTENT = NatAnalyzer.PORT_CONSISTENT
+DHT.NAT_PORT_INCREMENTING = NatAnalyzer.PORT_INCREMENTING
+DHT.NAT_PORT_RANDOMIZED = NatAnalyzer.PORT_RANDOMIZED
 
 module.exports = DHT
 
