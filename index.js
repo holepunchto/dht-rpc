@@ -245,7 +245,9 @@ class DHT extends EventEmitter {
     if (!this.bootstrapped) return
 
     if (this._tick === this._stableTick) {
-      this.emit('stable')
+      if (this.remoteAddress().type === NatAnalyzer.PORT_CONSISTENT) {
+        this.emit('stable')
+      }
     }
 
     if ((this._tick & 7) === 0) {
