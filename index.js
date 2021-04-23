@@ -8,6 +8,8 @@ const sodium = require('sodium-universal')
 const { EventEmitter } = require('events')
 
 const TICK_INTERVAL = 5000
+const SLEEPING_INTERVAL = 3 * TICK_INTERVAL
+const STABLE_TICKS = 240 // if nothing major bad happens in ~20mins we can consider this node stable (if nat is friendly)
 const REFRESH_TICKS = 60 // refresh every ~5min when idle
 const RECENT_NODE = 20 // we've heard from a node less than 1min ago
 const OLD_NODE = 360 // if an node has been around more than 30 min we consider it old...
@@ -26,6 +28,10 @@ class Request {
     this.token = m.token
     this.command = m.command
     this.value = m.value
+  }
+
+  get update () {
+    return this.token !== null
   }
 
   error (code) {
@@ -62,7 +68,10 @@ class DHT extends EventEmitter {
     this._bootstrapping = this.bootstrap()
     this._secrets = [randomBytes(32), randomBytes(32)]
     this._tick = (Math.random() * 1024) | 0 // random offset it
-    this._refreshTick = REFRESH_TICKS
+    this._rotateSecrets = false
+    this._lastTick = Date.now()
+    this._refreshTick = this._tick + REFRESH_TICKS
+    this._stableTick = this._tick + STABLE_TICKS
     this._tickInterval = setInterval(this._ontick.bind(this), TICK_INTERVAL)
 
     this.table.on('row', (row) => row.on('full', (node) => this._onfullrow(node, row)))
@@ -172,32 +181,6 @@ class DHT extends EventEmitter {
     this._backgroundQuery(node ? node.id : this.table.id, 'find_node', null)
   }
 
-  _tally (onlyIp) {
-    const sum = new Map()
-    let result = null
-    let node = this.nodes.latest
-    let cnt = 0
-    let good = 0
-
-    for (; node && cnt < 10; node = node.prev) {
-      const to = node.to.host + ':' + (onlyIp ? 0 : node.to.port)
-      const hits = 1 + (sum.get(to) || 0)
-      if (hits > good) {
-        good = hits
-        result = node.to
-      }
-      sum.set(to, hits)
-      cnt++
-    }
-
-    // We want at least 3 samples all with the same ip:port from
-    // different remotes (the to field) to be consider it consistent
-    // If we get >=3 samples with conflicting info we are not (or under attack) (Subject for tweaking)
-
-    const bad = cnt - good
-    return bad < 3 && good >= 3 ? result : null
-  }
-
   _pingSome () {
     let cnt = this.rpc.inflightRequests > 2 ? 3 : 5
     let oldest = this.nodes.oldest
@@ -221,26 +204,55 @@ class DHT extends EventEmitter {
   }
 
   _check (node) {
-    this.ping(node).catch(() => this._removeNode(node))
+    this.ping(node)
+      .then(
+        m => this._maybeRemoveNode(node, m.nodeId),
+        () => this._removeNode(node)
+      )
   }
 
   _token (peer, i) {
+    this._rotateSecrets = true
     const out = Buffer.allocUnsafe(32)
     sodium.crypto_generichash(out, Buffer.from(peer.host), this._secrets[i])
     return out
   }
 
   _ontick () {
-    // rotate secrets
-    const tmp = this._secrets[0]
-    this._secrets[0] = this._secrets[1]
-    this._secrets[1] = tmp
-    sodium.randombytes_buf(tmp)
+    if (this._rotateSecrets) {
+      const tmp = this._secrets[0]
+      this._secrets[0] = this._secrets[1]
+      this._secrets[1] = tmp
+      sodium.randombytes_buf(tmp)
+    }
+
+    const time = Date.now()
+
+    if (time - this._lastTick > SLEEPING_INTERVAL) {
+      this._stableTick = 0 // never stable
+      this._tick += 2 * OLD_NODE // bump the tick enough that everything appears old.
+      this._tick += 8 - (this._tick & 7) - 2 // triggers a series of pings in two ticks
+      this._refreshTick = this._tick + 1 // triggers a refresh next tick (allow network time to wake up also)
+      this.emit('wakeup')
+    } else {
+      this._tick++
+    }
+
+    this._lastTick = time
 
     if (!this.bootstrapped) return
-    this._tick++
-    if ((this._tick & 7) === 0) this._pingSome()
-    if (((this._tick & 63) === 0 && this.nodes.length < 20) || this._tick === this._refreshTick) this.refresh()
+
+    if (this._tick === this._stableTick) {
+      this.emit('stable')
+    }
+
+    if ((this._tick & 7) === 0) {
+      this._pingSome()
+    }
+
+    if (((this._tick & 63) === 0 && this.nodes.length < this.table.k) || this._tick >= this._refreshTick) {
+      this.refresh()
+    }
   }
 
   _onfullrow (newNode, row) {
@@ -271,7 +283,8 @@ class DHT extends EventEmitter {
     this._repinging++
     this.ping(oldNode).then(onsuccess, onswap)
 
-    function onsuccess () {
+    function onsuccess (m) {
+      if (m.nodeId === null || !m.nodeId.equals(oldNode.id)) return onswap()
       self._repinging--
       self._repingMaybe()
     }
@@ -299,21 +312,25 @@ class DHT extends EventEmitter {
   }
 
   _addNode (node) {
-    if (this.nodes.has(node)) return
+    if (this.nodes.has(node) || node.id.equals(this.table.id)) return
 
     node.added = node.seen = this._tick
 
-    this.nodes.add(node)
-    this.table.add(node)
+    if (this.table.add(node)) this.nodes.add(node)
 
     this.emit('add-node', node)
+  }
+
+  _maybeRemoveNode (node, expectedId) {
+    if (expectedId !== null && expectedId.equals(node.id)) return
+    this._removeNode(node)
   }
 
   _removeNode (node) {
     if (!this.nodes.has(node)) return
 
-    this.nodes.remove(node)
     this.table.remove(node.id)
+    this.nodes.remove(node)
 
     this.emit('remove-node', node)
   }
@@ -359,6 +376,7 @@ class DHT extends EventEmitter {
       return
     }
 
+    // empty dht reply back
     if (req.command === 'find_node') {
       this._reply(this.rpc, req.tid, req.target, 0, null, false, req.from)
       return
