@@ -1,6 +1,7 @@
 const dns = require('dns')
 const RPC = require('./lib/rpc')
 const Query = require('./lib/query')
+const race = require('./lib/race')
 const NatAnalyzer = require('./lib/nat-analyzer')
 const Table = require('kademlia-routing-table')
 const TOS = require('time-ordered-set')
@@ -36,7 +37,7 @@ class Request {
     this.value = m.value
   }
 
-  get update () {
+  get commit () {
     return this.token !== null
   }
 
@@ -129,29 +130,11 @@ class DHT extends EventEmitter {
     if (nodes instanceof Query) nodes = nodes.table.closest(nodes.table.id)
 
     const min = typeof opts.min === 'number' ? opts.min : 1
-    const max = typeof opts.max === 'number' ? opts.max : nodes.length
-
     if (nodes.length < min) return Promise.reject(new Error('Too few nodes to request'))
 
     const p = []
     for (const node of nodes) p.push(this.request(target, command, value, node))
-
-    let errors = 0
-    const results = []
-
-    return new Promise((resolve, reject) => {
-      for (let i = 0; i < p.length; i++) p[i].then(ondone, onerror)
-
-      function ondone (res) {
-        if (results.length < max) results.push(res)
-        if (results.length >= max) return resolve(results)
-        if (results.length + errors === p.length) return resolve(results)
-      }
-
-      function onerror () {
-        if ((p.length - ++errors) < min) reject(new Error('Too many requests failed'))
-      }
-    })
+    return race(p, min, opts.max)
   }
 
   destroy () {

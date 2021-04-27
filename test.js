@@ -49,6 +49,57 @@ tape('make bigger swarm', async function (t) {
   destroy(swarm)
 })
 
+tape('commit after query', async function (t) {
+  const swarm = await makeSwarm(100)
+
+  let commits = 0
+
+  for (const node of swarm) {
+    node.on('request', function (req) {
+      if (req.command === 'before') {
+        return req.reply(null)
+      }
+      if (req.command === 'after' && req.commit) {
+        commits++
+        return req.reply(null)
+      }
+    })
+  }
+
+  const q = swarm[42].query(swarm[0].table.id, 'before', null, {
+    commit (node, target, to) {
+      return node.request(target, 'after', null, to)
+    }
+  })
+
+  await q.finished()
+
+  t.same(commits, swarm[42].table.k)
+
+  destroy(swarm)
+})
+
+tape('map query stream', async function (t) {
+  const swarm = await makeSwarm(10)
+
+  const expected = []
+  const q = swarm[0].query(swarm[0].table.id, 'find_node', null, {
+    map (data) {
+      if (expected.length > 3) return null
+      expected.push(data.nodeId)
+      return data.nodeId
+    }
+  })
+
+  const buf = []
+  q.on('data', (data) => buf.push(data))
+
+  await q.finished()
+
+  t.same(buf, expected)
+  destroy(swarm)
+})
+
 function destroy (list) {
   for (const node of list) node.destroy()
 }
