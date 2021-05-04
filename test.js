@@ -12,13 +12,13 @@ tape('make bigger swarm', async function (t) {
 
   const targetNode = swarm[25]
 
-  let q = swarm[499].query(targetNode.id, 'find_node', null)
+  let q = swarm[499].query(targetNode.nodeId, 'find_node', null)
   let messages = 0
   let found = false
 
   for await (const data of q) {
     messages++
-    if (data.nodeId.equals(targetNode.id)) {
+    if (data.nodeId.equals(targetNode.nodeId)) {
       found = true
       break
     }
@@ -26,13 +26,13 @@ tape('make bigger swarm', async function (t) {
 
   t.ok(found, 'found target in ' + messages + ' message(s)')
 
-  q = swarm[490].query(targetNode.id, 'find_node', null, { closest: q.closest })
+  q = swarm[490].query(targetNode.nodeId, 'find_node', null, { closest: q.closest })
   messages = 0
   found = false
 
   for await (const data of q) {
     messages++
-    if (data.nodeId.equals(targetNode.id)) {
+    if (data.nodeId.equals(targetNode.nodeId)) {
       found = true
       break
     }
@@ -67,8 +67,8 @@ tape('commit after query', async function (t) {
   }
 
   const q = swarm[42].query(swarm[0].table.id, 'before', null, {
-    commit (node, target, to) {
-      return node.request(target, 'after', null, to)
+    commit (node, target, m) {
+      return node.request(target, 'after', null, { token: m.token, ...m.from })
     }
   })
 
