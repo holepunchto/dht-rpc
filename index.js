@@ -42,11 +42,11 @@ class Request {
   }
 
   error (code) {
-    this.dht._reply(this.rpc, this.tid, this.target, code, null, false, this.from)
+    return this.dht._reply(this.rpc, this.tid, this.target, code, null, false, this.from)
   }
 
   reply (value, token = true) {
-    this.dht._reply(this.rpc, this.tid, this.target, 0, value, token, this.from)
+    return this.dht._reply(this.rpc, this.tid, this.target, 0, value, token, this.from)
   }
 }
 
@@ -88,7 +88,7 @@ class DHT extends EventEmitter {
     this.table.on('row', (row) => row.on('full', (node) => this._onfullrow(node, row)))
   }
 
-  get id () {
+  get nodeId () {
     return this.table.id
   }
 
@@ -137,6 +137,17 @@ class DHT extends EventEmitter {
     return race(p, min, opts.max)
   }
 
+  // TODO: make this more smart - ie don't retry the first one etc etc
+  async requestAny (target, command, value, nodes, opts) {
+    for (const node of nodes) {
+      try {
+        return await this.request(target, command, value, node, opts)
+      } catch {}
+    }
+
+    throw new Error('All requests failed')
+  }
+
   destroy () {
     this.rpc.destroy()
     clearInterval(this._tickInterval)
@@ -173,7 +184,7 @@ class DHT extends EventEmitter {
 
   refresh () {
     const node = this.table.random()
-    this._backgroundQuery(node ? node.id : this.table.id, 'find_node', null)
+    this._backgroundQuery(node ? node.nodeId : this.table.id, 'find_node', null)
   }
 
   _pingSomeBootstrapNodes () {
@@ -185,7 +196,7 @@ class DHT extends EventEmitter {
     this._pingBootstrapTicks = REFRESH_TICKS
 
     const nodes = this.table.closest(PING_BOOTSTRAP, 1)
-    if (nodes.length === 0 || compare(PING_BOOTSTRAP, this.table.id, nodes[0].id) > 0) {
+    if (nodes.length === 0 || compare(PING_BOOTSTRAP, this.table.id, nodes[0].nodeId) > 0) {
       return
     }
 
@@ -194,7 +205,7 @@ class DHT extends EventEmitter {
     q.on('close', () => {
       if (q.closest.length === 0) return
 
-      if (compare(PING_BOOTSTRAP, this.table.id, q.closest[q.closest.length - 1].id) > 0) {
+      if (compare(PING_BOOTSTRAP, this.table.id, q.closest[q.closest.length - 1].nodeId) > 0) {
         return
       }
 
@@ -309,7 +320,7 @@ class DHT extends EventEmitter {
   _repingMaybe () {
     while (this._repinging < 3 && this._reping.isEmpty() === false) {
       const { newNode, row } = this._reping.shift()
-      if (this.table.get(newNode.id)) continue
+      if (this.table.get(newNode.nodeId)) continue
 
       let oldest = null
       for (const node of row.nodes) {
@@ -331,7 +342,7 @@ class DHT extends EventEmitter {
     this.ping(oldNode).then(onsuccess, onswap)
 
     function onsuccess (m) {
-      if (m.nodeId === null || !m.nodeId.equals(oldNode.id)) return onswap()
+      if (m.nodeId === null || !m.nodeId.equals(oldNode.nodeId)) return onswap()
       self._repinging--
       self._repingMaybe()
     }
@@ -352,14 +363,14 @@ class DHT extends EventEmitter {
 
     for (const node of this.bootstrapNodes) {
       dns.lookup(node.host, (_, host) => {
-        if (host) nodes.push({ id: node.id || null, host, port: node.port })
+        if (host) nodes.push({ nodeId: node.nodeId || null, host, port: node.port })
         if (--missing === 0) done(nodes)
       })
     }
   }
 
   _addNode (node) {
-    if (this.nodes.has(node) || node.id.equals(this.table.id)) return
+    if (this.nodes.has(node) || node.nodeId.equals(this.table.id)) return
 
     node.added = node.seen = this._tick
 
@@ -369,14 +380,14 @@ class DHT extends EventEmitter {
   }
 
   _maybeRemoveNode (node, expectedId) {
-    if (expectedId !== null && expectedId.equals(node.id)) return
+    if (expectedId !== null && expectedId.equals(node.nodeId)) return
     this._removeNode(node)
   }
 
   _removeNode (node) {
     if (!this.nodes.has(node)) return
 
-    this.table.remove(node.id)
+    this.table.remove(node.nodeId)
     this.nodes.remove(node)
 
     this.emit('remove-node', node)
@@ -398,10 +409,11 @@ class DHT extends EventEmitter {
     this._nat.add(m.to)
 
     this._addNode({
-      id: m.nodeId,
+      nodeId: m.nodeId,
       token: null,
       port: m.from.port,
       host: m.from.host,
+      id: m.nodeId, // alias for nodeId as the routing table expects that
       added: this._tick,
       seen: this._tick,
       prev: null,
@@ -459,8 +471,7 @@ class DHT extends EventEmitter {
   _reply (rpc, tid, target, status, value, token, to) {
     const closerNodes = target ? this.table.closest(target) : null
     const persistent = !this.ephemeral && rpc === this.rpc
-
-    rpc.send({
+    const reply = {
       version: 1,
       tid,
       from: null,
@@ -472,7 +483,10 @@ class DHT extends EventEmitter {
       command: null,
       status,
       value
-    })
+    }
+
+    rpc.send(reply)
+    return reply
   }
 }
 
@@ -492,7 +506,7 @@ function parseNode (s) {
   if (!port) throw new Error('Node format is id@?host:port')
 
   return {
-    id: id ? Buffer.from(id.slice(0, -1), 'hex') : null,
+    nodeId: id ? Buffer.from(id.slice(0, -1), 'hex') : null,
     host,
     port: Number(port.slice(1))
   }
