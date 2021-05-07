@@ -2,6 +2,7 @@ const dns = require('dns')
 const RPC = require('./lib/rpc')
 const Query = require('./lib/query')
 const race = require('./lib/race')
+const nodeId = require('./lib/id')
 const NatAnalyzer = require('./lib/nat-analyzer')
 const Table = require('kademlia-routing-table')
 const TOS = require('time-ordered-set')
@@ -11,8 +12,8 @@ const { EventEmitter } = require('events')
 
 const TICK_INTERVAL = 5000
 const SLEEPING_INTERVAL = 3 * TICK_INTERVAL
-const STABLE_TICKS = 240 // if nothing major bad happens in ~20mins we can consider this node stable (if nat is friendly)
-const MORE_STABLE_TICKS = 3 * STABLE_TICKS
+const PERSISTENT_TICKS = 240 // if nothing major bad happens in ~20mins we can consider this node stable (if nat is friendly)
+const MORE_PERSISTENT_TICKS = 3 * PERSISTENT_TICKS
 const REFRESH_TICKS = 60 // refresh every ~5min when idle
 const RECENT_NODE = 20 // we've heard from a node less than 1min ago
 const OLD_NODE = 360 // if an node has been around more than 30 min we consider it old
@@ -23,16 +24,14 @@ sodium.crypto_generichash(PING_BOOTSTRAP, Buffer.from('ping bootstrap'))
 
 class Request {
   constructor (dht, m) {
-    this.rpc = dht.rpc
     this.dht = dht
     this.tid = m.tid
     this.from = m.from
     this.to = m.to
-    this.nodeId = m.nodeId
+    this.token = m.token
     this.target = m.target
     this.closerNodes = m.closerNodes
     this.status = m.status
-    this.token = m.token
     this.command = m.command
     this.value = m.value
   }
@@ -41,12 +40,12 @@ class Request {
     return this.token !== null
   }
 
-  error (code) {
-    return this.dht._reply(this.rpc, this.tid, this.target, code, null, false, this.from)
+  error (code, token = false) {
+    return this.dht._reply(this.tid, this.target, code, null, this.from, token)
   }
 
   reply (value, token = true) {
-    return this.dht._reply(this.rpc, this.tid, this.target, 0, value, token, this.from)
+    return this.dht._reply(this.tid, this.target, 0, value, this.from, token)
   }
 }
 
@@ -54,46 +53,52 @@ class DHT extends EventEmitter {
   constructor (opts = {}) {
     super()
 
-    const id = opts.id || randomBytes(32)
-
     this.bootstrapNodes = opts.bootstrap === false ? [] : (opts.bootstrap || []).map(parseNode)
     this.nodes = new TOS()
-    this.table = new Table(id)
+    // this is just the private id, see below in the persistence handler
+    this.table = new Table(opts.id || randomBytes(32))
+
     this.rpc = new RPC({
+      maxWindow: opts.maxWindow,
       socket: opts.socket,
-      onwarning: opts.onwarning,
+      onwarning: opts.onwarning || console.error,
       onrequest: this._onrequest.bind(this),
       onresponse: this._onresponse.bind(this)
     })
 
     this.bootstrapped = false
     this.concurrency = opts.concurrency || 16
-    this.ephemeral = !!opts.ephemeral
-    this.adaptive = !!opts.adaptive
+    this.ephemeral = true
+    this.adaptive = opts.ephemeral === false || opts.adaptive !== false
+    this.clientOnly = !this.adaptive
 
+    this._forcePersistent = opts.ephemeral === false
     this._repinging = 0
     this._reping = new FIFO(128)
     this._bootstrapping = this.bootstrap()
-    this._secrets = [randomBytes(32), randomBytes(32)]
     // make sure to random offset all the network ticks
     this._tick = randomOffset(100)
     this._refreshTicks = randomOffset(REFRESH_TICKS)
     this._pingBootstrapTicks = randomOffset(REFRESH_TICKS)
-    this._stableTicks = this.adaptive ? STABLE_TICKS : 0
+    this._persistentTicks = this.adaptive ? PERSISTENT_TICKS : 0
     this._tickInterval = setInterval(this._ontick.bind(this), TICK_INTERVAL)
-    this._rotateSecrets = false
     this._lastTick = Date.now()
     this._nat = new NatAnalyzer(opts.natSampleSize || 16)
+    this._onrow = (row) => row.on('full', (node) => this._onfullrow(node, row))
+    this._rotateSecrets = false
+    this._secrets = [
+      Buffer.alloc(32),
+      Buffer.alloc(32)
+    ]
 
-    this.table.on('row', (row) => row.on('full', (node) => this._onfullrow(node, row)))
+    sodium.randombytes_buf(this._secrets[0])
+    sodium.randombytes_buf(this._secrets[1])
+
+    this.table.on('row', this._onrow)
   }
 
-  get nodeId () {
-    return this.table.id
-  }
-
-  static createRPCSocket (opts) {
-    return new RPC(opts)
+  get id () {
+    return this.ephemeral ? null : this.table.id
   }
 
   ready () {
@@ -115,8 +120,8 @@ class DHT extends EventEmitter {
       tid: 0,
       from: null,
       to,
-      token: to.token || null,
-      nodeId: this.ephemeral ? null : this.table.id,
+      id: this.ephemeral ? null : this.table.id,
+      token: to.token,
       target,
       closerNodes: null,
       command,
@@ -126,9 +131,6 @@ class DHT extends EventEmitter {
   }
 
   requestAll (target, command, value, nodes, opts = {}) {
-    if (nodes instanceof Table) nodes = nodes.closest(nodes.id)
-    if (nodes instanceof Query) nodes = nodes.table.closest(nodes.table.id)
-
     const min = typeof opts.min === 'number' ? opts.min : 1
     if (nodes.length < min) return Promise.reject(new Error('Too few nodes to request'))
 
@@ -154,16 +156,14 @@ class DHT extends EventEmitter {
   }
 
   async bootstrap () {
-    return new Promise((resolve) => {
-      this._backgroundQuery(this.table.id, 'find_node', null)
-        .on('close', () => {
-          if (!this.bootstrapped) {
-            this.bootstrapped = true
-            this.emit('ready')
-          }
-          resolve()
-        })
-    })
+    for (let i = 0; i < 2; i++) {
+      await this._backgroundQuery(this.table.id, 'find_node', null).finished()
+      if (this.bootstrapped || !this._forcePersistent || !this._onpersistent()) break
+    }
+
+    if (this.bootstrapped) return
+    this.bootstrapped = true
+    this.emit('ready')
   }
 
   _backgroundQuery (target, command, value) {
@@ -182,9 +182,17 @@ class DHT extends EventEmitter {
     return q
   }
 
+  _token (addr, i) {
+    const token = Buffer.allocUnsafe(32)
+    this._rotateSecrets = true
+    // TODO: also add .port?
+    sodium.crypto_generichash(token, Buffer.from(addr.host), this._secrets[i])
+    return token
+  }
+
   refresh () {
     const node = this.table.random()
-    this._backgroundQuery(node ? node.nodeId : this.table.id, 'find_node', null)
+    this._backgroundQuery(node ? node.id : this.table.id, 'find_node', null)
   }
 
   _pingSomeBootstrapNodes () {
@@ -196,7 +204,7 @@ class DHT extends EventEmitter {
     this._pingBootstrapTicks = REFRESH_TICKS
 
     const nodes = this.table.closest(PING_BOOTSTRAP, 1)
-    if (nodes.length === 0 || compare(PING_BOOTSTRAP, this.table.id, nodes[0].nodeId) > 0) {
+    if (nodes.length === 0 || compare(PING_BOOTSTRAP, this.table.id, nodes[0].id) > 0) {
       return
     }
 
@@ -205,7 +213,7 @@ class DHT extends EventEmitter {
     q.on('close', () => {
       if (q.closest.length === 0) return
 
-      if (compare(PING_BOOTSTRAP, this.table.id, q.closest[q.closest.length - 1].nodeId) > 0) {
+      if (compare(PING_BOOTSTRAP, this.table.id, q.closest[q.closest.length - 1].id) > 0) {
         return
       }
 
@@ -233,24 +241,17 @@ class DHT extends EventEmitter {
 
     while (cnt--) {
       if (!oldest || this._tick === oldest.seen) continue
-      this._check(oldest)
+      this._check(oldest, oldest.seen)
       oldest = oldest.next
     }
   }
 
-  _check (node) {
+  _check (node, lastSeen) {
     this.ping(node)
       .then(
-        m => this._maybeRemoveNode(node, m.nodeId),
+        () => this._removeStaleNode(node, lastSeen),
         () => this._removeNode(node)
       )
-  }
-
-  _token (peer, i) {
-    this._rotateSecrets = true
-    const out = Buffer.allocUnsafe(32)
-    sodium.crypto_generichash(out, Buffer.from(peer.host), this._secrets[i])
-    return out
   }
 
   _ontick () {
@@ -258,7 +259,7 @@ class DHT extends EventEmitter {
       const tmp = this._secrets[0]
       this._secrets[0] = this._secrets[1]
       this._secrets[1] = tmp
-      sodium.randombytes_buf(tmp)
+      sodium.crypto_generichash(tmp, tmp)
     }
 
     const time = Date.now()
@@ -273,8 +274,8 @@ class DHT extends EventEmitter {
 
     if (!this.bootstrapped) return
 
-    if (this.adaptive && this.ephemeral && --this._stableTicks <= 0) {
-      this._onstable()
+    if (this.adaptive && this.ephemeral && --this._persistentTicks <= 0) {
+      this._onpersistent()
     }
 
     if ((this._tick & 7) === 0) {
@@ -290,24 +291,42 @@ class DHT extends EventEmitter {
     }
   }
 
-  _onstable () {
-    if (this.remoteAddress().type === NatAnalyzer.PORT_CONSISTENT) {
-      this.emit('stable')
-    } else {
-      this._stableTicks = MORE_STABLE_TICKS
+  _onpersistent () {
+    if (this.ephemeral === false) return false
+
+    // TODO: do nat check also
+
+    const addr = this.remoteAddress(this._forcePersistent ? 1 : 3)
+
+    if (addr.type !== NatAnalyzer.PORT_CONSISTENT) {
+      this._persistentTicks = MORE_PERSISTENT_TICKS
+      return false
     }
+
+    const id = nodeId(addr.host, addr.port)
+    if (this.table.id.equals(id)) return false
+
+    const nodes = this.table.toArray()
+
+    this.table = new Table(id)
+    for (const node of nodes) this.table.add(node)
+    this.table.on('row', this._onrow)
+
+    this.ephemeral = false
+    this.emit('persistent')
+    return true
   }
 
   _onwakeup () {
     this._tick += 2 * OLD_NODE // bump the tick enough that everything appears old.
     this._tick += 8 - (this._tick & 7) - 2 // triggers a series of pings in two ticks
-    this._stableTicks = MORE_STABLE_TICKS
+    this._persistentTicks = MORE_PERSISTENT_TICKS
     this._pingBootstrapTicks = REFRESH_TICKS // forced ephemeral, so no need for a bootstrap ping soon
     this._refreshTicks = 1 // triggers a refresh next tick (allow network time to wake up also)
 
     if (this.adaptive) {
       this.ephemeral = true
-      this.emit('unstable')
+      this.emit('ephemeral')
     }
 
     this.emit('wakeup')
@@ -320,7 +339,7 @@ class DHT extends EventEmitter {
   _repingMaybe () {
     while (this._repinging < 3 && this._reping.isEmpty() === false) {
       const { newNode, row } = this._reping.shift()
-      if (this.table.get(newNode.nodeId)) continue
+      if (this.table.get(newNode.id)) continue
 
       let oldest = null
       for (const node of row.nodes) {
@@ -337,12 +356,13 @@ class DHT extends EventEmitter {
 
   _repingAndSwap (newNode, oldNode) {
     const self = this
+    const lastSeen = oldNode.seen
 
     this._repinging++
     this.ping(oldNode).then(onsuccess, onswap)
 
     function onsuccess (m) {
-      if (m.nodeId === null || !m.nodeId.equals(oldNode.nodeId)) return onswap()
+      if (oldNode.seen <= lastSeen) return onswap()
       self._repinging--
       self._repingMaybe()
     }
@@ -363,14 +383,14 @@ class DHT extends EventEmitter {
 
     for (const node of this.bootstrapNodes) {
       dns.lookup(node.host, (_, host) => {
-        if (host) nodes.push({ nodeId: node.nodeId || null, host, port: node.port })
+        if (host) nodes.push({ id: nodeId(host, node.port), host, port: node.port })
         if (--missing === 0) done(nodes)
       })
     }
   }
 
   _addNode (node) {
-    if (this.nodes.has(node) || node.nodeId.equals(this.table.id)) return
+    if (this.nodes.has(node) || node.id.equals(this.table.id)) return
 
     node.added = node.seen = this._tick
 
@@ -379,29 +399,40 @@ class DHT extends EventEmitter {
     this.emit('add-node', node)
   }
 
-  _maybeRemoveNode (node, expectedId) {
-    if (expectedId !== null && expectedId.equals(node.nodeId)) return
-    this._removeNode(node)
+  _removeStaleNode (node, lastSeen) {
+    if (node.seen <= lastSeen) this._removeNode(node)
   }
 
   _removeNode (node) {
     if (!this.nodes.has(node)) return
 
-    this.table.remove(node.nodeId)
+    this.table.remove(node.id)
     this.nodes.remove(node)
 
     this.emit('remove-node', node)
   }
 
   _addNodeFromMessage (m) {
-    const oldNode = this.table.get(m.nodeId)
+    const id = nodeId(m.from.host, m.from.port)
 
+    // verify id, if the id is mismatched it doesn't strictly mean the node is bad, could be
+    // a weird NAT thing, that the node is unaware of - in any case it def means we should not
+    // add this node to our routing table
+    if (!m.id.equals(id)) {
+      m.id = null
+      return
+    }
+
+    const oldNode = this.table.get(id)
+
+    // TODO: if the to.host is different than what the node has told us previously
+    // ALSO add it to the nat analyser as we have likely changed networks...
+    // If we DO change the ip, it should factor into our adaptive logic as well potentially
+
+    // refresh it, if we've seen this before
     if (oldNode) {
-      if (oldNode.port === m.from.port && oldNode.host === m.from.host) {
-        // refresh it
-        oldNode.seen = this._tick
-        this.nodes.add(oldNode)
-      }
+      oldNode.seen = this._tick
+      this.nodes.add(oldNode)
       return
     }
 
@@ -409,11 +440,10 @@ class DHT extends EventEmitter {
     this._nat.add(m.to)
 
     this._addNode({
-      nodeId: m.nodeId,
-      token: null,
+      id,
       port: m.from.port,
       host: m.from.host,
-      id: m.nodeId, // alias for nodeId as the routing table expects that
+      token: null, // adding this so it has the same "shape" as the query nodes for easier debugging
       added: this._tick,
       seen: this._tick,
       prev: null,
@@ -422,38 +452,35 @@ class DHT extends EventEmitter {
   }
 
   _onrequest (req) {
-    if (req.nodeId !== null) this._addNodeFromMessage(req)
-
-    if (req.token !== null) {
-      if (!req.token.equals(this._token(req.from, 1)) && !req.token.equals(this._token(req.from, 0))) {
-        req.token = null
-      }
+    // check if the roundtrip token is one we've generated within the last 10s for this peer
+    if (req.token !== null && !this._token(req.from, 1).equals(req.token) && !this._token(req.from, 0).equals(req.token)) {
+      req.token = null
     }
 
-    // empty reply back
+    if (req.id !== null) this._addNodeFromMessage(req)
+    else this._pingBootstrapTicks = REFRESH_TICKS
+    // o/ if this node is ephemeral, it prob originated from a bootstrapper somehow so no need to ping them
+
+    // echo the value back
     if (req.command === 'ping') {
-      this._reply(this.rpc, req.tid, null, 0, null, false, req.from)
+      this._reply(req.tid, null, 0, req.value, req.from, false)
       return
     }
 
     // empty dht reply back
     if (req.command === 'find_node') {
-      this._reply(this.rpc, req.tid, req.target, 0, null, false, req.from)
+      this._reply(req.tid, req.target, 0, null, req.from, false)
       return
     }
 
-    // if this node is ephemeral, it prob came from a bootstrapper somehow so no need to ping them
-    if (req.nodeId === null) {
-      this._pingBootstrapTicks = REFRESH_TICKS
-    }
-
     if (this.emit('request', new Request(this, req)) === false) {
-      this._reply(this.rpc, req.tid, req.target, 1, null, false, req.from)
+      this._reply(req.tid, req.target, 1, null, req.from, false)
     }
   }
 
   _onresponse (res) {
-    if (res.nodeId !== null) this._addNodeFromMessage(res)
+    if (res.id !== null) this._addNodeFromMessage(res)
+    else if (this._nat.length < 3) this._nat.add(res.to)
   }
 
   bind (...args) {
@@ -464,20 +491,19 @@ class DHT extends EventEmitter {
     return this.rpc.address()
   }
 
-  remoteAddress () {
-    return this._nat.analyze()
+  remoteAddress (minSamples) {
+    return this._nat.analyze(minSamples)
   }
 
-  _reply (rpc, tid, target, status, value, token, to) {
+  _reply (tid, target, status, value, to, addToken) {
     const closerNodes = target ? this.table.closest(target) : null
-    const persistent = !this.ephemeral && rpc === this.rpc
     const reply = {
       version: 1,
       tid,
       from: null,
       to,
-      token: token ? this._token(to, 1) : null,
-      nodeId: persistent ? this.table.id : null,
+      id: this.ephemeral ? null : this.table.id,
+      token: addToken ? this._token(to, 1) : null,
       target: null,
       closerNodes,
       command: null,
@@ -485,7 +511,7 @@ class DHT extends EventEmitter {
       value
     }
 
-    rpc.send(reply)
+    this.rpc.send(reply)
     return reply
   }
 }
@@ -502,13 +528,12 @@ module.exports = DHT
 
 function parseNode (s) {
   if (typeof s === 'object') return s
-  const [, id, host, port] = s.match(/([a-f0-9]{64}@)?([^:@]+)(:\d+)?$/i)
-  if (!port) throw new Error('Node format is id@?host:port')
+  const [host, port] = s.split(':')
+  if (!port) throw new Error('Bootstrap node format is host:port')
 
   return {
-    nodeId: id ? Buffer.from(id.slice(0, -1), 'hex') : null,
     host,
-    port: Number(port.slice(1))
+    port: Number(port)
   }
 }
 
