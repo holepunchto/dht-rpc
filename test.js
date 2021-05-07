@@ -12,13 +12,13 @@ tape('make bigger swarm', async function (t) {
 
   const targetNode = swarm[25]
 
-  let q = swarm[499].query(targetNode.nodeId, 'find_node', null)
+  let q = swarm[499].query(targetNode.id, 'find_node', null)
   let messages = 0
   let found = false
 
   for await (const data of q) {
     messages++
-    if (data.nodeId.equals(targetNode.nodeId)) {
+    if (data.id.equals(targetNode.id)) {
       found = true
       break
     }
@@ -26,13 +26,13 @@ tape('make bigger swarm', async function (t) {
 
   t.ok(found, 'found target in ' + messages + ' message(s)')
 
-  q = swarm[490].query(targetNode.nodeId, 'find_node', null, { closest: q.closest })
+  q = swarm[490].query(targetNode.id, 'find_node', null, { closest: q.closest })
   messages = 0
   found = false
 
   for await (const data of q) {
     messages++
-    if (data.nodeId.equals(targetNode.nodeId)) {
+    if (data.id.equals(targetNode.id)) {
       found = true
       break
     }
@@ -67,8 +67,8 @@ tape('commit after query', async function (t) {
   }
 
   const q = swarm[42].query(swarm[0].table.id, 'before', null, {
-    commit (node, target, m) {
-      return node.request(target, 'after', null, { token: m.token, ...m.from })
+    commit (node, dht, query) {
+      return dht.request(query.target, 'after', null, node)
     }
   })
 
@@ -86,8 +86,8 @@ tape('map query stream', async function (t) {
   const q = swarm[0].query(swarm[0].table.id, 'find_node', null, {
     map (data) {
       if (expected.length > 3) return null
-      expected.push(data.nodeId)
-      return data.nodeId
+      expected.push(data.id)
+      return data.id
     }
   })
 
@@ -110,7 +110,7 @@ async function makeSwarm (n) {
   const all = [node]
   const bootstrap = ['localhost:' + node.address().port]
   while (all.length < n) {
-    const node = new DHT({ bootstrap })
+    const node = new DHT({ ephemeral: false, bootstrap })
     await node.ready()
     all.push(node)
   }
