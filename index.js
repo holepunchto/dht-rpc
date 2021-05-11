@@ -309,6 +309,7 @@ class DHT extends EventEmitter {
     }
 
     if (await this._checkIfFirewalled()) return false
+    if (!this.ephemeral) return false // incase it's called in parallel for some reason
 
     const id = nodeId(addr.host, addr.port)
     if (this.table.id.equals(id)) return false
@@ -343,7 +344,7 @@ class DHT extends EventEmitter {
     if (!nodes.length) return true // no nodes available, including bootstrappers - bail
 
     try {
-      await this.requestAll(null, 'ping_nat', null, nodes, { min: 1, max: 3 })
+      await this.requestAll(null, 'ping_nat', null, nodes, { min: nodes.length >= 5 ? 3 : 1, max: 3 })
     } catch {
       // not enough nat pings succeded - assume firewalled
       return true
@@ -564,10 +565,10 @@ DHT.OK = 0
 DHT.UNKNOWN_COMMAND = 1
 DHT.BAD_TOKEN = 2
 DHT.NAT_UNKNOWN = NatAnalyzer.UNKNOWN
+DHT.NAT_OPEN = Symbol.for('NAT_OPEN') // implies PORT_CONSISTENT
 DHT.NAT_PORT_CONSISTENT = NatAnalyzer.PORT_CONSISTENT
 DHT.NAT_PORT_INCREMENTING = NatAnalyzer.PORT_INCREMENTING
 DHT.NAT_PORT_RANDOMIZED = NatAnalyzer.PORT_RANDOMIZED
-DHT.NAT_OPEN = Symbol.for('NAT_OPEN') // implies PORT_CONSISTENT
 
 module.exports = DHT
 
