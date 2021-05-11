@@ -303,7 +303,7 @@ class DHT extends EventEmitter {
 
     const addr = this.remoteAddress(this._forcePersistent ? 1 : 3)
 
-    if (addr.type !== NatAnalyzer.PORT_CONSISTENT) {
+    if (addr.type !== DHT.NAT_PORT_CONSISTENT && addr.type !== DHT.NAT_OPEN) {
       this._persistentTicks = MORE_PERSISTENT_TICKS
       return false
     }
@@ -533,7 +533,9 @@ class DHT extends EventEmitter {
   }
 
   remoteAddress (minSamples) {
-    return this._nat.analyze(minSamples)
+    const result = this._nat.analyze(minSamples)
+    if (result.type === NatAnalyzer.PORT_CONSISTENT && !this.ephemeral) result.type = DHT.NAT_OPEN
+    return result
   }
 
   _reply (tid, target, status, value, to, addToken, socket = this.rpc.socket) {
@@ -565,6 +567,7 @@ DHT.NAT_UNKNOWN = NatAnalyzer.UNKNOWN
 DHT.NAT_PORT_CONSISTENT = NatAnalyzer.PORT_CONSISTENT
 DHT.NAT_PORT_INCREMENTING = NatAnalyzer.PORT_INCREMENTING
 DHT.NAT_PORT_RANDOMIZED = NatAnalyzer.PORT_RANDOMIZED
+DHT.NAT_OPEN = Symbol.for('NAT_OPEN') // implies PORT_CONSISTENT
 
 module.exports = DHT
 
