@@ -8,6 +8,7 @@ const Table = require('kademlia-routing-table')
 const TOS = require('time-ordered-set')
 const FIFO = require('fast-fifo/fixed-size')
 const sodium = require('sodium-universal')
+const dgram = require('dgram')
 const { EventEmitter } = require('events')
 
 const TICK_INTERVAL = 5000
@@ -40,12 +41,12 @@ class Request {
     return this.token !== null
   }
 
-  error (code, token = false) {
-    return this.dht._reply(this.tid, this.target, code, null, this.from, token)
+  error (code, token = false, socket) {
+    return this.dht._reply(this.tid, this.target, code, null, this.from, token, socket)
   }
 
-  reply (value, token = true) {
-    return this.dht._reply(this.tid, this.target, 0, value, this.from, token)
+  reply (value, token = true, socket) {
+    return this.dht._reply(this.tid, this.target, 0, value, this.from, token, socket)
   }
 }
 
@@ -67,17 +68,17 @@ class DHT extends EventEmitter {
     })
 
     this.bootstrapped = false
-    this.concurrency = opts.concurrency || 16
+    this.concurrency = opts.concurrency || this.table.k
     this.ephemeral = true
-    this.adaptive = opts.ephemeral === false || opts.adaptive !== false
+    this.adaptive = opts.ephemeral !== false && opts.adaptive !== false
     this.clientOnly = !this.adaptive
 
     this._forcePersistent = opts.ephemeral === false
     this._repinging = 0
     this._reping = new FIFO(128)
     this._bootstrapping = this.bootstrap()
-    // make sure to random offset all the network ticks
-    this._tick = randomOffset(100)
+    this._localSocket = opts.localSocket || null // used for auto configuring nat sessions
+    this._tick = randomOffset(100) // make sure to random offset all the network ticks
     this._refreshTicks = randomOffset(REFRESH_TICKS)
     this._pingBootstrapTicks = randomOffset(REFRESH_TICKS)
     this._persistentTicks = this.adaptive ? PERSISTENT_TICKS : 0
@@ -152,13 +153,17 @@ class DHT extends EventEmitter {
 
   destroy () {
     this.rpc.destroy()
+    if (this._localSocket) {
+      this._localSocket.close()
+      this._localSocket = null
+    }
     clearInterval(this._tickInterval)
   }
 
   async bootstrap () {
     for (let i = 0; i < 2; i++) {
       await this._backgroundQuery(this.table.id, 'find_node', null).finished()
-      if (this.bootstrapped || !this._forcePersistent || !this._onpersistent()) break
+      if (this.bootstrapped || !this._forcePersistent || !(await this._onpersistent())) break
     }
 
     if (this.bootstrapped) return
@@ -275,7 +280,7 @@ class DHT extends EventEmitter {
     if (!this.bootstrapped) return
 
     if (this.adaptive && this.ephemeral && --this._persistentTicks <= 0) {
-      this._onpersistent()
+      this._onpersistent() // the promise returned here never fails so just ignore it
     }
 
     if ((this._tick & 7) === 0) {
@@ -291,7 +296,7 @@ class DHT extends EventEmitter {
     }
   }
 
-  _onpersistent () {
+  async _onpersistent () {
     if (this.ephemeral === false) return false
 
     // TODO: do nat check also
@@ -302,6 +307,8 @@ class DHT extends EventEmitter {
       this._persistentTicks = MORE_PERSISTENT_TICKS
       return false
     }
+
+    if (await this._checkIfFirewalled()) return false
 
     const id = nodeId(addr.host, addr.port)
     if (this.table.id.equals(id)) return false
@@ -315,6 +322,34 @@ class DHT extends EventEmitter {
     this.ephemeral = false
     this.emit('persistent')
     return true
+  }
+
+  async _addBootstrapNodes (nodes) {
+    return new Promise((resolve) => {
+      this._resolveBootstrapNodes(function (bootstrappers) {
+        nodes.push(...bootstrappers)
+        resolve()
+      })
+    })
+  }
+
+  async _checkIfFirewalled () {
+    const nodes = []
+    for (let node = this.nodes.latest; node && nodes.length < 5; node = node.prev) {
+      nodes.push(node)
+    }
+
+    if (nodes.length < 5) await this._addBootstrapNodes(nodes)
+    if (!nodes.length) return true // no nodes available, including bootstrappers - bail
+
+    try {
+      await this.requestAll(null, 'ping_nat', null, nodes, { min: 1, max: 3 })
+    } catch {
+      // not enough nat pings succeded - assume firewalled
+      return true
+    }
+
+    return false
   }
 
   _onwakeup () {
@@ -467,6 +502,12 @@ class DHT extends EventEmitter {
       return
     }
 
+    if (req.command === 'ping_nat') {
+      if (!this._localSocket) this._localSocket = dgram.createSocket('udp4')
+      this._reply(req.tid, null, 0, null, req.from, false, this._localSocket)
+      return
+    }
+
     // empty dht reply back
     if (req.command === 'find_node') {
       this._reply(req.tid, req.target, 0, null, req.from, false)
@@ -495,15 +536,16 @@ class DHT extends EventEmitter {
     return this._nat.analyze(minSamples)
   }
 
-  _reply (tid, target, status, value, to, addToken) {
+  _reply (tid, target, status, value, to, addToken, socket = this.rpc.socket) {
     const closerNodes = target ? this.table.closest(target) : null
+    const ephemeral = socket !== this.rpc.socket || this.ephemeral
     const reply = {
       version: 1,
       tid,
       from: null,
       to,
-      id: this.ephemeral ? null : this.table.id,
-      token: addToken ? this._token(to, 1) : null,
+      id: ephemeral ? null : this.table.id,
+      token: (!ephemeral && addToken) ? this._token(to, 1) : null,
       target: null,
       closerNodes,
       command: null,
@@ -511,7 +553,7 @@ class DHT extends EventEmitter {
       value
     }
 
-    this.rpc.send(reply)
+    this.rpc.send(reply, socket)
     return reply
   }
 }
