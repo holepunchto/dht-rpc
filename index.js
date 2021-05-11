@@ -499,7 +499,7 @@ class DHT extends EventEmitter {
 
     // echo the value back
     if (req.command === 'ping') {
-      this._reply(req.tid, null, 0, req.value, req.from, false)
+      if (req.value === null || req.value.byteLength <= 32) this._reply(req.tid, null, 0, req.value, req.from, false)
       return
     }
 
