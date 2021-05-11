@@ -299,9 +299,9 @@ class DHT extends EventEmitter {
   async _onpersistent () {
     if (this.ephemeral === false) return false
 
-    // TODO: do nat check also
-
-    const addr = this.remoteAddress(this._forcePersistent ? 1 : 3)
+    // only require one sample here as we do the nat check anyway after
+    // makes settting up a dht easier...
+    const addr = this.remoteAddress(1)
 
     if (addr.type !== DHT.NAT_PORT_CONSISTENT && addr.type !== DHT.NAT_OPEN) {
       this._persistentTicks = MORE_PERSISTENT_TICKS
@@ -473,7 +473,7 @@ class DHT extends EventEmitter {
     }
 
     // add a sample of our address from the remote nodes pov
-    this._nat.add(m.to)
+    this._nat.add(m.to, m.from)
 
     this._addNode({
       id,
@@ -522,7 +522,7 @@ class DHT extends EventEmitter {
 
   _onresponse (res) {
     if (res.id !== null) this._addNodeFromMessage(res)
-    else if (this._nat.length < 3) this._nat.add(res.to)
+    else if (this._nat.length < 3 && !this._nat.sampled(res.from)) this._nat.add(res.to, res.from)
   }
 
   bind (...args) {
