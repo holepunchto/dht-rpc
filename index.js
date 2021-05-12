@@ -461,12 +461,24 @@ class DHT extends EventEmitter {
 
     const oldNode = this.table.get(id)
 
-    // TODO: if the to.host is different than what the node has told us previously
-    // ALSO add it to the nat analyser as we have likely changed networks...
-    // If we DO change the ip, it should factor into our adaptive logic as well potentially
-
     // refresh it, if we've seen this before
     if (oldNode) {
+      // if the node is indicating that we got a new ip
+      // make sure to add it again to the sampler. make sure we don't allow the remote node
+      // to add multiple entries though.
+      if (oldNode.network !== m.to.host) {
+        oldNode.network = m.to.host
+        // TODO: would be technically better to add to the head of the sample queue, but
+        // this is prop fine
+        const s = this._nat.sample(m.from)
+        if (s) {
+          s.port = m.to.port
+          s.host = m.to.host
+        } else {
+          this._nat.add(m.to, m.from)
+        }
+      }
+
       oldNode.seen = this._tick
       this.nodes.add(oldNode)
       return
@@ -482,6 +494,7 @@ class DHT extends EventEmitter {
       token: null, // adding this so it has the same "shape" as the query nodes for easier debugging
       added: this._tick,
       seen: this._tick,
+      network: m.to.host,
       prev: null,
       next: null
     })
@@ -522,7 +535,7 @@ class DHT extends EventEmitter {
 
   _onresponse (res) {
     if (res.id !== null) this._addNodeFromMessage(res)
-    else if (this._nat.length < 3 && !this._nat.sampled(res.from)) this._nat.add(res.to, res.from)
+    else if (this._nat.length < 3 && this._nat.sample(res.from) === null) this._nat.add(res.to, res.from)
   }
 
   bind (...args) {
