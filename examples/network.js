@@ -7,6 +7,7 @@ for (let i = 0; i < 100; i++) swarm[i] = createNode()
 
 function createNode () {
   const node = new DHT({
+    ephemeral: false,
     bootstrap: [
       'localhost:10001'
     ]
@@ -16,7 +17,7 @@ function createNode () {
 
   node.on('request', function (req) {
     if (req.command === 'values') {
-      if (req.update) {
+      if (req.commit) {
         const key = sha256(req.value).toString('hex')
         values.set(key, req.value)
         console.log('Storing', key, '-->', req.value.toString())
