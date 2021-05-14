@@ -62,7 +62,7 @@ class DHT extends EventEmitter {
     this.rpc = new RPC({
       maxWindow: opts.maxWindow,
       socket: opts.socket,
-      onwarning: opts.onwarning || console.error,
+      onwarning: opts.onwarning,
       onrequest: this._onrequest.bind(this),
       onresponse: this._onresponse.bind(this)
     })
@@ -70,8 +70,8 @@ class DHT extends EventEmitter {
     this.bootstrapped = false
     this.concurrency = opts.concurrency || this.table.k
     this.ephemeral = true
-    this.adaptive = opts.ephemeral !== false && opts.adaptive !== false
-    this.clientOnly = !this.adaptive
+    this.adaptive = typeof opts.ephemeral !== 'boolean' && opts.adaptive !== false
+    this.clientOnly = !this.adaptive && opts.ephemeral !== false
 
     this._forcePersistent = opts.ephemeral === false
     this._repinging = 0
@@ -96,6 +96,10 @@ class DHT extends EventEmitter {
     sodium.randombytes_buf(this._secrets[1])
 
     this.table.on('row', this._onrow)
+
+    if (opts.nodes) {
+      for (const node of opts.nodes) this.addNode(node)
+    }
   }
 
   get id () {
@@ -552,6 +556,24 @@ class DHT extends EventEmitter {
     return result
   }
 
+  addNode ({ host, port }) {
+    this._addNode({
+      id: nodeId(host, port),
+      port,
+      host,
+      token: null,
+      added: this._tick,
+      seen: this._tick,
+      network: host,
+      prev: null,
+      next: null
+    })
+  }
+
+  toArray () {
+    return this.nodes.toArray().map(({ host, port }) => ({ host, port }))
+  }
+
   _reply (tid, target, status, value, to, addToken, socket = this.rpc.socket) {
     const closerNodes = target ? this.table.closest(target) : null
     const ephemeral = socket !== this.rpc.socket || this.ephemeral
@@ -576,7 +598,6 @@ class DHT extends EventEmitter {
 
 DHT.OK = 0
 DHT.UNKNOWN_COMMAND = 1
-DHT.BAD_TOKEN = 2
 DHT.NAT_UNKNOWN = NatAnalyzer.UNKNOWN
 DHT.NAT_OPEN = Symbol.for('NAT_OPEN') // implies PORT_CONSISTENT
 DHT.NAT_PORT_CONSISTENT = NatAnalyzer.PORT_CONSISTENT
