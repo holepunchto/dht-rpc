@@ -18,7 +18,7 @@ tape('make bigger swarm', async function (t) {
 
   for await (const data of q) {
     messages++
-    if (data.id.equals(targetNode.id)) {
+    if (data.id && data.id.equals(targetNode.id)) {
       found = true
       break
     }
@@ -32,7 +32,7 @@ tape('make bigger swarm', async function (t) {
 
   for await (const data of q) {
     messages++
-    if (data.id.equals(targetNode.id)) {
+    if (data.id && data.id.equals(targetNode.id)) {
       found = true
       break
     }
@@ -98,6 +98,102 @@ tape('map query stream', async function (t) {
 
   t.same(buf, expected)
   destroy(swarm)
+})
+
+tape('timeouts', async function (t) {
+  const [bootstrap, a, b] = await makeSwarm(3)
+  let tries = 0
+
+  b.on('request', function (req) {
+    if (req.command === 'nope') {
+      tries++
+      t.pass('ignoring request')
+    }
+  })
+
+  const q = a.query(Buffer.alloc(32), 'nope')
+  await q.finished()
+
+  t.same(tries, 4)
+
+  bootstrap.destroy()
+  a.destroy()
+  b.destroy()
+})
+
+tape('timeouts when commiting', async function (t) {
+  const [bootstrap, a, b] = await makeSwarm(3)
+  let tries = 0
+
+  b.on('request', function (req) {
+    if (req.command === 'nope') {
+      tries++
+      t.pass('ignoring request')
+    }
+  })
+
+  const q = a.query(Buffer.alloc(32), 'nope', null, { commit: true })
+  let error = null
+
+  try {
+    await q.finished()
+  } catch (err) {
+    error = err
+  }
+
+  t.ok(error, 'commit should fail')
+  t.same(tries, 4)
+
+  bootstrap.destroy()
+  a.destroy()
+  b.destroy()
+})
+
+tape('toArray', async function (t) {
+  const [bootstrap, a, b] = await makeSwarm(3)
+
+  t.same(a.toArray(), [{ host: '127.0.0.1', port: b.address().port }])
+  t.same(b.toArray(), [{ host: '127.0.0.1', port: a.address().port }])
+  t.same(bootstrap.toArray().sort(), [{ host: '127.0.0.1', port: a.address().port }, { host: '127.0.0.1', port: b.address().port }].sort())
+
+  a.destroy()
+  b.destroy()
+  bootstrap.destroy()
+})
+
+tape('addNode / nodes option', async function (t) {
+  const [bootstrap, a] = await makeSwarm(2)
+
+  a.on('request', function (req) {
+    t.same(req.value, null, 'expected data')
+    req.reply(Buffer.from('world'))
+  })
+
+  await bootstrap.ready()
+  await a.ready()
+
+  const b = new DHT({ ephemeral: false, nodes: [{ host: '127.0.0.1', port: a.address().port }] })
+  await b.ready()
+
+  const bNodes = b.toArray()
+
+  t.deepEqual(bNodes, [{ host: '127.0.0.1', port: a.address().port }])
+
+  const responses = []
+  for await (const data of b.query(a.id, 'hello')) {
+    responses.push(data)
+  }
+
+  t.same(responses.length, 1, 'one response')
+  t.same(responses[0].value, Buffer.from('world'), 'responded')
+
+  const aNodes = a.toArray()
+
+  t.deepEqual(aNodes, [{ host: '127.0.0.1', port: b.address().port }])
+
+  a.destroy()
+  b.destroy()
+  bootstrap.destroy()
 })
 
 function destroy (list) {
