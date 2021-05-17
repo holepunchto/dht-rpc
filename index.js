@@ -165,6 +165,8 @@ class DHT extends EventEmitter {
   }
 
   async bootstrap () {
+    await Promise.resolve() // wait a tick, so apis can be used from the outside
+
     for (let i = 0; i < 2; i++) {
       await this._backgroundQuery(this.table.id, 'find_node', null).finished()
       if (this.bootstrapped || !this._forcePersistent || !(await this._onpersistent())) break
@@ -564,7 +566,7 @@ class DHT extends EventEmitter {
       token: null,
       added: this._tick,
       seen: this._tick,
-      network: host,
+      network: null,
       prev: null,
       next: null
     })
