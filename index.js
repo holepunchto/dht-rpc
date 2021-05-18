@@ -41,12 +41,18 @@ class Request {
     return this.token !== null
   }
 
-  error (code, token = false, socket) {
-    return this.dht._reply(this.tid, this.target, code, null, this.from, token, socket)
+  error (code, opts = {}) {
+    return this.send(code, null, opts)
   }
 
-  reply (value, token = true, socket) {
-    return this.dht._reply(this.tid, this.target, 0, value, this.from, token, socket)
+  reply (value, opts = {}) {
+    return this.send(0, value, opts)
+  }
+
+  send (status, value, opts) {
+    const target = opts.closerNodes === false ? null : this.target
+    const token = opts.token !== false
+    return this.dht._reply(this.tid, target, status, value, this.from, token, opts.socket)
   }
 }
 
