@@ -112,6 +112,10 @@ class DHT extends EventEmitter {
     return this.ephemeral ? null : this.table.id
   }
 
+  onmessage (buf, rinfo) {
+    if (buf.byteLength > 1) this.rpc.onmessage(buf, rinfo)
+  }
+
   ready () {
     return this._bootstrapping
   }
@@ -126,13 +130,16 @@ class DHT extends EventEmitter {
   }
 
   request (target, command, value, to, opts) {
+    const ephemeral = this.ephemeral || !!(opts && opts.socket !== this.rpc.socket)
+    const token = to.token || (opts && opts.token) || null
+
     return this.rpc.request({
       version: 1,
       tid: 0,
       from: null,
       to,
-      id: this.ephemeral ? null : this.table.id,
-      token: to.token,
+      id: ephemeral ? null : this.table.id,
+      token,
       target,
       closerNodes: null,
       command,
