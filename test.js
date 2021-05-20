@@ -49,6 +49,28 @@ tape('make bigger swarm', async function (t) {
   destroy(swarm)
 })
 
+tape('nat sample promise', async function (t) {
+  const swarm = await makeSwarm(5)
+
+  const node = new DHT({
+    bootstrap: [{ host: '127.0.0.1', port: swarm[0].address().port }]
+  })
+
+  let ready = false
+  node.ready().then(() => {
+    ready = true
+  })
+
+  await node.sampledNAT()
+  t.ok(node._nat.length >= 3, 'min 3 samples')
+  t.notOk(ready, 'before ready')
+  await node.ready()
+  t.ok(ready, 'after ready')
+
+  node.destroy()
+  destroy(swarm)
+})
+
 tape('commit after query', async function (t) {
   const swarm = await makeSwarm(100)
 

@@ -172,6 +172,11 @@ peers behind the DHT later on.
 * `DHT.NAT_PORT_INCREMENTING` - NAT sessions appear to have an incremeting port across sessions.
 * `DHT.NAT_PORT_RANDOMIZED` - NAT sessions appear randomized across sessions.
 
+#### `await node.sampledNAT()`
+
+Helper to indicate when the NAT analyzer has enough data to determine your NAT type as that happens much
+faster than the bootstrapping promise returned by `ready()`.
+
 #### `node.on('request', req)`
 
 Emitted when an incoming DHT request is received. This is where you can add your own RPC methods.

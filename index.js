@@ -97,6 +97,8 @@ class DHT extends EventEmitter {
       Buffer.alloc(32),
       Buffer.alloc(32)
     ]
+    this._resolveSampled = null
+    this._sampled = new Promise((resolve) => { this._resolveSampled = resolve })
 
     sodium.randombytes_buf(this._secrets[0])
     sodium.randombytes_buf(this._secrets[1])
@@ -114,6 +116,10 @@ class DHT extends EventEmitter {
 
   onmessage (buf, rinfo) {
     if (buf.byteLength > 1) this.rpc.onmessage(buf, rinfo)
+  }
+
+  sampledNAT () {
+    return this._sampled
   }
 
   ready () {
@@ -170,6 +176,10 @@ class DHT extends EventEmitter {
 
   destroy () {
     this.rpc.destroy()
+    if (this._resolveSampled !== null) {
+      this._resolveSampled(false)
+      this._resolveSampled = null
+    }
     if (this._localSocket) {
       this._localSocket.close()
       this._localSocket = null
@@ -555,6 +565,11 @@ class DHT extends EventEmitter {
   _onresponse (res) {
     if (res.id !== null) this._addNodeFromMessage(res)
     else if (this._nat.length < 3 && this._nat.sample(res.from) === null) this._nat.add(res.to, res.from)
+
+    if (this._resolveSampled !== null && this._nat.length >= 3) {
+      this._resolveSampled(true)
+      this._resolveSampled = null
+    }
   }
 
   bind (...args) {
