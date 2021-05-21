@@ -140,7 +140,7 @@ class DHT extends EventEmitter {
     const token = to.token || (opts && opts.token) || null
 
     return this.rpc.request({
-      version: 1,
+      version: 2,
       tid: 0,
       from: null,
       to,
@@ -608,7 +608,7 @@ class DHT extends EventEmitter {
     const closerNodes = target ? this.table.closest(target) : null
     const ephemeral = socket !== this.rpc.socket || this.ephemeral
     const reply = {
-      version: 1,
+      version: 2,
       tid,
       from: null,
       to,
