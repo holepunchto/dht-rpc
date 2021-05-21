@@ -197,6 +197,12 @@ class DHT extends EventEmitter {
 
     if (this.bootstrapped) return
     this.bootstrapped = true
+
+    if (this._resolveSampled !== null) {
+      this._resolveSampled(true)
+      this._resolveSampled = null
+    }
+
     this.emit('ready')
   }
 
