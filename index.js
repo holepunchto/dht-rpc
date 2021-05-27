@@ -501,8 +501,8 @@ class DHT extends EventEmitter {
       // if the node is indicating that we got a new ip
       // make sure to add it again to the sampler. make sure we don't allow the remote node
       // to add multiple entries though.
-      if (oldNode.network !== m.to.host) {
-        oldNode.network = m.to.host
+      if (oldNode.to === null || oldNode.to.host !== m.to.host) {
+        oldNode.to = m.to
         // TODO: would be technically better to add to the head of the sample queue, but
         // this is prop fine
         const s = this._nat.sample(m.from)
@@ -527,9 +527,9 @@ class DHT extends EventEmitter {
       port: m.from.port,
       host: m.from.host,
       token: null, // adding this so it has the same "shape" as the query nodes for easier debugging
+      to: m.to,
       added: this._tick,
       seen: this._tick,
-      network: m.to.host,
       prev: null,
       next: null
     })
@@ -598,9 +598,9 @@ class DHT extends EventEmitter {
       port,
       host,
       token: null,
+      to: null,
       added: this._tick,
       seen: this._tick,
-      network: null,
       prev: null,
       next: null
     })
