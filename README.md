@@ -50,7 +50,7 @@ function createNode () {
 
   node.on('request', function (req) {
     if (req.command === 'values') {
-      if (req.commit) { // if we are the closest node store the value
+      if (req.commit) { // if we are the closest node store the value (ie the node sent a roundtrip token)
         const key = sha256(req.value).toString('hex')
         values.set(key, req.value)
         console.log('Storing', key, '-->', req.value.toString())
@@ -184,7 +184,8 @@ Emitted when an incoming DHT request is received. This is where you can add your
 * `req.target` - the dht target the peer is looking (routing is handled behind the scene)
 * `req.command` - the RPC command name
 * `req.value` - the RPC value buffer
-* `req.commit` - boolean if you are the closest node and the remote's from address was verified
+* `req.token` - If the remote peer echoed back a valid roundtrip token, proving their "from address" this is set
+* `req.commit` - Boolean set as a convenience if a valid token was provided
 * `req.from` - who sent this request (host, port)
 
 To reply to a request use the `req.reply(value)` method and to reply with an error code use `req.error(errorCode)`.
@@ -201,6 +202,18 @@ Those are:
 #### `reply = await node.request(target, command, value, to, [options])`
 
 Send a request to a specific node specified by the to address (`{ host, port }`).
+
+Options include:
+
+```js
+{
+  token: roundtripTokenFromAReply,
+  retry: true, // whether the request should retry on timeout
+  expectOk: true // expect the reply to have status 0 or error
+}
+```
+
+Normally you'd set the token when commiting to the dht in the query's commit hook.
 
 #### `reply = await node.ping(to)`
 
@@ -233,8 +246,10 @@ that is called for each close reply.
 
 ``` js
 {
-  async commit (closestNode, dht, query) {
-    await dht.request(myTarget, myCommand, myValue, closestNode)
+  async commit (closestReply, dht, query) {
+    // normally you'd send back the roundtrip token here, to prove to the remote that you own
+    // your ip/port
+    await dht.request(myTarget, myCommand, myValue, closestReply.from, { token: closestReply.token })
   }
 }
 ```
@@ -256,7 +271,7 @@ Other options include:
 
 The query method returns a stream encapsulating the query, that is also an async iterator. Each `data` event contain a DHT reply.
 If you just want to wait for the query to finish, you can use the `await stream.finished()` helper. After completion the closest
-nodes are stored in `stream.closest` array.
+nodes are stored in `stream.closestNodes` array.
 
 #### `node.destroy()`
 

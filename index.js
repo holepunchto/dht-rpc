@@ -137,7 +137,7 @@ class DHT extends EventEmitter {
 
   request (target, command, value, to, opts) {
     const ephemeral = this.ephemeral || !!(opts && opts.socket !== this.rpc.socket)
-    const token = to.token || (opts && opts.token) || null
+    const token = (opts && opts.token) || null
 
     return this.rpc.request({
       version: 2,
@@ -161,17 +161,6 @@ class DHT extends EventEmitter {
     const p = []
     for (const node of nodes) p.push(this.request(target, command, value, node))
     return race(p, min, opts.max)
-  }
-
-  // TODO: make this more smart - ie don't retry the first one etc etc
-  async requestAny (target, command, value, nodes, opts) {
-    for (const node of nodes) {
-      try {
-        return await this.request(target, command, value, node, opts)
-      } catch {}
-    }
-
-    throw new Error('All requests failed')
   }
 
   destroy () {
@@ -251,9 +240,9 @@ class DHT extends EventEmitter {
     const q = this._backgroundQuery(PING_BOOTSTRAP, 'find_node', null)
 
     q.on('close', () => {
-      if (q.closest.length === 0) return
+      if (q.closestReplies.length === 0) return
 
-      if (compare(PING_BOOTSTRAP, this.table.id, q.closest[q.closest.length - 1].id) > 0) {
+      if (compare(PING_BOOTSTRAP, this.table.id, q.closestReplies[q.closestReplies.length - 1].id) > 0) {
         return
       }
 
@@ -629,6 +618,10 @@ class DHT extends EventEmitter {
 
     this.rpc.send(reply, socket)
     return reply
+  }
+
+  static id (node, out) {
+    return nodeId(node.host, node.port, out)
   }
 }
 
