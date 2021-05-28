@@ -26,7 +26,7 @@ tape('make bigger swarm', async function (t) {
 
   t.ok(found, 'found target in ' + messages + ' message(s)')
 
-  q = swarm[490].query(targetNode.id, 'find_node', null, { closest: q.closest })
+  q = swarm[490].query(targetNode.id, 'find_node', null, { nodes: q.closestNodes })
   messages = 0
   found = false
 
@@ -89,8 +89,8 @@ tape('commit after query', async function (t) {
   }
 
   const q = swarm[42].query(swarm[0].table.id, 'before', null, {
-    commit (node, dht, query) {
-      return dht.request(query.target, 'after', null, node)
+    commit (m, dht, query) {
+      return dht.request(query.target, 'after', null, m.from, { token: m.token })
     }
   })
 
