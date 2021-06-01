@@ -442,7 +442,7 @@ class DHT extends EventEmitter {
     const nodes = []
 
     for (const node of this.bootstrapNodes) {
-      dns.lookup(node.host, (_, host) => {
+      dns.lookup(node.host, { family: 4 }, (_, host) => {
         if (host) nodes.push({ id: nodeId(host, node.port), host, port: node.port })
         if (--missing === 0) done(nodes)
       })
