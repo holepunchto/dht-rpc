@@ -143,6 +143,26 @@ tape('timeouts', async function (t) {
   b.destroy()
 })
 
+tape('shorthand commit', async function (t) {
+  const swarm = await makeSwarm(40)
+  let tokens = 0
+
+  for (const node of swarm) {
+    node.on('request', function (req) {
+      if (req.commit) tokens++
+      req.reply(null)
+    })
+  }
+
+  const q = swarm[0].query(Buffer.alloc(32), 'nope', null, { commit: true })
+
+  await q.finished()
+
+  t.same(tokens, 20)
+
+  destroy(swarm)
+})
+
 tape('timeouts when commiting', async function (t) {
   const [bootstrap, a, b] = await makeSwarm(3)
   let tries = 0
