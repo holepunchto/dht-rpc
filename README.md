@@ -144,6 +144,10 @@ A boolean indicating if you are currently epheremal or not
 
 Emitted when the routing table is fully bootstrapped. Emitted as a conveinience.
 
+#### `node.on('listening')`
+
+Emitted when the underlying UDP socket is listening. Emitted as a conveinience.
+
 #### `node.on('persistent')`
 
 Emitted when the node is no longer in ephemeral mode.

@@ -163,6 +163,23 @@ tape('shorthand commit', async function (t) {
   destroy(swarm)
 })
 
+tape('after ready it is always bound', async function (t) {
+  t.plan(2)
+
+  const node = new DHT()
+
+  node.on('listening', function () {
+    t.pass('is listening')
+  })
+
+  await node.ready()
+  const addr = node.address()
+
+  t.ok(typeof addr.port, 'is number')
+
+  node.destroy()
+})
+
 tape('timeouts when commiting', async function (t) {
   const [bootstrap, a, b] = await makeSwarm(3)
   let tries = 0
