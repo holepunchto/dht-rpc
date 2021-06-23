@@ -66,6 +66,7 @@ class DHT extends EventEmitter {
     this.table = new Table(opts.id || randomBytes(32))
 
     this.rpc = new RPC({
+      bind: opts.bind,
       maxWindow: opts.maxWindow,
       socket: opts.socket,
       onwarning: opts.onwarning,
@@ -93,7 +94,6 @@ class DHT extends EventEmitter {
     this._nat = new NatAnalyzer(opts.natSampleSize || 16)
     this._onrow = (row) => row.on('full', (node) => this._onfullrow(node, row))
     this._rotateSecrets = false
-    this._bound = false
     this._secrets = [
       Buffer.alloc(32),
       Buffer.alloc(32)
@@ -105,11 +105,7 @@ class DHT extends EventEmitter {
     sodium.randombytes_buf(this._secrets[1])
 
     this.table.on('row', this._onrow)
-
-    this.rpc.socket.on('listening', () => {
-      this._bound = true
-      this.emit('listening')
-    })
+    this.rpc.socket.on('listening', () => this.emit('listening'))
 
     if (opts.nodes) {
       for (const node of opts.nodes) this.addNode(node)
@@ -198,9 +194,7 @@ class DHT extends EventEmitter {
       this._resolveSampled = null
     }
 
-    if (!this._bound) {
-      await bind(this.rpc.socket, 0)
-    }
+    await this.rpc.bind()
 
     this.emit('ready')
   }
@@ -675,25 +669,4 @@ function compare (id, a, b) {
 
 function randomOffset (n) {
   return n - ((Math.random() * 0.5 * n) | 0)
-}
-
-function bind (socket, port) {
-  return new Promise((resolve, reject) => {
-    socket.bind(port)
-
-    socket.on('error', onerror)
-    socket.on('listening', ondone)
-
-    function onerror (err) {
-      socket.removeListener('error', onerror)
-      socket.removeListener('listening', ondone)
-      reject(err)
-    }
-
-    function ondone () {
-      socket.removeListener('error', onerror)
-      socket.removeListener('listening', ondone)
-      resolve()
-    }
-  })
 }

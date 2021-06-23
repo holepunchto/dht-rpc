@@ -114,7 +114,9 @@ Options include:
   // Optionally pass in your own UDP socket to use.
   socket: udpSocket,
   // Optionally pass in array of { host, port } to add to the routing table if you know any peers
-  nodes: [{ host, port }, ...]
+  nodes: [{ host, port }, ...],
+  // Optionally pass a port you prefer to bind to instead of a random one
+  bind: 0
 }
 ```
 
@@ -128,9 +130,9 @@ Your DHT routing id is `hash(publicIp + publicPort)` and will be autoconfigured 
 Wait for the node to be fully bootstrapped etc.
 You don't have to wait for this method, but can be useful during testing.
 
-#### `await node.bind(port)`
+#### `await node.bind([preferredPort])`
 
-Bind to a specific UDP port instead of a random one.
+Wait for the underlying socket to bind. If you prefer a specific port you can specify it here.
 
 #### `node.id`
 

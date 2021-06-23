@@ -1,4 +1,5 @@
 const tape = require('tape')
+const dgram = require('dgram')
 const DHT = require('./')
 
 tape('make tiny swarm', async function (t) {
@@ -255,8 +256,37 @@ tape('addNode / nodes option', async function (t) {
   bootstrap.destroy()
 })
 
+tape('set bind', async function (t) {
+  const port = await freePort()
+
+  const a = new DHT({ bind: port })
+  await a.ready()
+
+  t.same(a.address().port, port, 'bound to explicit port')
+
+  const b = new DHT({ bind: port })
+  await b.ready()
+
+  t.notSame(b.address().port, port, 'bound to different port as explicit one is taken')
+
+  a.destroy()
+  b.destroy()
+})
+
 function destroy (list) {
   for (const node of list) node.destroy()
+}
+
+function freePort () {
+  return new Promise(resolve => {
+    const socket = dgram.createSocket('udp4')
+
+    socket.bind(0)
+    socket.on('listening', function () {
+      const { port } = socket.address()
+      socket.close(() => resolve(port))
+    })
+  })
 }
 
 async function makeSwarm (n) {
