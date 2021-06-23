@@ -117,7 +117,7 @@ class DHT extends EventEmitter {
   }
 
   onmessage (buf, rinfo) {
-    if (buf.byteLength > 1) this.rpc.onmessage(buf, rinfo)
+    if (buf.byteLength > 1) this.rpc.onmessage(false, buf, rinfo)
   }
 
   sampledNAT () {
@@ -476,7 +476,7 @@ class DHT extends EventEmitter {
     this.emit('remove-node', node)
   }
 
-  _addNodeFromMessage (m) {
+  _addNodeFromMessage (m, sample) {
     const id = nodeId(m.from.host, m.from.port)
 
     // verify id, if the id is mismatched it doesn't strictly mean the node is bad, could be
@@ -494,7 +494,7 @@ class DHT extends EventEmitter {
       // if the node is indicating that we got a new ip
       // make sure to add it again to the sampler. make sure we don't allow the remote node
       // to add multiple entries though.
-      if (oldNode.to === null || oldNode.to.host !== m.to.host) {
+      if (sample && (oldNode.to === null || oldNode.to.host !== m.to.host)) {
         oldNode.to = m.to
         // TODO: would be technically better to add to the head of the sample queue, but
         // this is prop fine
@@ -513,14 +513,14 @@ class DHT extends EventEmitter {
     }
 
     // add a sample of our address from the remote nodes pov
-    this._nat.add(m.to, m.from)
+    if (sample) this._nat.add(m.to, m.from)
 
     this._addNode({
       id,
       port: m.from.port,
       host: m.from.host,
       token: null, // adding this so it has the same "shape" as the query nodes for easier debugging
-      to: m.to,
+      to: sample ? m.to : null,
       added: this._tick,
       seen: this._tick,
       prev: null,
@@ -528,13 +528,13 @@ class DHT extends EventEmitter {
     })
   }
 
-  _onrequest (req) {
+  _onrequest (req, sample) {
     // check if the roundtrip token is one we've generated within the last 10s for this peer
     if (req.token !== null && !this._token(req.from, 1).equals(req.token) && !this._token(req.from, 0).equals(req.token)) {
       req.token = null
     }
 
-    if (req.id !== null) this._addNodeFromMessage(req)
+    if (req.id !== null) this._addNodeFromMessage(req, sample)
     else this._pingBootstrapTicks = REFRESH_TICKS
     // o/ if this node is ephemeral, it prob originated from a bootstrapper somehow so no need to ping them
 
@@ -561,9 +561,9 @@ class DHT extends EventEmitter {
     }
   }
 
-  _onresponse (res) {
-    if (res.id !== null) this._addNodeFromMessage(res)
-    else if (this._nat.length < 3 && this._nat.sample(res.from) === null) this._nat.add(res.to, res.from)
+  _onresponse (res, sample) {
+    if (res.id !== null) this._addNodeFromMessage(res, sample)
+    else if (sample && this._nat.length < 3 && this._nat.sample(res.from) === null) this._nat.add(res.to, res.from)
 
     if (this._resolveSampled !== null && this._nat.length >= 3) {
       this._resolveSampled(true)
