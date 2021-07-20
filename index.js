@@ -80,6 +80,7 @@ class DHT extends EventEmitter {
     this.adaptive = typeof opts.ephemeral !== 'boolean' && opts.adaptive !== false
     this.clientOnly = !this.adaptive && opts.ephemeral !== false
 
+    this._userAddNode = opts.addNode || allowAll
     this._forcePersistent = opts.ephemeral === false
     this._repinging = 0
     this._reping = new FIFO(128)
@@ -455,6 +456,7 @@ class DHT extends EventEmitter {
 
   _addNode (node) {
     if (this.nodes.has(node) || node.id.equals(this.table.id)) return
+    if (!this._userAddNode(node)) return
 
     node.added = node.seen = this._tick
 
@@ -669,4 +671,8 @@ function compare (id, a, b) {
 
 function randomOffset (n) {
   return n - ((Math.random() * 0.5 * n) | 0)
+}
+
+function allowAll (node) {
+  return true
 }
