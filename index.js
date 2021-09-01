@@ -343,9 +343,13 @@ class DHT extends EventEmitter {
     }
 
     // ask the user to handle it or reply back with a bad command
-    if (this.emit('request', req) === false) {
+    if (this.onrequest(req) === false) {
       req.sendReply(BAD_COMMAND, null, false, true)
     }
+  }
+
+  onrequest (req) {
+    return this.emit('request', req)
   }
 
   _onresponse (res, external) {
