@@ -8,7 +8,7 @@ const NatSampler = require('nat-sampler')
 const IO = require('./lib/io')
 const Query = require('./lib/query')
 const peer = require('./lib/peer')
-const { BAD_COMMAND, BAD_TOKEN, TIMEOUT, DESTROY } = require('./lib/errors')
+const { UNKNOWN_COMMAND, BAD_COMMAND, INVALID_TOKEN } = require('./lib/errors')
 
 const TMP = Buffer.allocUnsafe(32)
 const TICK_INTERVAL = 5000
@@ -344,7 +344,7 @@ class DHT extends EventEmitter {
 
     // ask the user to handle it or reply back with a bad command
     if (this.onrequest(req) === false) {
-      req.sendReply(BAD_COMMAND, null, false, true)
+      req.sendReply(UNKNOWN_COMMAND, null, false, true)
     }
   }
 
@@ -581,10 +581,9 @@ class DHT extends EventEmitter {
   }
 }
 
-DHT.ERROR_BAD_TOKEN = BAD_TOKEN
+DHT.ERROR_UNKNOWN_COMMAND = UNKNOWN_COMMAND
 DHT.ERROR_BAD_COMMAND = BAD_COMMAND
-DHT.ERROR_TIMEOUT = TIMEOUT
-DHT.ERROR_DESTROY = DESTROY
+DHT.ERROR_INVALID_TOKEN = INVALID_TOKEN
 
 module.exports = DHT
 
