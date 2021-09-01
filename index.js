@@ -1,227 +1,158 @@
 const dns = require('dns')
-const RPC = require('./lib/rpc')
-const Query = require('./lib/query')
-const race = require('./lib/race')
-const nodeId = require('./lib/id')
-const NatAnalyzer = require('./lib/nat-analyzer')
+const { EventEmitter } = require('events')
 const Table = require('kademlia-routing-table')
 const TOS = require('time-ordered-set')
-const FIFO = require('fast-fifo/fixed-size')
 const sodium = require('sodium-universal')
-const dgram = require('dgram')
-const { EventEmitter } = require('events')
+const c = require('compact-encoding')
+const NatSampler = require('nat-sampler')
+const IO = require('./lib/io')
+const Query = require('./lib/query')
+const peer = require('./lib/peer')
+const { BAD_COMMAND, BAD_TOKEN, TIMEOUT, DESTROY } = require('./lib/errors')
 
+const TMP = Buffer.allocUnsafe(32)
 const TICK_INTERVAL = 5000
 const SLEEPING_INTERVAL = 3 * TICK_INTERVAL
-const PERSISTENT_TICKS = 240 // if nothing major bad happens in ~20mins we can consider this node stable (if nat is friendly)
-const MORE_PERSISTENT_TICKS = 3 * PERSISTENT_TICKS
+const STABLE_TICKS = 240 // if nothing major bad happens in ~20mins we can consider this node stable (if nat is friendly)
+const MORE_STABLE_TICKS = 3 * STABLE_TICKS
 const REFRESH_TICKS = 60 // refresh every ~5min when idle
-const RECENT_NODE = 20 // we've heard from a node less than 1min ago
+const RECENT_NODE = 12 // we've heard from a node less than 1min ago
 const OLD_NODE = 360 // if an node has been around more than 30 min we consider it old
-
-// this is the known id for figuring out if we should ping bootstrap nodes
-const PING_BOOTSTRAP = Buffer.allocUnsafe(32)
-sodium.crypto_generichash(PING_BOOTSTRAP, Buffer.from('ping bootstrap'))
-
-class Request {
-  constructor (dht, m) {
-    this.dht = dht
-    this.tid = m.tid
-    this.from = m.from
-    this.to = m.to
-    this.token = m.token
-    this.target = m.target
-    this.closerNodes = m.closerNodes
-    this.status = m.status
-    this.command = m.command
-    this.value = m.value
-  }
-
-  get commit () {
-    return this.token !== null
-  }
-
-  error (code, opts = {}) {
-    return this.send(code, null, opts)
-  }
-
-  reply (value, opts = {}) {
-    return this.send(0, value, opts)
-  }
-
-  send (status, value, opts) {
-    const target = opts.closerNodes === false ? null : this.target
-    const token = opts.token !== false
-    return this.dht._reply(this.tid, target, status, value, this.from, token, opts.socket)
-  }
-}
 
 class DHT extends EventEmitter {
   constructor (opts = {}) {
     super()
 
     this.bootstrapNodes = opts.bootstrap === false ? [] : (opts.bootstrap || []).map(parseNode)
-    this.nodes = new TOS()
-    // this is just the private id, see below in the persistence handler
     this.table = new Table(opts.id || randomBytes(32))
-
-    this.rpc = new RPC({
-      bind: opts.bind,
-      maxWindow: opts.maxWindow,
-      socket: opts.socket,
-      onwarning: opts.onwarning,
+    this.nodes = new TOS()
+    this.io = new IO(this.table, {
+      ...opts,
       onrequest: this._onrequest.bind(this),
-      onresponse: this._onresponse.bind(this)
+      onresponse: this._onresponse.bind(this),
+      ontimeout: this._ontimeout.bind(this)
     })
 
+    this.concurrency = opts.concurrency || 10
     this.bootstrapped = false
-    this.concurrency = opts.concurrency || this.table.k
     this.ephemeral = true
+    this.firewalled = this.io.firewalled
     this.adaptive = typeof opts.ephemeral !== 'boolean' && opts.adaptive !== false
-    this.clientOnly = !this.adaptive && opts.ephemeral !== false
 
-    this._userAddNode = opts.addNode || allowAll
+    this._nat = new NatSampler()
+    this._bind = opts.bind || 0
     this._forcePersistent = opts.ephemeral === false
     this._repinging = 0
-    this._reping = new FIFO(128)
-    this._bootstrapping = this.bootstrap()
-    this._localSocket = opts.localSocket || null // used for auto configuring nat sessions
+    this._checks = 0
     this._tick = randomOffset(100) // make sure to random offset all the network ticks
     this._refreshTicks = randomOffset(REFRESH_TICKS)
-    this._pingBootstrapTicks = randomOffset(REFRESH_TICKS)
-    this._persistentTicks = this.adaptive ? PERSISTENT_TICKS : 0
+    this._stableTicks = this.adaptive ? STABLE_TICKS : 0
     this._tickInterval = setInterval(this._ontick.bind(this), TICK_INTERVAL)
     this._lastTick = Date.now()
-    this._nat = new NatAnalyzer(opts.natSampleSize || 16)
+    this._lastHost = null
     this._onrow = (row) => row.on('full', (node) => this._onfullrow(node, row))
-    this._rotateSecrets = false
-    this._secrets = [
-      Buffer.alloc(32),
-      Buffer.alloc(32)
-    ]
-    this._resolveSampled = null
-    this._sampled = new Promise((resolve) => { this._resolveSampled = resolve })
-
-    sodium.randombytes_buf(this._secrets[0])
-    sodium.randombytes_buf(this._secrets[1])
+    this._nonePersistentSamples = []
+    this._bootstrapping = this.bootstrap()
 
     this.table.on('row', this._onrow)
-    this.rpc.socket.on('listening', () => this.emit('listening'))
 
     if (opts.nodes) {
       for (const node of opts.nodes) this.addNode(node)
     }
   }
 
+  static bootstrapper (bind, opts) {
+    return new this({ bind, firewalled: false, ...opts })
+  }
+
   get id () {
     return this.ephemeral ? null : this.table.id
   }
 
-  onmessage (buf, rinfo) {
-    if (buf.byteLength > 1) this.rpc.onmessage(false, buf, rinfo)
+  get host () {
+    return this._nat.host
   }
 
-  sampledNAT () {
-    return this._sampled
+  get port () {
+    return this._nat.port
+  }
+
+  onmessage (buf, rinfo) {
+    if (buf.byteLength > 1) this.io.onmessage(null, buf, rinfo)
+  }
+
+  bind () {
+    return this.io.bind()
+  }
+
+  address () {
+    const socket = this.firewalled ? this.io.clientSocket : this.io.serverSocket
+    return socket ? socket.address() : null
+  }
+
+  addNode ({ host, port }) {
+    this._addNode({
+      id: peer.id(host, port),
+      port,
+      host,
+      token: null,
+      to: null,
+      sampled: 0,
+      added: this._tick,
+      pinged: 0,
+      seen: 0,
+      downHints: 0,
+      prev: null,
+      next: null
+    })
+  }
+
+  toArray () {
+    return this.nodes.toArray().map(({ host, port }) => ({ host, port }))
   }
 
   ready () {
     return this._bootstrapping
   }
 
-  query (target, command, value, opts) {
+  query ({ target, command, value }, opts) {
     this._refreshTicks = REFRESH_TICKS
     return new Query(this, target, command, value || null, opts)
   }
 
-  ping (node) {
-    return this.request(null, 'ping', null, node)
+  ping (to) {
+    return this.request({ token: null, command: 'ping', target: null, value: null }, to)
   }
 
-  request (target, command, value, to, opts) {
-    const ephemeral = this.ephemeral || !!(opts && opts.socket !== this.rpc.socket)
-    const token = (opts && opts.token) || null
+  request ({ token = null, command, target = null, value = null }, { host, port }, opts) {
+    const req = this.io.createRequest({ id: null, host, port }, token, command, target, value)
 
-    return this.rpc.request({
-      version: 2,
-      tid: 0,
-      from: null,
-      to,
-      id: ephemeral ? null : this.table.id,
-      token,
-      target,
-      closerNodes: null,
-      command,
-      status: 0,
-      value
-    }, opts)
-  }
+    if (opts && opts.socket) req.socket = opts.socket
 
-  requestAll (target, command, value, nodes, opts = {}) {
-    const min = typeof opts.min === 'number' ? opts.min : 1
-    if (nodes.length < min) return Promise.reject(new Error('Too few nodes to request'))
-
-    const p = []
-    for (const node of nodes) p.push(this.request(target, command, value, node))
-    return race(p, min, opts.max)
-  }
-
-  destroy () {
-    this.rpc.destroy()
-    if (this._resolveSampled !== null) {
-      this._resolveSampled(false)
-      this._resolveSampled = null
-    }
-    if (this._localSocket) {
-      this._localSocket.close()
-      this._localSocket = null
-    }
-    clearInterval(this._tickInterval)
+    return new Promise((resolve, reject) => {
+      req.onresponse = resolve
+      req.onerror = reject
+      req.send()
+    })
   }
 
   async bootstrap () {
     await Promise.resolve() // wait a tick, so apis can be used from the outside
+    await this.io.bind()
+
+    this.emit('listening')
+
+    // TODO: some papers describe more advanced ways of bootstrapping - we should prob look into that
 
     for (let i = 0; i < 2; i++) {
       await this._backgroundQuery(this.table.id, 'find_node', null).finished()
-      if (this.bootstrapped || !this._forcePersistent || !(await this._onpersistent())) break
+      if (this.bootstrapped || !this._forcePersistent || !(await this._onstable())) break
     }
 
     if (this.bootstrapped) return
     this.bootstrapped = true
 
-    if (this._resolveSampled !== null) {
-      this._resolveSampled(true)
-      this._resolveSampled = null
-    }
-
-    await this.rpc.bind()
-
     this.emit('ready')
-  }
-
-  _backgroundQuery (target, command, value) {
-    const backgroundCon = Math.min(this.concurrency, Math.max(2, (this.concurrency / 8) | 0))
-    const q = this.query(target, command, value, {
-      concurrency: backgroundCon
-    })
-
-    q.on('data', () => {
-      // yield to other traffic
-      q.concurrency = this.rpc.inflightRequests < 3
-        ? this.concurrency
-        : backgroundCon
-    })
-
-    return q
-  }
-
-  _token (addr, i) {
-    const token = Buffer.allocUnsafe(32)
-    this._rotateSecrets = true
-    // TODO: also add .port?
-    sodium.crypto_generichash(token, Buffer.from(addr.host), this._secrets[i])
-    return token
   }
 
   refresh () {
@@ -229,238 +160,77 @@ class DHT extends EventEmitter {
     this._backgroundQuery(node ? node.id : this.table.id, 'find_node', null)
   }
 
-  _pingSomeBootstrapNodes () {
-    // once in a while it can be good to ping the bootstrap nodes, since we force them to be ephemeral to lower their load
-    // to make this a lightweight as possible we first check if we are the closest node we know to a known id (hash(ping bootstrap))
-    // and if so we issue a background query against that. if after doing this query we are still one of the closests nodes
-    // we ping the bootstrapper - in practice this results to very little bootstrap ping traffic.
+  destroy () {
+    clearInterval(this._tickInterval)
+    return this.io.destroy()
+  }
 
-    this._pingBootstrapTicks = REFRESH_TICKS
+  _request (to, command, target, value, onresponse, onerror) {
+    const req = this.io.createRequest(to, null, command, target, value)
 
-    const nodes = this.table.closest(PING_BOOTSTRAP, 1)
-    if (nodes.length === 0 || compare(PING_BOOTSTRAP, this.table.id, nodes[0].id) > 0) {
+    req.onresponse = onresponse
+    req.onerror = onerror
+    req.send()
+
+    return req
+  }
+
+  _sampleBootstrapMaybe (from, to) { // we don't check that this is a bootstrap but good enough, some node once
+    if (this._nonePersistentSamples.length >= this.bootstrapNodes.length) return
+    const id = from.host + ':' + from.port
+    if (this._nonePersistentSamples.indexOf(id) > -1) return
+    this._nonePersistentSamples.push(id)
+    this._nat.add(to.host, to.port)
+  }
+
+  _addNodeFromNetwork (sample, from, to) {
+    if (from.id === null) {
+      this._sampleBootstrapMaybe(from, to)
       return
     }
 
-    const q = this._backgroundQuery(PING_BOOTSTRAP, 'find_node', null)
+    const oldNode = this.table.get(from.id)
 
-    q.on('close', () => {
-      if (q.closestReplies.length === 0) return
-
-      if (compare(PING_BOOTSTRAP, this.table.id, q.closestReplies[q.closestReplies.length - 1].id) > 0) {
-        return
+    // refresh it, if we've seen this before
+    if (oldNode) {
+      if (sample && (oldNode.sampled === 0 || (this._tick - oldNode.sampled) >= OLD_NODE)) {
+        oldNode.to = to
+        oldNode.sampled = this._tick
+        this._nat.add(to.host, to.port)
       }
 
-      this._resolveBootstrapNodes((nodes) => {
-        const node = nodes[(Math.random() * nodes.length) | 0]
-        this.ping(node).then(noop, noop)
-      })
-    })
-  }
-
-  _pingSome () {
-    let cnt = this.rpc.inflightRequests > 2 ? 3 : 5
-    let oldest = this.nodes.oldest
-
-    // tiny dht, ping the bootstrap again
-    if (!oldest) {
-      this.refresh()
+      oldNode.pinged = oldNode.seen = this._tick
+      this.nodes.add(oldNode)
       return
     }
 
-    // we've recently pinged the oldest one, so only trigger a couple of repings
-    if ((this._tick - oldest.seen) < RECENT_NODE) {
-      cnt = 2
-    }
-
-    while (cnt--) {
-      if (!oldest || this._tick === oldest.seen) continue
-      this._check(oldest, oldest.seen)
-      oldest = oldest.next
-    }
-  }
-
-  _check (node, lastSeen) {
-    this.ping(node)
-      .then(
-        () => this._removeStaleNode(node, lastSeen),
-        () => this._removeNode(node)
-      )
-  }
-
-  _ontick () {
-    if (this._rotateSecrets) {
-      const tmp = this._secrets[0]
-      this._secrets[0] = this._secrets[1]
-      this._secrets[1] = tmp
-      sodium.crypto_generichash(tmp, tmp)
-    }
-
-    const time = Date.now()
-
-    if (time - this._lastTick > SLEEPING_INTERVAL) {
-      this._onwakeup()
-    } else {
-      this._tick++
-    }
-
-    this._lastTick = time
-
-    if (!this.bootstrapped) return
-
-    if (this.adaptive && this.ephemeral && --this._persistentTicks <= 0) {
-      this._onpersistent() // the promise returned here never fails so just ignore it
-    }
-
-    if ((this._tick & 7) === 0) {
-      this._pingSome()
-    }
-
-    if (!this.ephemeral && --this._pingBootstrapTicks <= 0) {
-      this._pingSomeBootstrapNodes()
-    }
-
-    if (((this._tick & 63) === 0 && this.nodes.length < this.table.k) || --this._refreshTicks <= 0) {
-      this.refresh()
-    }
-  }
-
-  async _onpersistent () {
-    if (this.ephemeral === false) return false
-
-    // only require one sample here as we do the nat check anyway after
-    // makes settting up a dht easier...
-    const addr = this.remoteAddress(1)
-
-    if (addr.type !== DHT.NAT_PORT_CONSISTENT && addr.type !== DHT.NAT_OPEN) {
-      this._persistentTicks = MORE_PERSISTENT_TICKS
-      return false
-    }
-
-    if (await this._checkIfFirewalled()) return false
-    if (!this.ephemeral) return false // incase it's called in parallel for some reason
-
-    const id = nodeId(addr.host, addr.port)
-    if (this.table.id.equals(id)) return false
-
-    const nodes = this.table.toArray()
-
-    this.table = new Table(id)
-    for (const node of nodes) this.table.add(node)
-    this.table.on('row', this._onrow)
-
-    this.ephemeral = false
-    this.emit('persistent')
-    return true
-  }
-
-  async _addBootstrapNodes (nodes) {
-    return new Promise((resolve) => {
-      this._resolveBootstrapNodes(function (bootstrappers) {
-        nodes.push(...bootstrappers)
-        resolve()
-      })
+    this._addNode({
+      id: from.id,
+      port: from.port,
+      host: from.host,
+      to,
+      sampled: 0,
+      added: this._tick,
+      pinged: this._tick, // last time we interacted with them
+      seen: this._tick, // last time we heard from them
+      downHints: 0,
+      prev: null,
+      next: null
     })
-  }
-
-  async _checkIfFirewalled () {
-    const nodes = []
-    for (let node = this.nodes.latest; node && nodes.length < 5; node = node.prev) {
-      nodes.push(node)
-    }
-
-    if (nodes.length < 5) await this._addBootstrapNodes(nodes)
-    if (!nodes.length) return true // no nodes available, including bootstrappers - bail
-
-    try {
-      await this.requestAll(null, 'ping_nat', null, nodes, { min: nodes.length >= 5 ? 3 : 1, max: 3 })
-    } catch {
-      // not enough nat pings succeded - assume firewalled
-      return true
-    }
-
-    return false
-  }
-
-  _onwakeup () {
-    this._tick += 2 * OLD_NODE // bump the tick enough that everything appears old.
-    this._tick += 8 - (this._tick & 7) - 2 // triggers a series of pings in two ticks
-    this._persistentTicks = MORE_PERSISTENT_TICKS
-    this._pingBootstrapTicks = REFRESH_TICKS // forced ephemeral, so no need for a bootstrap ping soon
-    this._refreshTicks = 1 // triggers a refresh next tick (allow network time to wake up also)
-
-    if (this.adaptive) {
-      this.ephemeral = true
-      this.emit('ephemeral')
-    }
-
-    this.emit('wakeup')
-  }
-
-  _onfullrow (newNode, row) {
-    if (this.bootstrapped && this._reping.push({ newNode, row })) this._repingMaybe()
-  }
-
-  _repingMaybe () {
-    while (this._repinging < 3 && this._reping.isEmpty() === false) {
-      const { newNode, row } = this._reping.shift()
-      if (this.table.get(newNode.id)) continue
-
-      let oldest = null
-      for (const node of row.nodes) {
-        if (node.seen === this._tick) continue
-        if (oldest === null || oldest.seen > node.seen || (oldest.seen === node.seen && oldest.added > node.added)) oldest = node
-      }
-
-      if (oldest === null) continue
-      if ((this._tick - oldest.seen) < RECENT_NODE && (this._tick - oldest.added) > OLD_NODE) continue
-
-      this._repingAndSwap(newNode, oldest)
-    }
-  }
-
-  _repingAndSwap (newNode, oldNode) {
-    const self = this
-    const lastSeen = oldNode.seen
-
-    this._repinging++
-    this.ping(oldNode).then(onsuccess, onswap)
-
-    function onsuccess (m) {
-      if (oldNode.seen <= lastSeen) return onswap()
-      self._repinging--
-      self._repingMaybe()
-    }
-
-    function onswap () {
-      self._repinging--
-      self._repingMaybe()
-      self._removeNode(oldNode)
-      self._addNode(newNode)
-    }
-  }
-
-  _resolveBootstrapNodes (done) {
-    if (!this.bootstrapNodes.length) return done([])
-
-    let missing = this.bootstrapNodes.length
-    const nodes = []
-
-    for (const node of this.bootstrapNodes) {
-      dns.lookup(node.host, { family: 4 }, (_, host) => {
-        if (host) nodes.push({ id: nodeId(host, node.port), host, port: node.port })
-        if (--missing === 0) done(nodes)
-      })
-    }
   }
 
   _addNode (node) {
     if (this.nodes.has(node) || node.id.equals(this.table.id)) return
-    if (!this._userAddNode(node)) return
 
-    node.added = node.seen = this._tick
+    node.added = node.pinged = node.seen = this._tick
 
-    if (this.table.add(node)) this.nodes.add(node)
+    if (!this.table.add(node)) return
+    this.nodes.add(node)
+
+    if (node.to && node.sampled === 0) {
+      node.sampled = this._tick
+      this._nat.add(node.to.host, node.to.port)
+    }
 
     this.emit('add-node', node)
   }
@@ -478,166 +248,339 @@ class DHT extends EventEmitter {
     this.emit('remove-node', node)
   }
 
-  _addNodeFromMessage (m, sample) {
-    const id = nodeId(m.from.host, m.from.port)
+  _onwakeup () {
+    this._tick += 2 * OLD_NODE // bump the tick enough that everything appears old.
+    this._tick += 8 - (this._tick & 7) - 2 // triggers a series of pings in two ticks
+    this._stableTicks = MORE_STABLE_TICKS
+    this._refreshTicks = 1 // triggers a refresh next tick (allow network time to wake up also)
+    this._lastHost = null // clear network cache check
 
-    // verify id, if the id is mismatched it doesn't strictly mean the node is bad, could be
-    // a weird NAT thing, that the node is unaware of - in any case it def means we should not
-    // add this node to our routing table
-    if (!m.id.equals(id)) {
-      m.id = null
-      return
+    if (this.adaptive && !this.ephemeral) {
+      this.ephemeral = true
+      this.io.ephemeral = true
+      this.emit('ephemeral')
     }
 
-    const oldNode = this.table.get(id)
-
-    // refresh it, if we've seen this before
-    if (oldNode) {
-      // if the node is indicating that we got a new ip
-      // make sure to add it again to the sampler. make sure we don't allow the remote node
-      // to add multiple entries though.
-      if (sample && (oldNode.to === null || oldNode.to.host !== m.to.host)) {
-        oldNode.to = m.to
-        // TODO: would be technically better to add to the head of the sample queue, but
-        // this is prop fine
-        const s = this._nat.sample(m.from)
-        if (s) {
-          s.port = m.to.port
-          s.host = m.to.host
-        } else {
-          this._nat.add(m.to, m.from)
-        }
-      }
-
-      oldNode.seen = this._tick
-      this.nodes.add(oldNode)
-      return
-    }
-
-    // add a sample of our address from the remote nodes pov
-    if (sample) this._nat.add(m.to, m.from)
-
-    this._addNode({
-      id,
-      port: m.from.port,
-      host: m.from.host,
-      token: null, // adding this so it has the same "shape" as the query nodes for easier debugging
-      to: sample ? m.to : null,
-      added: this._tick,
-      seen: this._tick,
-      prev: null,
-      next: null
-    })
+    this.emit('wakeup')
   }
 
-  _onrequest (req, sample) {
-    // check if the roundtrip token is one we've generated within the last 10s for this peer
-    if (req.token !== null && !this._token(req.from, 1).equals(req.token) && !this._token(req.from, 0).equals(req.token)) {
-      req.token = null
+  _onfullrow (newNode, row) {
+    if (!this.bootstrapped || this._repinging >= 3) return
+
+    let oldest = null
+    for (const node of row.nodes) {
+      if (node.pinged === this._tick) continue
+      if (oldest === null || oldest.pinged > node.pinged || (oldest.pinged === node.pinged && oldest.added > node.added)) oldest = node
     }
 
-    if (req.id !== null) this._addNodeFromMessage(req, sample)
-    else this._pingBootstrapTicks = REFRESH_TICKS
-    // o/ if this node is ephemeral, it prob originated from a bootstrapper somehow so no need to ping them
+    if (oldest === null) return
+    if ((this._tick - oldest.pinged) < RECENT_NODE && (this._tick - oldest.added) > OLD_NODE) return
 
-    // echo the value back
+    this._repingAndSwap(newNode, oldest)
+  }
+
+  _repingAndSwap (newNode, oldNode) {
+    const self = this
+    const lastSeen = oldNode.seen
+
+    oldNode.pinged = this._tick
+
+    this._repinging++
+    this._request({ id: null, host: oldNode.host, port: oldNode.port }, 'ping', null, null, onsuccess, onswap)
+
+    function onsuccess (m) {
+      if (oldNode.seen <= lastSeen) return onswap()
+      self._repinging--
+    }
+
+    function onswap (e) {
+      self._repinging--
+      self._removeNode(oldNode)
+      self._addNode(newNode)
+    }
+  }
+
+  _onrequest (req, external) {
+    if (req.from.id !== null) {
+      this._addNodeFromNetwork(!external, req.from, req.to)
+    }
+
+    // standard keep alive call
     if (req.command === 'ping') {
-      if (req.value === null || req.value.byteLength <= 32) this._reply(req.tid, null, 0, req.value, req.from, false)
+      req.sendReply(0, null, false, false)
       return
     }
 
+    // check if the other side can receive a message to their other socket
     if (req.command === 'ping_nat') {
-      if (!this._localSocket) this._localSocket = dgram.createSocket('udp4')
-      this._reply(req.tid, null, 0, null, req.from, false, this._localSocket)
+      if (req.value === null || req.value.byteLength < 2) return
+      const port = c.uint16.decode({ start: 0, end: 2, buffer: req.value })
+      if (port === 0) return
+      req.from.port = port
+      req.sendReply(0, null, false, false)
       return
     }
 
     // empty dht reply back
     if (req.command === 'find_node') {
-      this._reply(req.tid, req.target, 0, null, req.from, false)
+      if (!req.target) return
+      req.sendReply(0, null, false, true)
       return
     }
 
-    if (this.emit('request', new Request(this, req)) === false) {
-      this._reply(req.tid, req.target, 1, null, req.from, false)
+    if (req.command === 'down_hint') {
+      if (req.value === null || req.value.byteLength < 6) return
+      if (this._checks < 10) {
+        sodium.crypto_generichash(TMP, req.value.subarray(0, 6))
+        const node = this.table.get(TMP)
+        if (node && (node.pinged < this._tick || node.downHints === 0)) {
+          node.downHints++
+          this._check(node)
+        }
+      }
+      req.sendReply(0, null, false, false)
+      return
+    }
+
+    // ask the user to handle it or reply back with a bad command
+    if (this.emit('request', req) === false) {
+      req.sendReply(BAD_COMMAND, null, false, true)
     }
   }
 
-  _onresponse (res, sample) {
-    if (res.id !== null) this._addNodeFromMessage(res, sample)
-    else if (sample && this._nat.length < 3 && this._nat.sample(res.from) === null) this._nat.add(res.to, res.from)
+  _onresponse (res, external) {
+    this._addNodeFromNetwork(!external, res.from, res.to)
+  }
 
-    if (this._resolveSampled !== null && this._nat.length >= 3) {
-      this._resolveSampled(true)
-      this._resolveSampled = null
+  _ontimeout (req) {
+    if (!req.to.id) return
+    const node = this.table.get(req.to.id)
+    if (node) this._removeNode(node)
+  }
+
+  _pingSome () {
+    let cnt = this.io.inflight.length > 2 ? 3 : 5
+    let oldest = this.nodes.oldest
+
+    // tiny dht, pinged the bootstrap again
+    if (!oldest) {
+      this.refresh()
+      return
+    }
+
+    // we've recently pinged the oldest one, so only trigger a couple of repings
+    if ((this._tick - oldest.pinged) < RECENT_NODE) {
+      cnt = 2
+    }
+
+    while (cnt--) {
+      if (!oldest || this._tick === oldest.pinged) continue
+      this._check(oldest)
+      oldest = oldest.next
     }
   }
 
-  bind (...args) {
-    return this.rpc.bind(...args)
+  _check (node) {
+    node.pinged = this._tick
+
+    const lastSeen = node.seen
+    const onresponse = () => {
+      this._checks--
+      this._removeStaleNode(node, lastSeen)
+    }
+    const onerror = () => {
+      this._checks--
+      this._removeNode(node)
+    }
+
+    this._checks++
+    this._request({ id: null, host: node.host, port: node.port }, 'ping', null, null, onresponse, onerror)
   }
 
-  address () {
-    return this.rpc.address()
+  _ontick () {
+    const time = Date.now()
+
+    if (time - this._lastTick > SLEEPING_INTERVAL) {
+      this._onwakeup()
+    } else {
+      this._tick++
+    }
+
+    this._lastTick = time
+
+    if (!this.bootstrapped) return
+
+    if (this.adaptive && this.ephemeral && --this._stableTicks <= 0) {
+      if (this._lastHost === this._nat.host) { // do not recheck the same network...
+        this._stableTicks = MORE_STABLE_TICKS
+      } else {
+        this._onstable() // the promise returned here never fails so just ignore it
+      }
+    }
+
+    if ((this._tick & 7) === 0) {
+      this._pingSome()
+    }
+
+    if (((this._tick & 63) === 0 && this.nodes.length < this.table.k) || --this._refreshTicks <= 0) {
+      this.refresh()
+    }
   }
 
-  remoteAddress (minSamples) {
-    const result = this._nat.analyze(minSamples)
-    if (result.type === NatAnalyzer.PORT_CONSISTENT && !this.ephemeral) result.type = DHT.NAT_OPEN
-    return result
+  async _onstable () {
+    if (!this.ephemeral) return false
+
+    const { host, port } = this._nat
+
+    // remember what host we checked and reset the counter
+    this._stableTicks = MORE_STABLE_TICKS
+    this._lastHost = host
+
+    // check if we have a consistent host and port
+    if (host === null || port === 0) {
+      return false
+    }
+
+    // check if the external port is mapped to the internal port
+    if (this._nat.port !== this.address().port) {
+      return false
+    }
+
+    const natSampler = this.firewalled ? new NatSampler() : this._nat
+
+    // ask remote nodes to ping us on our server socket to see if we have the port open
+    const firewalled = this.firewalled && await this._checkIfFirewalled(natSampler)
+    if (firewalled) return false
+
+    this.firewalled = this.io.firewalled = false
+
+    // incase it's called in parallel for some reason, or if our nat status somehow changed
+    if (!this.ephemeral || host !== this._nat.host || port !== this._nat.port) return false
+    // if the firewall probe returned a different host / non consistent port, bail as well
+    if (natSampler.host !== host || natSampler.port === 0) return false
+
+    const id = peer.id(natSampler.host, natSampler.port)
+
+    this.ephemeral = this.io.ephemeral = false
+
+    this._nonePersistentSamples = []
+    this._nat = natSampler
+
+    // all good! copy over the old routing table to the new one
+    if (!this.table.id.equals(id)) {
+      const nodes = this.table.toArray()
+
+      this.table = this.io.table = new Table(id)
+
+      for (const node of nodes) {
+        if (node.id.equals(id)) continue
+        if (!this.table.add(node)) this.nodes.remove(node)
+      }
+
+      this.table.on('row', this._onrow)
+
+      // we need to rebootstrap/refresh since we updated our id
+      if (this.bootstrapped) this.refresh()
+    }
+
+    this.emit('persistent')
+
+    return true
   }
 
-  addNode ({ host, port }) {
-    this._addNode({
-      id: nodeId(host, port),
-      port,
-      host,
-      token: null,
-      to: null,
-      added: this._tick,
-      seen: this._tick,
-      prev: null,
-      next: null
+  _resolveBootstrapNodes (done) {
+    if (!this.bootstrapNodes.length) return done([])
+
+    let missing = this.bootstrapNodes.length
+    const nodes = []
+
+    for (const node of this.bootstrapNodes) {
+      dns.lookup(node.host, { family: 4 }, (_, host) => {
+        if (host) nodes.push({ id: peer.id(host, node.port), host, port: node.port })
+        if (--missing === 0) done(nodes)
+      })
+    }
+  }
+
+  async _addBootstrapNodes (nodes) {
+    return new Promise((resolve) => {
+      this._resolveBootstrapNodes(function (bootstrappers) {
+        nodes.push(...bootstrappers)
+        resolve()
+      })
     })
   }
 
-  toArray () {
-    return this.nodes.toArray().map(({ host, port }) => ({ host, port }))
-  }
-
-  _reply (tid, target, status, value, to, addToken, socket = this.rpc.socket) {
-    const closerNodes = target ? this.table.closest(target) : null
-    const ephemeral = socket !== this.rpc.socket || this.ephemeral
-    const reply = {
-      version: 2,
-      tid,
-      from: null,
-      to,
-      id: ephemeral ? null : this.table.id,
-      token: (!ephemeral && addToken) ? this._token(to, 1) : null,
-      target: null,
-      closerNodes,
-      command: null,
-      status,
-      value
+  async _checkIfFirewalled (natSampler = new NatSampler()) {
+    const nodes = []
+    for (let node = this.nodes.latest; node && nodes.length < 5; node = node.prev) {
+      nodes.push(node)
     }
 
-    this.rpc.send(reply, socket)
-    return reply
+    if (nodes.length < 5) await this._addBootstrapNodes(nodes)
+    // if no nodes are available, including bootstrappers - bail
+    if (nodes.length === 0) return true
+
+    const hosts = []
+    const value = Buffer.allocUnsafe(2)
+    let pongs
+
+    c.uint16.encode({ start: 0, end: 2, buffer: value }, this.io.serverSocket.address().port)
+
+    // double check they actually came on the server socket...
+    this.io.serverSocket.on('message', onmessage)
+
+    pongs = await requestAll(this, 'ping_nat', value, nodes)
+    if (!pongs.length) return true
+
+    let count = 0
+    for (const res of pongs) {
+      if (hosts.indexOf(res.from.host) > -1) count++
+    }
+
+    this.io.serverSocket.removeListener('message', onmessage)
+
+    // if we got very few replies, consider it a fluke
+    if (count < (nodes.length >= 5 ? 3 : 1)) return true
+
+    // check that the server socket has the same properties nat wise
+    pongs = await requestAll(this, 'ping', null, nodes, { socket: this.io.serverSocket })
+    for (const seen of pongs) natSampler.add(seen.to.host, seen.to.port)
+
+    // check that the server socket has the same ip as the client socket
+    if (natSampler.host === null || this._nat.host !== natSampler.host) return true
+
+    // check that the local port of the server socket is the same as the remote port
+    if (natSampler.port === 0 || natSampler.port !== this.io.serverSocket.address().port) return true
+
+    return false
+
+    function onmessage (_, rinfo) {
+      hosts.push(rinfo.address)
+    }
   }
 
-  static id (node, out) {
-    return nodeId(node.host, node.port, out)
+  _backgroundQuery (target, command, value) {
+    this._refreshTicks = REFRESH_TICKS
+
+    const backgroundCon = Math.min(this.concurrency, Math.max(2, (this.concurrency / 8) | 0))
+    const q = new Query(this, target, command, value, { concurrency: backgroundCon, maxSlow: 0 })
+
+    q.on('data', () => {
+      // yield to other traffic
+      q.concurrency = this.io.inflight.length < 3
+        ? this.concurrency
+        : backgroundCon
+    })
+
+    return q
   }
 }
 
-DHT.OK = 0
-DHT.UNKNOWN_COMMAND = 1
-DHT.NAT_UNKNOWN = NatAnalyzer.UNKNOWN
-DHT.NAT_OPEN = Symbol.for('NAT_OPEN') // implies PORT_CONSISTENT
-DHT.NAT_PORT_CONSISTENT = NatAnalyzer.PORT_CONSISTENT
-DHT.NAT_PORT_INCREMENTING = NatAnalyzer.PORT_INCREMENTING
-DHT.NAT_PORT_RANDOMIZED = NatAnalyzer.PORT_RANDOMIZED
+DHT.ERROR_BAD_TOKEN = BAD_TOKEN
+DHT.ERROR_BAD_COMMAND = BAD_COMMAND
+DHT.ERROR_TIMEOUT = TIMEOUT
+DHT.ERROR_DESTROY = DESTROY
 
 module.exports = DHT
 
@@ -658,21 +601,27 @@ function randomBytes (n) {
   return b
 }
 
-function noop () {}
-
-function compare (id, a, b) {
-  for (let i = 0; i < id.length; i++) {
-    if (a[i] === b[i]) continue
-    const t = id[i]
-    return (t ^ a[i]) - (t ^ b[i])
-  }
-  return 0
-}
-
 function randomOffset (n) {
   return n - ((Math.random() * 0.5 * n) | 0)
 }
 
-function allowAll (node) {
-  return true
+function requestAll (dht, command, value, nodes, opts) {
+  let missing = nodes.length
+  const replies = []
+
+  return new Promise((resolve) => {
+    for (const node of nodes) {
+      dht.request({ token: null, command, target: null, value }, node, opts)
+        .then(onsuccess, onerror)
+    }
+
+    function onsuccess (res) {
+      replies.push(res)
+      if (--missing === 0) resolve(replies)
+    }
+
+    function onerror () {
+      if (--missing === 0) resolve(replies)
+    }
+  })
 }

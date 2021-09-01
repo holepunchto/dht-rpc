@@ -12,14 +12,15 @@ tape('make bigger swarm', async function (t) {
   const swarm = await makeSwarm(500)
 
   const targetNode = swarm[25]
+  const target = targetNode.id
 
-  let q = swarm[499].query(targetNode.id, 'find_node', null)
+  let q = swarm[499].query({ command: 'find_node', target })
   let messages = 0
   let found = false
 
   for await (const data of q) {
     messages++
-    if (data.id && data.id.equals(targetNode.id)) {
+    if (data.from.id && data.from.id.equals(target)) {
       found = true
       break
     }
@@ -27,13 +28,13 @@ tape('make bigger swarm', async function (t) {
 
   t.ok(found, 'found target in ' + messages + ' message(s)')
 
-  q = swarm[490].query(targetNode.id, 'find_node', null, { nodes: q.closestNodes })
+  q = swarm[490].query({ command: 'find_node', target }, { nodes: q.closestNodes })
   messages = 0
   found = false
 
   for await (const data of q) {
     messages++
-    if (data.id && data.id.equals(targetNode.id)) {
+    if (data.from.id && data.from.id.equals(target)) {
       found = true
       break
     }
@@ -41,34 +42,12 @@ tape('make bigger swarm', async function (t) {
 
   t.ok(found, 'found target again in ' + messages + ' message(s)')
 
-  const { type, host, port } = swarm[490].remoteAddress()
+  const { firewalled, host, port } = swarm[490]
 
-  t.same(type, DHT.NAT_OPEN)
+  t.same(firewalled, false)
   t.same(port, swarm[490].address().port)
   t.ok(host)
 
-  destroy(swarm)
-})
-
-tape('nat sample promise', async function (t) {
-  const swarm = await makeSwarm(5)
-
-  const node = new DHT({
-    bootstrap: [{ host: '127.0.0.1', port: swarm[0].address().port }]
-  })
-
-  let ready = false
-  node.ready().then(() => {
-    ready = true
-  })
-
-  await node.sampledNAT()
-  t.ok(node._nat.length >= 3, 'min 3 samples')
-  t.notOk(ready, 'before ready')
-  await node.ready()
-  t.ok(ready, 'after ready')
-
-  node.destroy()
   destroy(swarm)
 })
 
@@ -82,16 +61,16 @@ tape('commit after query', async function (t) {
       if (req.command === 'before') {
         return req.reply(null)
       }
-      if (req.command === 'after' && req.commit) {
+      if (req.command === 'after' && req.token) {
         commits++
         return req.reply(null)
       }
     })
   }
 
-  const q = swarm[42].query(swarm[0].table.id, 'before', null, {
+  const q = swarm[42].query({ command: 'before', target: swarm[0].table.id }, {
     commit (m, dht, query) {
-      return dht.request(query.target, 'after', null, m.from, { token: m.token })
+      return dht.request({ command: 'after', target: query.target, token: m.token }, m.from)
     }
   })
 
@@ -106,11 +85,11 @@ tape('map query stream', async function (t) {
   const swarm = await makeSwarm(10)
 
   const expected = []
-  const q = swarm[0].query(swarm[0].table.id, 'find_node', null, {
+  const q = swarm[0].query({ command: 'find_node', target: swarm[0].table.id }, {
     map (data) {
       if (expected.length > 3) return null
-      expected.push(data.id)
-      return data.id
+      expected.push(data.from.id)
+      return data.from.id
     }
   })
 
@@ -119,7 +98,9 @@ tape('map query stream', async function (t) {
 
   await q.finished()
 
+  t.ok(expected.length > 0)
   t.same(buf, expected)
+
   destroy(swarm)
 })
 
@@ -134,10 +115,10 @@ tape('timeouts', async function (t) {
     }
   })
 
-  const q = a.query(Buffer.alloc(32), 'nope')
+  const q = a.query({ command: 'nope', target: Buffer.alloc(32) })
   await q.finished()
 
-  t.same(tries, 4)
+  t.same(tries, 3)
 
   bootstrap.destroy()
   a.destroy()
@@ -146,20 +127,24 @@ tape('timeouts', async function (t) {
 
 tape('shorthand commit', async function (t) {
   const swarm = await makeSwarm(40)
+
   let tokens = 0
+  let notTokens = 0
 
   for (const node of swarm) {
     node.on('request', function (req) {
-      if (req.commit) tokens++
+      if (req.token) tokens++
+      else notTokens++
       req.reply(null)
     })
   }
 
-  const q = swarm[0].query(Buffer.alloc(32), 'nope', null, { commit: true })
+  const q = swarm[0].query({ command: 'hello', target: Buffer.alloc(32) }, { commit: true })
 
   await q.finished()
 
   t.same(tokens, 20)
+  t.ok(notTokens >= tokens)
 
   destroy(swarm)
 })
@@ -192,7 +177,7 @@ tape('timeouts when commiting', async function (t) {
     }
   })
 
-  const q = a.query(Buffer.alloc(32), 'nope', null, { commit: true })
+  const q = a.query({ command: 'nope', target: Buffer.alloc(32) }, { commit: true })
   let error = null
 
   try {
@@ -202,7 +187,7 @@ tape('timeouts when commiting', async function (t) {
   }
 
   t.ok(error, 'commit should fail')
-  t.same(tries, 4)
+  t.same(tries, 3)
 
   bootstrap.destroy()
   a.destroy()
@@ -237,10 +222,10 @@ tape('addNode / nodes option', async function (t) {
 
   const bNodes = b.toArray()
 
-  t.deepEqual(bNodes, [{ host: '127.0.0.1', port: a.address().port }])
+  t.same(bNodes, [{ host: '127.0.0.1', port: a.address().port }])
 
   const responses = []
-  for await (const data of b.query(a.id, 'hello')) {
+  for await (const data of b.query({ command: 'hello', target: a.id })) {
     responses.push(data)
   }
 
@@ -249,7 +234,7 @@ tape('addNode / nodes option', async function (t) {
 
   const aNodes = a.toArray()
 
-  t.deepEqual(aNodes, [{ host: '127.0.0.1', port: b.address().port }])
+  t.same(aNodes, [{ host: '127.0.0.1', port: b.address().port }])
 
   a.destroy()
   b.destroy()
@@ -259,7 +244,7 @@ tape('addNode / nodes option', async function (t) {
 tape('set bind', async function (t) {
   const port = await freePort()
 
-  const a = new DHT({ bind: port })
+  const a = new DHT({ bind: port, firewalled: false })
   await a.ready()
 
   t.same(a.address().port, port, 'bound to explicit port')
@@ -290,8 +275,8 @@ function freePort () {
 }
 
 async function makeSwarm (n) {
-  const node = new DHT()
-  await node.bind(0)
+  const node = DHT.bootstrapper()
+  await node.ready()
   const all = [node]
   const bootstrap = ['localhost:' + node.address().port]
   while (all.length < n) {

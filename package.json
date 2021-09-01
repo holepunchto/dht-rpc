@@ -7,6 +7,7 @@
     "compact-encoding": "^2.1.0",
     "fast-fifo": "^1.0.0",
     "kademlia-routing-table": "^1.0.0",
+    "nat-sampler": "^1.0.1",
     "sodium-universal": "^3.0.4",
     "streamx": "^2.10.3",
     "time-ordered-set": "^1.0.2"
