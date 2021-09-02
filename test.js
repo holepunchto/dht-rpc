@@ -258,6 +258,35 @@ tape('set bind', async function (t) {
   b.destroy()
 })
 
+tape('relay', async function (t) {
+  const [bootstrap, a, b, c] = await makeSwarm(4)
+
+  b.on('request', function (req) {
+    t.same(req.command, 'route', 'b got request')
+    t.same(req.from.port, a.address().port, 'from a')
+    const value = Buffer.concat([req.value, Buffer.from('b')])
+    req.relay(value, { host: '127.0.0.1', port: c.address().port })
+  })
+
+  c.on('request', function (req) {
+    t.same(req.command, 'route', 'c got request')
+    t.same(req.from.port, b.address().port, 'from b')
+    const value = Buffer.concat([req.value, Buffer.from('c')])
+    req.reply(value, { to: { host: '127.0.0.1', port: a.address().port } })
+  })
+
+  const res = await a.request({ command: 'route', value: Buffer.from('a') }, { host: '127.0.0.1', port: b.address().port })
+
+  t.same(res.value, Buffer.from('abc'))
+  t.same(res.from.port, c.address().port)
+  t.same(res.to.port, a.address().port)
+
+  bootstrap.destroy()
+  a.destroy()
+  b.destroy()
+  c.destroy()
+})
+
 function destroy (list) {
   for (const node of list) node.destroy()
 }
