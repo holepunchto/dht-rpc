@@ -307,7 +307,7 @@ class DHT extends EventEmitter {
 
     // standard keep alive call
     if (req.command === 'ping') {
-      req.sendReply(0, null, false, false, req.from)
+      req.sendReply(0, null, false, false)
       return
     }
 
@@ -317,14 +317,14 @@ class DHT extends EventEmitter {
       const port = c.uint16.decode({ start: 0, end: 2, buffer: req.value })
       if (port === 0) return
       req.from.port = port
-      req.sendReply(0, null, false, false, req.from)
+      req.sendReply(0, null, false, false)
       return
     }
 
     // empty dht reply back
     if (req.command === 'find_node') {
       if (!req.target) return
-      req.sendReply(0, null, false, true, req.from)
+      req.sendReply(0, null, false, true)
       return
     }
 
@@ -338,13 +338,13 @@ class DHT extends EventEmitter {
           this._check(node)
         }
       }
-      req.sendReply(0, null, false, false, req.from)
+      req.sendReply(0, null, false, false)
       return
     }
 
     // ask the user to handle it or reply back with a bad command
     if (this.onrequest(req) === false) {
-      req.sendReply(UNKNOWN_COMMAND, null, false, true, req.from)
+      req.sendReply(UNKNOWN_COMMAND, null, false, req.target !== null)
     }
   }
 
