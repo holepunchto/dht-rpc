@@ -77,8 +77,8 @@ class DHT extends EventEmitter {
     return this._nat.port
   }
 
-  onmessage (buf, rinfo) {
-    if (buf.byteLength > 1) this.io.onmessage(null, buf, rinfo)
+  onmessage (socket, buf, rinfo) {
+    if (buf.byteLength > 1) this.io.onmessage(socket, buf, rinfo)
   }
 
   bind () {
