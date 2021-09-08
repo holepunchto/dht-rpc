@@ -128,6 +128,7 @@ class DHT extends EventEmitter {
     const req = this.io.createRequest({ id: null, host, port }, token, command, target, value)
 
     if (opts && opts.socket) req.socket = opts.socket
+    if (opts && opts.retry === false) req.retries = 0
 
     return new Promise((resolve, reject) => {
       req.onresponse = resolve
