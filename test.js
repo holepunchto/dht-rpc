@@ -137,7 +137,7 @@ tape('request with/without retries', async function (t) {
   })
 
   try {
-    await a.request({ command: 'nope', target: Buffer.alloc(32) }, { host: '127.0.0.1', port: b.address().port })
+    await a.request({ command: 'nope' }, { host: '127.0.0.1', port: b.address().port })
   } catch {
     // do nothing
   }
@@ -145,12 +145,33 @@ tape('request with/without retries', async function (t) {
   t.same(tries, 3)
 
   try {
-    await a.request({ command: 'nope', target: Buffer.alloc(32) }, { host: '127.0.0.1', port: b.address().port }, { retry: false })
+    await a.request({ command: 'nope' }, { host: '127.0.0.1', port: b.address().port }, { retry: false })
   } catch {
     // do nothing
   }
 
   t.same(tries, 4)
+
+  bootstrap.destroy()
+  a.destroy()
+  b.destroy()
+})
+
+tape('reply onflush', async function (t) {
+  const [bootstrap, a, b] = await makeSwarm(3)
+
+  let flushed = false
+
+  b.on('request', function (req) {
+    req.reply(null, {
+      onflush () {
+        flushed = true
+      }
+    })
+  })
+
+  await a.request({ command: 'hello' }, { host: '127.0.0.1', port: b.address().port })
+  t.ok(flushed)
 
   bootstrap.destroy()
   a.destroy()
