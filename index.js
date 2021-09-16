@@ -41,6 +41,7 @@ class DHT extends EventEmitter {
 
     this._nat = new NatSampler()
     this._bind = opts.bind || 0
+    this._quickFirewall = opts.quickFirewall !== false
     this._forcePersistent = opts.ephemeral === false
     this._repinging = 0
     this._checks = 0
@@ -147,7 +148,7 @@ class DHT extends EventEmitter {
 
     // TODO: some papers describe more advanced ways of bootstrapping - we should prob look into that
 
-    let first = !this._forcePersistent
+    let first = this._quickFirewall && !this._forcePersistent
     let testNat = false
 
     const onlyFirewall = !this._forcePersistent
