@@ -138,6 +138,8 @@ class DHT extends EventEmitter {
   }
 
   async bootstrap () {
+    const self = this
+
     await Promise.resolve() // wait a tick, so apis can be used from the outside
     await this.io.bind()
 
@@ -145,15 +147,39 @@ class DHT extends EventEmitter {
 
     // TODO: some papers describe more advanced ways of bootstrapping - we should prob look into that
 
+    let first = !this._forcePersistent
+    let testNat = false
+
+    const onlyFirewall = !this._forcePersistent
+
     for (let i = 0; i < 2; i++) {
-      await this._backgroundQuery(this.table.id, 'find_node', null).finished()
-      if (this.bootstrapped || !(await this._updateNetworkState(!this._forcePersistent))) break
+      await this._backgroundQuery(this.table.id, 'find_node', null).on('data', ondata).finished()
+
+      if (this.bootstrapped || (!testNat && !this._forcePersistent)) break
+      if (!(await this._updateNetworkState(onlyFirewall))) break
     }
 
     if (this.bootstrapped) return
     this.bootstrapped = true
 
     this.emit('ready')
+
+    function ondata (data) {
+      // Simple QUICK nat heuristic.
+      // If we get ONE positive nat ping before the bootstrap query finishes
+      // then we always to a nat test, no matter if we are adaptive...
+      // This should be expanded in the future to try more than one node etc, not always hit the first etc
+      // If this fails, then nbd, as the onstable hook will pick it up later.
+
+      if (!first) return
+      first = false
+
+      const value = Buffer.allocUnsafe(2)
+      c.uint16.encode({ start: 0, end: 2, buffer: value }, self.io.serverSocket.address().port)
+
+      self.request({ token: null, command: 'ping_nat', target: null, value }, data.from)
+        .then(() => { testNat = true }, noop)
+    }
   }
 
   refresh () {
@@ -634,3 +660,5 @@ function requestAll (dht, command, value, nodes, opts) {
     }
   })
 }
+
+function noop () {}
