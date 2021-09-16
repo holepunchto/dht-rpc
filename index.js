@@ -62,7 +62,7 @@ class DHT extends EventEmitter {
   }
 
   static bootstrapper (bind, opts) {
-    return new this({ bind, firewalled: false, ephemeral: false, ...opts })
+    return new this({ bind, firewalled: false, ...opts })
   }
 
   get id () {
@@ -147,7 +147,7 @@ class DHT extends EventEmitter {
 
     for (let i = 0; i < 2; i++) {
       await this._backgroundQuery(this.table.id, 'find_node', null).finished()
-      if (this.bootstrapped || !this._forcePersistent || !(await this._onstable())) break
+      if (this.bootstrapped || !(await this._updateNetworkState(!this._forcePersistent))) break
     }
 
     if (this.bootstrapped) return
@@ -419,7 +419,7 @@ class DHT extends EventEmitter {
       if (this._lastHost === this._nat.host) { // do not recheck the same network...
         this._stableTicks = MORE_STABLE_TICKS
       } else {
-        this._onstable() // the promise returned here never fails so just ignore it
+        this._updateNetworkState() // the promise returned here never fails so just ignore it
       }
     }
 
@@ -432,8 +432,9 @@ class DHT extends EventEmitter {
     }
   }
 
-  async _onstable () {
+  async _updateNetworkState (onlyFirewall = false) {
     if (!this.ephemeral) return false
+    if (onlyFirewall && !this.firewalled) return false
 
     const { host, port } = this._nat
 
@@ -443,11 +444,6 @@ class DHT extends EventEmitter {
 
     // check if we have a consistent host and port
     if (host === null || port === 0) {
-      return false
-    }
-
-    // check if the external port is mapped to the internal port
-    if (this._nat.port !== this.address().port) {
       return false
     }
 
@@ -466,10 +462,18 @@ class DHT extends EventEmitter {
 
     const id = peer.id(natSampler.host, natSampler.port)
 
-    this.ephemeral = this.io.ephemeral = false
+    if (!onlyFirewall) {
+      this.ephemeral = this.io.ephemeral = false
+    }
 
-    this._nonePersistentSamples = []
-    this._nat = natSampler
+    if (natSampler !== this._nat) {
+      this._nonePersistentSamples = []
+      this._nat = natSampler
+    }
+
+    // TODO: we should make this a bit more defensive in terms of using more
+    // resources to make sure that the new routing table contains as many alive nodes
+    // as possible, vs blindly copying them over...
 
     // all good! copy over the old routing table to the new one
     if (!this.table.id.equals(id)) {
@@ -488,7 +492,9 @@ class DHT extends EventEmitter {
       if (this.bootstrapped) this.refresh()
     }
 
-    this.emit('persistent')
+    if (!this.ephemeral) {
+      this.emit('persistent')
+    }
 
     return true
   }
@@ -528,19 +534,21 @@ class DHT extends EventEmitter {
 
     const hosts = []
     const value = Buffer.allocUnsafe(2)
-    let pongs
 
     c.uint16.encode({ start: 0, end: 2, buffer: value }, this.io.serverSocket.address().port)
 
     // double check they actually came on the server socket...
     this.io.serverSocket.on('message', onmessage)
 
-    pongs = await requestAll(this, 'ping_nat', value, nodes)
+    const pongs = await requestAll(this, 'ping_nat', value, nodes)
     if (!pongs.length) return true
 
     let count = 0
     for (const res of pongs) {
-      if (hosts.indexOf(res.from.host) > -1) count++
+      if (hosts.indexOf(res.from.host) > -1) {
+        count++
+        natSampler.add(res.to.host, res.to.port)
+      }
     }
 
     this.io.serverSocket.removeListener('message', onmessage)
@@ -548,14 +556,11 @@ class DHT extends EventEmitter {
     // if we got very few replies, consider it a fluke
     if (count < (nodes.length >= 5 ? 3 : 1)) return true
 
-    // check that the server socket has the same properties nat wise
-    pongs = await requestAll(this, 'ping', null, nodes, { socket: this.io.serverSocket })
-    for (const seen of pongs) natSampler.add(seen.to.host, seen.to.port)
-
     // check that the server socket has the same ip as the client socket
     if (natSampler.host === null || this._nat.host !== natSampler.host) return true
 
     // check that the local port of the server socket is the same as the remote port
+    // TODO: we might want a flag to opt out of this heuristic for specific remapped port servers
     if (natSampler.port === 0 || natSampler.port !== this.io.serverSocket.address().port) return true
 
     return false
