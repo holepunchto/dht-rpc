@@ -63,7 +63,7 @@ class DHT extends EventEmitter {
   }
 
   static bootstrapper (bind, opts) {
-    return new this({ bind, firewalled: false, ...opts })
+    return new this({ bind, firewalled: false, bootstrap: [], ...opts })
   }
 
   get id () {
