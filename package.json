@@ -4,6 +4,7 @@
   "description": "Make RPC calls over a Kademlia based DHT",
   "main": "index.js",
   "dependencies": {
+    "bind-easy": "^1.0.0",
     "compact-encoding": "^2.1.0",
     "fast-fifo": "^1.0.0",
     "kademlia-routing-table": "^1.0.0",
