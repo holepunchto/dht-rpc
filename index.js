@@ -148,7 +148,7 @@ class DHT extends EventEmitter {
 
     // TODO: some papers describe more advanced ways of bootstrapping - we should prob look into that
 
-    let first = this._quickFirewall && !this._forcePersistent
+    let first = this.firewalled && this._quickFirewall && !this._forcePersistent
     let testNat = false
 
     const onlyFirewall = !this._forcePersistent
