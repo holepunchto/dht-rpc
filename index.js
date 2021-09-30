@@ -78,6 +78,10 @@ class DHT extends EventEmitter {
     return this._nat.port
   }
 
+  get socket () {
+    return this.firewalled ? this.io.clientSocket : this.io.serverSocket
+  }
+
   onmessage (socket, buf, rinfo) {
     if (buf.byteLength > 1) this.io.onmessage(socket, buf, rinfo)
   }
@@ -87,7 +91,7 @@ class DHT extends EventEmitter {
   }
 
   address () {
-    const socket = this.firewalled ? this.io.clientSocket : this.io.serverSocket
+    const socket = this.socket
     return socket ? socket.address() : null
   }
 
