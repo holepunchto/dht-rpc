@@ -199,6 +199,7 @@ class DHT extends EventEmitter {
 
   _request (to, command, target, value, onresponse, onerror) {
     const req = this.io.createRequest(to, null, command, target, value)
+    if (req === null) return null
 
     req.onresponse = onresponse
     req.onerror = onerror
