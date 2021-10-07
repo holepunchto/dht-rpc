@@ -38,6 +38,7 @@ class DHT extends EventEmitter {
     this.ephemeral = true
     this.firewalled = this.io.firewalled
     this.adaptive = typeof opts.ephemeral !== 'boolean' && opts.adaptive !== false
+    this.destroyed = false
 
     this._nat = new NatSampler()
     this._bind = opts.bind || 0
@@ -193,6 +194,7 @@ class DHT extends EventEmitter {
   }
 
   destroy () {
+    this.destroyed = true
     clearInterval(this._tickInterval)
     return this.io.destroy()
   }
