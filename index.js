@@ -122,6 +122,7 @@ class DHT extends EventEmitter {
   }
 
   query ({ target, command, value }, opts) {
+    if (this.destroyed) throw new Error('Node destroyed')
     this._refreshTicks = REFRESH_TICKS
     return new Query(this, target, command, value || null, opts)
   }
@@ -132,6 +133,7 @@ class DHT extends EventEmitter {
 
   request ({ token = null, command, target = null, value = null }, { host, port }, opts) {
     const req = this.io.createRequest({ id: null, host, port }, token, command, target, value)
+    if (req === null) throw new Error('Node destroyed')
 
     if (opts && opts.socket) req.socket = opts.socket
     if (opts && opts.retry === false) req.retries = 0
