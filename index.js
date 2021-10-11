@@ -8,7 +8,7 @@ const NatSampler = require('nat-sampler')
 const IO = require('./lib/io')
 const Query = require('./lib/query')
 const peer = require('./lib/peer')
-const { UNKNOWN_COMMAND, BAD_COMMAND, INVALID_TOKEN } = require('./lib/errors')
+const { UNKNOWN_COMMAND, INVALID_TOKEN } = require('./lib/errors')
 
 const TMP = Buffer.allocUnsafe(32)
 const TICK_INTERVAL = 5000
@@ -623,14 +623,15 @@ class DHT extends EventEmitter {
   }
 }
 
+DHT.OK = 0
 DHT.ERROR_UNKNOWN_COMMAND = UNKNOWN_COMMAND
 DHT.ERROR_INVALID_TOKEN = INVALID_TOKEN
-DHT.ERROR_BAD_COMMAND = BAD_COMMAND
 
 module.exports = DHT
 
 function parseNode (s) {
   if (typeof s === 'object') return s
+  if (typeof s === 'number') return { host: '127.0.0.1', port: s }
   const [host, port] = s.split(':')
   if (!port) throw new Error('Bootstrap node format is host:port')
 
