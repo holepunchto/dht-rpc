@@ -26,6 +26,7 @@ tape('make bigger swarm', async function (t) {
     }
   }
 
+  const replies = q.closestReplies
   t.ok(found, 'found target in ' + messages + ' message(s)')
 
   q = swarm[490].query({ command: 'find_node', target }, { nodes: q.closestNodes })
@@ -41,6 +42,20 @@ tape('make bigger swarm', async function (t) {
   }
 
   t.ok(found, 'found target again in ' + messages + ' message(s)')
+
+  q = swarm[470].query({ command: 'find_node', target }, { replies })
+  messages = 0
+  found = false
+
+  for await (const data of q) {
+    messages++
+    if (data.from.id && data.from.id.equals(target)) {
+      found = true
+      break
+    }
+  }
+
+  t.ok(found, 'found target again in ' + messages + ' message(s) with original replies')
 
   const { firewalled, host, port } = swarm[490]
 
