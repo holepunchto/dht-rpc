@@ -7,7 +7,7 @@ const node = new DHT({ ephemeral: true, bootstrap: ['localhost:10001'] })
 run()
 
 async function run () {
-  const q = node.query(Buffer.from(hex, 'hex'), 'values')
+  const q = node.query({ target: Buffer.from(hex, 'hex'), command: 'values' })
 
   for await (const data of q) {
     if (data.value && sha256(data.value).toString('hex') === hex) {

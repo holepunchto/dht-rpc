@@ -8,10 +8,14 @@ const val = Buffer.from(process.argv[2])
 run()
 
 async function run () {
-  const q = node.query(sha256(val), 'values')
+  const q = node.query({ target: sha256(val), command: 'values', commit })
   await q.finished()
   await q.commit('values', val)
   console.log('Inserted', sha256(val).toString('hex'))
+
+  async function commit (reply) {
+    await node.request({ token: reply.token, target: sha256(val), command: 'values', value: val }, reply.from)
+  }
 }
 
 function sha256 (val) {

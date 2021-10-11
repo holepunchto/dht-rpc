@@ -1,6 +1,4 @@
 const DHT = require('../')
 
-// Set ephemeral: true so other peers do not add us to the peer list, simply bootstrap
-const bootstrap = new DHT({ ephemeral: true })
-
-bootstrap.bind(10001)
+// Set ephemeral: true since this does not implement any APIs
+DHT.bootstrapper(10001, { ephemeral: true })
