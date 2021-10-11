@@ -17,7 +17,7 @@ function createNode () {
 
   node.on('request', function (req) {
     if (req.command === 'values') {
-      if (req.commit) {
+      if (req.token) {
         const key = sha256(req.value).toString('hex')
         values.set(key, req.value)
         console.log('Storing', key, '-->', req.value.toString())
