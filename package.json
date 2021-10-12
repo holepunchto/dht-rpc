@@ -14,7 +14,7 @@
     "time-ordered-set": "^1.0.2"
   },
   "devDependencies": {
-    "brittle": "^1.4.1",
+    "brittle": "^1.4.3",
     "standard": "^16.0.3"
   },
   "scripts": {
