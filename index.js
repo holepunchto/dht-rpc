@@ -9,6 +9,7 @@ const IO = require('./lib/io')
 const Query = require('./lib/query')
 const peer = require('./lib/peer')
 const { UNKNOWN_COMMAND, INVALID_TOKEN } = require('./lib/errors')
+const { PING, PING_NAT, FIND_NODE, DOWN_HINT } = require('./lib/commands')
 
 const TMP = Buffer.allocUnsafe(32)
 const TICK_INTERVAL = 5000
@@ -121,19 +122,30 @@ class DHT extends EventEmitter {
     return this._bootstrapping
   }
 
+  findNode (target, opts) {
+    if (this.destroyed) throw new Error('Node destroyed')
+    this._refreshTicks = REFRESH_TICKS
+    return new Query(this, target, true, FIND_NODE, null, opts)
+  }
+
   query ({ target, command, value }, opts) {
     if (this.destroyed) throw new Error('Node destroyed')
     this._refreshTicks = REFRESH_TICKS
-    return new Query(this, target, command, value || null, opts)
+    return new Query(this, target, false, command, value || null, opts)
   }
 
-  ping (to) {
-    return this.request({ token: null, command: 'ping', target: null, value: null }, to)
+  ping ({ host, port }, opts) {
+    const req = this.io.createRequest({ id: null, host, port }, null, true, PING, null, null)
+    return this._requestToPromise(req, opts)
   }
 
   request ({ token = null, command, target = null, value = null }, { host, port }, opts) {
-    const req = this.io.createRequest({ id: null, host, port }, token, command, target, value)
-    if (req === null) throw new Error('Node destroyed')
+    const req = this.io.createRequest({ id: null, host, port }, token, false, command, target, value)
+    return this._requestToPromise(req, opts)
+  }
+
+  _requestToPromise (req, opts) {
+    if (req === null) return Promise.reject(new Error('Node destroyed'))
 
     if (opts && opts.socket) req.socket = opts.socket
     if (opts && opts.retry === false) req.retries = 0
@@ -161,7 +173,7 @@ class DHT extends EventEmitter {
     const onlyFirewall = !this._forcePersistent
 
     for (let i = 0; i < 2; i++) {
-      await this._backgroundQuery(this.table.id, 'find_node', null).on('data', ondata).finished()
+      await this._backgroundQuery(this.table.id).on('data', ondata).finished()
 
       if (this.bootstrapped || (!testNat && !this._forcePersistent)) break
       if (!(await this._updateNetworkState(onlyFirewall))) break
@@ -185,14 +197,13 @@ class DHT extends EventEmitter {
       const value = Buffer.allocUnsafe(2)
       c.uint16.encode({ start: 0, end: 2, buffer: value }, self.io.serverSocket.address().port)
 
-      self.request({ token: null, command: 'ping_nat', target: null, value }, data.from)
-        .then(() => { testNat = true }, noop)
+      self._request(data.from, true, PING_NAT, null, value, () => { testNat = true }, noop)
     }
   }
 
   refresh () {
     const node = this.table.random()
-    this._backgroundQuery(node ? node.id : this.table.id, 'find_node', null)
+    this._backgroundQuery(node ? node.id : this.table.id)
   }
 
   destroy () {
@@ -201,8 +212,8 @@ class DHT extends EventEmitter {
     return this.io.destroy()
   }
 
-  _request (to, command, target, value, onresponse, onerror) {
-    const req = this.io.createRequest(to, null, command, target, value)
+  _request (to, internal, command, target, value, onresponse, onerror) {
+    const req = this.io.createRequest(to, null, internal, command, target, value)
     if (req === null) return null
 
     req.onresponse = onresponse
@@ -323,7 +334,7 @@ class DHT extends EventEmitter {
     oldNode.pinged = this._tick
 
     this._repinging++
-    this._request({ id: null, host: oldNode.host, port: oldNode.port }, 'ping', null, null, onsuccess, onswap)
+    this._request({ id: null, host: oldNode.host, port: oldNode.port }, true, PING, null, null, onsuccess, onswap)
 
     function onsuccess (m) {
       if (oldNode.seen <= lastSeen) return onswap()
@@ -342,40 +353,45 @@ class DHT extends EventEmitter {
       this._addNodeFromNetwork(!external, req.from, req.to)
     }
 
-    // standard keep alive call
-    if (req.command === 'ping') {
-      req.sendReply(0, null, false, false)
-      return
-    }
-
-    // check if the other side can receive a message to their other socket
-    if (req.command === 'ping_nat') {
-      if (req.value === null || req.value.byteLength < 2) return
-      const port = c.uint16.decode({ start: 0, end: 2, buffer: req.value })
-      if (port === 0) return
-      req.from.port = port
-      req.sendReply(0, null, false, false)
-      return
-    }
-
-    // empty dht reply back
-    if (req.command === 'find_node') {
-      if (!req.target) return
-      req.sendReply(0, null, false, true)
-      return
-    }
-
-    if (req.command === 'down_hint') {
-      if (req.value === null || req.value.byteLength < 6) return
-      if (this._checks < 10) {
-        sodium.crypto_generichash(TMP, req.value.subarray(0, 6))
-        const node = this.table.get(TMP)
-        if (node && (node.pinged < this._tick || node.downHints === 0)) {
-          node.downHints++
-          this._check(node)
+    if (req.internal) {
+      switch (req.command) {
+        // standard keep alive call
+        case PING: {
+          req.sendReply(0, null, false, false)
+          return
+        }
+        // check if the other side can receive a message to their other socket
+        case PING_NAT: {
+          if (req.value === null || req.value.byteLength < 2) return
+          const port = c.uint16.decode({ start: 0, end: 2, buffer: req.value })
+          if (port === 0) return
+          req.from.port = port
+          req.sendReply(0, null, false, false)
+          return
+        }
+        // empty dht reply back
+        case FIND_NODE: {
+          if (!req.target) return
+          req.sendReply(0, null, false, true)
+          return
+        }
+        // "this is node you sent me is down" - let's try to ping it
+        case DOWN_HINT: {
+          if (req.value === null || req.value.byteLength < 6) return
+          if (this._checks < 10) {
+            sodium.crypto_generichash(TMP, req.value.subarray(0, 6))
+            const node = this.table.get(TMP)
+            if (node && (node.pinged < this._tick || node.downHints === 0)) {
+              node.downHints++
+              this._check(node)
+            }
+          }
+          req.sendReply(0, null, false, false)
+          return
         }
       }
-      req.sendReply(0, null, false, false)
+
+      req.sendReply(UNKNOWN_COMMAND, null, false, req.target !== null)
       return
     }
 
@@ -435,7 +451,7 @@ class DHT extends EventEmitter {
     }
 
     this._checks++
-    this._request({ id: null, host: node.host, port: node.port }, 'ping', null, null, onresponse, onerror)
+    this._request({ id: null, host: node.host, port: node.port }, true, PING, null, null, onresponse, onerror)
   }
 
   _ontick () {
@@ -576,7 +592,7 @@ class DHT extends EventEmitter {
     // double check they actually came on the server socket...
     this.io.serverSocket.on('message', onmessage)
 
-    const pongs = await requestAll(this, 'ping_nat', value, nodes)
+    const pongs = await requestAll(this, true, PING_NAT, value, nodes)
     if (!pongs.length) return true
 
     let count = 0
@@ -606,11 +622,11 @@ class DHT extends EventEmitter {
     }
   }
 
-  _backgroundQuery (target, command, value) {
+  _backgroundQuery (target) {
     this._refreshTicks = REFRESH_TICKS
 
     const backgroundCon = Math.min(this.concurrency, Math.max(2, (this.concurrency / 8) | 0))
-    const q = new Query(this, target, command, value, { concurrency: backgroundCon, maxSlow: 0 })
+    const q = new Query(this, target, true, FIND_NODE, null, { concurrency: backgroundCon, maxSlow: 0 })
 
     q.on('data', () => {
       // yield to other traffic
@@ -651,14 +667,14 @@ function randomOffset (n) {
   return n - ((Math.random() * 0.5 * n) | 0)
 }
 
-function requestAll (dht, command, value, nodes, opts) {
+function requestAll (dht, internal, command, value, nodes) {
   let missing = nodes.length
   const replies = []
 
   return new Promise((resolve) => {
     for (const node of nodes) {
-      dht.request({ token: null, command, target: null, value }, node, opts)
-        .then(onsuccess, onerror)
+      const req = dht._request(node, internal, command, null, value, onsuccess, onerror)
+      if (!req) return resolve(replies)
     }
 
     function onsuccess (res) {

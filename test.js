@@ -15,7 +15,7 @@ test('make bigger swarm', async function (t) {
   const targetNode = swarm[25]
   const target = targetNode.id
 
-  let q = swarm[499].query({ command: 'find_node', target })
+  let q = swarm[499].findNode(target)
   let messages = 0
   let found = false
 
@@ -30,7 +30,7 @@ test('make bigger swarm', async function (t) {
   const replies = q.closestReplies
   t.ok(found, 'found target in ' + messages + ' message(s)')
 
-  q = swarm[490].query({ command: 'find_node', target }, { nodes: q.closestNodes })
+  q = swarm[490].findNode(target, { nodes: q.closestNodes })
   messages = 0
   found = false
 
@@ -44,7 +44,7 @@ test('make bigger swarm', async function (t) {
 
   t.ok(found, 'found target again in ' + messages + ' message(s)')
 
-  q = swarm[470].query({ command: 'find_node', target }, { replies })
+  q = swarm[470].findNode(target, { replies })
   messages = 0
   found = false
 
@@ -67,24 +67,26 @@ test('make bigger swarm', async function (t) {
 
 test('commit after query', async function (t) {
   const swarm = await makeSwarm(100, t)
+  const BEFORE = 0
+  const AFTER = 1
 
   let commits = 0
 
   for (const node of swarm) {
     node.on('request', function (req) {
-      if (req.command === 'before') {
+      if (req.command === BEFORE) {
         return req.reply(null)
       }
-      if (req.command === 'after' && req.token) {
+      if (req.command === AFTER && req.token) {
         commits++
         return req.reply(null)
       }
     })
   }
 
-  const q = swarm[42].query({ command: 'before', target: swarm[0].table.id }, {
+  const q = swarm[42].query({ command: BEFORE, target: swarm[0].table.id }, {
     commit (m, dht, query) {
-      return dht.request({ command: 'after', target: query.target, token: m.token }, m.from)
+      return dht.request({ command: AFTER, target: query.target, token: m.token }, m.from)
     }
   })
 
@@ -97,7 +99,7 @@ test('map query stream', async function (t) {
   const swarm = await makeSwarm(10, t)
 
   const expected = []
-  const q = swarm[0].query({ command: 'find_node', target: swarm[0].table.id }, {
+  const q = swarm[0].findNode(swarm[0].table.id, {
     map (data) {
       if (expected.length > 3) return null
       expected.push(data.from.id)
@@ -117,15 +119,18 @@ test('map query stream', async function (t) {
 test('timeouts', async function (t) {
   const [, a, b] = await makeSwarm(3, t)
   let tries = 0
+  const NOPE = 52
+
+  t.plan(4)
 
   b.on('request', function (req) {
-    if (req.command === 'nope') {
+    if (req.command === NOPE) {
       tries++
       t.pass('ignoring request')
     }
   })
 
-  const q = a.query({ command: 'nope', target: Buffer.alloc(32) })
+  const q = a.query({ command: NOPE, target: Buffer.alloc(32) })
   await q.finished()
 
   t.is(tries, 3)
@@ -134,16 +139,17 @@ test('timeouts', async function (t) {
 test('request with/without retries', async function (t) {
   const [, a, b] = await makeSwarm(3, t)
   let tries = 0
+  const NOPE = 442
 
   b.on('request', function (req) {
-    if (req.command === 'nope') {
+    if (req.command === NOPE) {
       tries++
       t.pass('ignoring request')
     }
   })
 
   try {
-    await a.request({ command: 'nope' }, { host: '127.0.0.1', port: b.address().port })
+    await a.request({ command: NOPE }, { host: '127.0.0.1', port: b.address().port })
   } catch {
     // do nothing
   }
@@ -151,7 +157,7 @@ test('request with/without retries', async function (t) {
   t.is(tries, 3)
 
   try {
-    await a.request({ command: 'nope' }, { host: '127.0.0.1', port: b.address().port }, { retry: false })
+    await a.request({ command: NOPE }, { host: '127.0.0.1', port: b.address().port }, { retry: false })
   } catch {
     // do nothing
   }
@@ -172,7 +178,7 @@ test('reply onflush', async function (t) {
     })
   })
 
-  await a.request({ command: 'hello' }, { host: '127.0.0.1', port: b.address().port })
+  await a.request({ command: 42 }, { host: '127.0.0.1', port: b.address().port })
   t.ok(flushed)
 })
 
@@ -190,7 +196,7 @@ test('shorthand commit', async function (t) {
     })
   }
 
-  const q = swarm[0].query({ command: 'hello', target: Buffer.alloc(32) }, { commit: true })
+  const q = swarm[0].query({ command: 42, target: Buffer.alloc(32) }, { commit: true })
 
   await q.finished()
 
@@ -218,15 +224,16 @@ test('after ready it is always bound', async function (t) {
 test('timeouts when commiting', async function (t) {
   const [, a, b] = await makeSwarm(3, t)
   let tries = 0
+  const NOPE = 41
 
   b.on('request', function (req) {
-    if (req.command === 'nope') {
+    if (req.command === NOPE) {
       tries++
       t.pass('ignoring request')
     }
   })
 
-  const q = a.query({ command: 'nope', target: Buffer.alloc(32) }, { commit: true })
+  const q = a.query({ command: NOPE, target: Buffer.alloc(32) }, { commit: true })
   let error = null
 
   try {
@@ -266,7 +273,7 @@ test('addNode / nodes option', async function (t) {
   t.alike(bNodes, [{ host: '127.0.0.1', port: a.address().port }])
 
   const responses = []
-  for await (const data of b.query({ command: 'hello', target: a.id })) {
+  for await (const data of b.query({ command: 52, target: a.id })) {
     responses.push(data)
   }
 
@@ -300,21 +307,23 @@ test('set bind', async function (t) {
 test('relay', async function (t) {
   const [, a, b, c] = await makeSwarm(4, t)
 
+  const ROUTE = 1
+
   b.on('request', function (req) {
-    t.is(req.command, 'route', 'b got request')
+    t.is(req.command, ROUTE, 'b got request')
     t.is(req.from.port, a.address().port, 'from a')
     const value = Buffer.concat([req.value, Buffer.from('b')])
     req.relay(value, { host: '127.0.0.1', port: c.address().port })
   })
 
   c.on('request', function (req) {
-    t.is(req.command, 'route', 'c got request')
+    t.is(req.command, ROUTE, 'c got request')
     t.is(req.from.port, b.address().port, 'from b')
     const value = Buffer.concat([req.value, Buffer.from('c')])
     req.reply(value, { to: { host: '127.0.0.1', port: a.address().port } })
   })
 
-  const res = await a.request({ command: 'route', value: Buffer.from('a') }, { host: '127.0.0.1', port: b.address().port })
+  const res = await a.request({ command: ROUTE, value: Buffer.from('a') }, { host: '127.0.0.1', port: b.address().port })
 
   t.alike(res.value, Buffer.from('abc'))
   t.is(res.from.port, c.address().port)
