@@ -51,9 +51,10 @@ function createNode () {
   })
 
   const values = new Map()
+  const VALUES = 0 // define a command enum
 
   node.on('request', function (req) {
-    if (req.command === 'values') {
+    if (req.command === VALUES) {
       if (req.token) { // if we are the closest node store the value (ie the node sent a valid roundtrip token)
         const key = hash(req.value).toString('hex')
         values.set(key, req.value)
@@ -79,7 +80,7 @@ const node = new DHT()
 
 const q = node.query({
   target: hash(val),
-  command: 'values',
+  command: VALUES,
   value
 }, {
   // commit true will make the query re-reuqest the 20 closest
@@ -94,7 +95,7 @@ Then after inserting run this script to query for a value
 
 ``` js
 const target = Buffer.from(hexFromAbove, 'hex')
-for await (const data of node.query({ target, command: 'values' })) {
+for await (const data of node.query({ target, command: VALUES })) {
   if (data.value && hash(data.value).toString('hex') === hexFromAbove) {
     // We found the value! Destroy the query stream as there is no need to continue.
     console.log(val, '-->', data.value.toString())
@@ -218,7 +219,7 @@ mode always uses a random port.
 Emitted when an incoming DHT request is received. This is where you can add your own RPC methods.
 
 * `req.target` - the dht target the peer is looking (routing is handled behind the scene)
-* `req.command` - the RPC command name
+* `req.command` - the RPC command enum
 * `req.value` - the RPC value buffer
 * `req.token` - If the remote peer echoed back a valid roundtrip token, proving their "from address" this is set
 * `req.from` - who sent this request (host, port)
@@ -236,17 +237,10 @@ DHT.ERROR_UNKNOWN_COMMAND = 1 // the command requested does not exist
 DHT.ERROR_INVALID_TOKEN = 2 // the round trip token sent is invalid
 ```
 
-The DHT has a couple of built in commands for bootstrapping and general DHT health management.
-Those are:
-
-* `find_node` - Find the closest DHT nodes to a specific target with no side-effects.
-* `ping` - Ping another node to see if it is alive.
-* `ping_nat` - Ping another node, but have it reply on a different UDP session to see if you are firewalled.
-* `down_hint` - Gossiped internally to hint that a specific node might be down.
-
 #### `reply = await node.request({ token, target, command, value }, to, [options])`
 
 Send a request to a specific node specified by the to address (`{ host, port }`).
+See the query API for more info on the arguments.
 
 Options include:
 
@@ -267,8 +261,8 @@ Sugar for `dht.request({ command: 'ping' }, to)`
 
 Query the DHT. Will move as close as possible to the `target` provided, which should be a 32-byte uniformly distributed buffer (ie a hash).
 
-* `target` - find nodes close to this
-* `command` - the method you want to invoke
+* `target` - find nodes close to this (should be a 32 byte buffer like a hash)
+* `command` - an enum (uint) indicating the method you want to invoke
 * `value` - optional binary payload to send with it
 
 If you want to modify state stored in the dht, you can use the commit flag to signal the closest
