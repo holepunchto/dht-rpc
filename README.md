@@ -3,13 +3,12 @@
 Make RPC calls over a [Kademlia](https://pdos.csail.mit.edu/~petar/papers/maymounkov-kademlia-lncs.pdf) based DHT.
 
 ```
-npm install dht-rpc@next
+npm install dht-rpc
 ```
 
-## NOTE: v5 Release Candidate
+## NOTE: v5
 
-Note that this is the README for the v5 release candidate.
-To see the v4 documentation/code go to https://github.com/mafintosh/dht-rpc/tree/v4
+Note that the latest release is v5. To see the v4 documentation/code go to https://github.com/mafintosh/dht-rpc/tree/v4
 
 ## Key Features
 
