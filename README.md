@@ -114,11 +114,6 @@ Options include:
 
 ``` js
 {
-  // Whether or not this node is ephemeral or should join the routing table
-  ephemeral: false,
-  // If you don't explicitly specific the ephemerality, the node will automatically
-  // figure it out in adaptive mode, based on your NAT settings, uptime and some other heuristics
-  adaptive: true,
   // A list of bootstrap nodes
   bootstrap: [ 'bootstrap-node.com:24242', ... ],
   // Optionally pass in your own UDP socket to use.
@@ -132,8 +127,9 @@ Options include:
 }
 ```
 
-Note that adaptive mode is very conservative, so it might take ~20-30 mins for the node to turn persistent.
-For the majority of use-cases you should always use adaptive mode to ensure good DHT health.
+Node per default uses something called adaptive mode to decide whether or not they want to join other nodes routing table.
+This includes things like node uptime, if the node is firewalled etc. Adaptive mode is conservative, so it might take ~20-30 mins for the node to turn persistent. If you are making a test case with your own bootstrap network you'd usually want to turn this off to make sure your test finishes in a timely maner. You can do this by passing `ephemeral: false` in the constructor.
+For the vast majority of use-cases you should always use adaptive mode to ensure good DHT health, ie the defaults.
 
 Your DHT routing id is `hash(publicIp + publicPort)` and will be autoconfigured internally.
 
