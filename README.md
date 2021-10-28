@@ -127,7 +127,7 @@ Options include:
 }
 ```
 
-Node per default uses something called adaptive mode to decide whether or not they want to join other nodes routing table.
+Nodes per default use something called adaptive mode to decide whether or not they want to join other nodes' routing table.
 This includes things like node uptime, if the node is firewalled etc. Adaptive mode is conservative, so it might take ~20-30 mins for the node to turn persistent. If you are making a test case with your own bootstrap network you'd usually want to turn this off to make sure your test finishes in a timely maner. You can do this by passing `ephemeral: false` in the constructor.
 For the vast majority of use-cases you should always use adaptive mode to ensure good DHT health, ie the defaults.
 
