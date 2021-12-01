@@ -55,7 +55,7 @@ class DHT extends EventEmitter {
     this._lastHost = null
     this._onrow = (row) => row.on('full', (node) => this._onfullrow(node, row))
     this._nonePersistentSamples = []
-    this._bootstrapping = this.bootstrap()
+    this._bootstrapping = this.bootstrap().catch(noop)
 
     this.table.on('row', this._onrow)
 
