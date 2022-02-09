@@ -55,7 +55,7 @@ class DHT extends EventEmitter {
     this._lastHost = null
     this._onrow = (row) => row.on('full', (node) => this._onfullrow(node, row))
     this._nonePersistentSamples = []
-    this._bootstrapping = this.bootstrap().catch(noop)
+    this._bootstrapping = this._bootstrap().catch(noop)
 
     this.table.on('row', this._onrow)
 
@@ -157,7 +157,7 @@ class DHT extends EventEmitter {
     })
   }
 
-  async bootstrap () {
+  async _bootstrap () {
     const self = this
 
     await Promise.resolve() // wait a tick, so apis can be used from the outside
@@ -203,7 +203,7 @@ class DHT extends EventEmitter {
 
   refresh () {
     const node = this.table.random()
-    this._backgroundQuery(node ? node.id : this.table.id)
+    this._backgroundQuery(node ? node.id : this.table.id).on('error', noop)
   }
 
   destroy () {
@@ -223,8 +223,9 @@ class DHT extends EventEmitter {
     return req
   }
 
-  _sampleBootstrapMaybe (from, to) { // we don't check that this is a bootstrap but good enough, some node once
-    if (this._nonePersistentSamples.length >= this.bootstrapNodes.length) return
+  // we don't check that this is a bootstrap node but we limit the sample size to very few nodes, so fine
+  _sampleBootstrapMaybe (from, to) {
+    if (this._nonePersistentSamples.length >= Math.max(1, this.bootstrapNodes.length)) return
     const id = from.host + ':' + from.port
     if (this._nonePersistentSamples.indexOf(id) > -1) return
     this._nonePersistentSamples.push(id)
