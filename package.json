@@ -1,6 +1,6 @@
 {
   "name": "dht-rpc",
-  "version": "5.0.3",
+  "version": "5.0.4",
   "description": "Make RPC calls over a Kademlia based DHT",
   "main": "index.js",
   "dependencies": {
