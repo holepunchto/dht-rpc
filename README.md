@@ -309,6 +309,10 @@ nodes are stored in `stream.closestNodes` array.
 
 If you want to access the closest replies to your provided target you can see those at `stream.closestReplies`.
 
+#### `stream = node.findNode(target, [options])`
+
+Find the node closest to the node with id `target`. Returns a stream encapsulating the query (see `node.query()`). `options` are the same as `node.query()`.
+
 #### `node.destroy()`
 
 Shutdown the DHT node.
