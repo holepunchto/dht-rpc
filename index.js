@@ -5,13 +5,14 @@ const TOS = require('time-ordered-set')
 const sodium = require('sodium-universal')
 const c = require('compact-encoding')
 const NatSampler = require('nat-sampler')
+const b4a = require('b4a')
 const IO = require('./lib/io')
 const Query = require('./lib/query')
 const peer = require('./lib/peer')
 const { UNKNOWN_COMMAND, INVALID_TOKEN } = require('./lib/errors')
 const { PING, PING_NAT, FIND_NODE, DOWN_HINT } = require('./lib/commands')
 
-const TMP = Buffer.allocUnsafe(32)
+const TMP = b4a.allocUnsafe(32)
 const TICK_INTERVAL = 5000
 const SLEEPING_INTERVAL = 3 * TICK_INTERVAL
 const STABLE_TICKS = 240 // if nothing major bad happens in ~20mins we can consider this node stable (if nat is friendly)
@@ -194,7 +195,7 @@ class DHT extends EventEmitter {
       if (!first) return
       first = false
 
-      const value = Buffer.allocUnsafe(2)
+      const value = b4a.allocUnsafe(2)
       c.uint16.encode({ start: 0, end: 2, buffer: value }, self.io.serverSocket.address().port)
 
       self._request(data.from, true, PING_NAT, null, value, () => { testNat = true }, noop)
@@ -269,7 +270,7 @@ class DHT extends EventEmitter {
   }
 
   _addNode (node) {
-    if (this.nodes.has(node) || node.id.equals(this.table.id)) return
+    if (this.nodes.has(node) || b4a.equals(node.id, this.table.id)) return
 
     node.added = node.pinged = node.seen = this._tick
 
@@ -529,13 +530,13 @@ class DHT extends EventEmitter {
     // as possible, vs blindly copying them over...
 
     // all good! copy over the old routing table to the new one
-    if (!this.table.id.equals(id)) {
+    if (!b4a.equals(this.table.id, id)) {
       const nodes = this.table.toArray()
 
       this.table = this.io.table = new Table(id)
 
       for (const node of nodes) {
-        if (node.id.equals(id)) continue
+        if (b4a.equals(node.id, id)) continue
         if (!this.table.add(node)) this.nodes.remove(node)
       }
 
@@ -586,7 +587,7 @@ class DHT extends EventEmitter {
     if (nodes.length === 0) return true
 
     const hosts = []
-    const value = Buffer.allocUnsafe(2)
+    const value = b4a.allocUnsafe(2)
 
     c.uint16.encode({ start: 0, end: 2, buffer: value }, this.io.serverSocket.address().port)
 
@@ -659,7 +660,7 @@ function parseNode (s) {
 }
 
 function randomBytes (n) {
-  const b = Buffer.alloc(n)
+  const b = b4a.alloc(n)
   sodium.randombytes_buf(b)
   return b
 }
