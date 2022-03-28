@@ -1,5 +1,5 @@
 const test = require('brittle')
-const dgram = require('dgram')
+const udx = require('udx-native')
 const DHT = require('./')
 
 test.configure({ serial: true })
@@ -332,7 +332,7 @@ test('relay', async function (t) {
 
 function freePort () {
   return new Promise(resolve => {
-    const socket = dgram.createSocket('udp4')
+    const socket = udx.createSocket()
 
     socket.bind(0)
     socket.on('listening', function () {
