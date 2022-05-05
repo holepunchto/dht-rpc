@@ -133,7 +133,7 @@ For the vast majority of use-cases you should always use adaptive mode to ensure
 
 Your DHT routing id is `hash(publicIp + publicPort)` and will be autoconfigured internally.
 
-#### `const node = DHT.boostrapper(port, [options])`
+#### `const node = DHT.bootrapper(port, [options])`
 
 Sugar for the options needed to run a bootstrap node, ie
 
