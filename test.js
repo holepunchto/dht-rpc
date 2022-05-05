@@ -2,8 +2,6 @@ const test = require('brittle')
 const dgram = require('dgram')
 const DHT = require('./')
 
-test.configure({ serial: true })
-
 test('make tiny swarm', async function (t) {
   await makeSwarm(2, t)
   t.pass('could make swarm')
