@@ -90,7 +90,7 @@ class DHT extends EventEmitter {
   }
 
   bind () {
-    this.io.bind()
+    return this.io.bind()
   }
 
   address () {
@@ -162,7 +162,7 @@ class DHT extends EventEmitter {
     const self = this
 
     await Promise.resolve() // wait a tick, so apis can be used from the outside
-    this.io.bind()
+    await this.io.bind()
 
     this.emit('listening')
 
