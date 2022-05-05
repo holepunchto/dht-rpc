@@ -1,5 +1,5 @@
 const test = require('brittle')
-const udx = require('udx-native')
+const dgram = require('dgram')
 const DHT = require('./')
 
 test.configure({ serial: true })
@@ -290,12 +290,12 @@ test('addNode / nodes option', async function (t) {
 test('set bind', async function (t) {
   const port = await freePort()
 
-  const a = new DHT({ bind: port, firewalled: false })
+  const a = new DHT({ port, firewalled: false })
   await a.ready()
 
   t.alike(a.address().port, port, 'bound to explicit port')
 
-  const b = new DHT({ bind: port })
+  const b = new DHT({ port })
   await b.ready()
 
   t.not(b.address().port, port, 'bound to different port as explicit one is taken')
@@ -332,7 +332,7 @@ test('relay', async function (t) {
 
 function freePort () {
   return new Promise(resolve => {
-    const socket = udx.createSocket()
+    const socket = dgram.createSocket('udp4')
 
     socket.bind(0)
     socket.on('listening', function () {

@@ -43,7 +43,7 @@ class DHT extends EventEmitter {
     this.destroyed = false
 
     this._nat = new NatSampler()
-    this._bind = opts.bind || 0
+    this._port = opts.port || 0
     this._quickFirewall = opts.quickFirewall !== false
     this._forcePersistent = opts.ephemeral === false
     this._repinging = 0
@@ -65,8 +65,8 @@ class DHT extends EventEmitter {
     }
   }
 
-  static bootstrapper (bind, opts) {
-    return new this({ bind, firewalled: false, bootstrap: [], ...opts })
+  static bootstrapper (port, opts) {
+    return new this({ port, firewalled: false, bootstrap: [], ...opts })
   }
 
   get id () {

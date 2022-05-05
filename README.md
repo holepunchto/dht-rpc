@@ -116,12 +116,12 @@ Options include:
 {
   // A list of bootstrap nodes
   bootstrap: [ 'bootstrap-node.com:24242', ... ],
-  // Optionally pass in your own UDP socket to use.
-  socket: udpSocket,
   // Optionally pass in array of { host, port } to add to the routing table if you know any peers
   nodes: [{ host, port }, ...],
   // Optionally pass a port you prefer to bind to instead of a random one
-  bind: 0,
+  port: 0,
+  // Optionally pass a UDX instance on which sockets will be created.
+  udx,
   // dht-rpc will automatically detect if you are firewalled. If you know that you are not set this to false
   firewalled: true
 }
@@ -133,7 +133,7 @@ For the vast majority of use-cases you should always use adaptive mode to ensure
 
 Your DHT routing id is `hash(publicIp + publicPort)` and will be autoconfigured internally.
 
-#### `const node = DHT.boostrapper(bind, [options])`
+#### `const node = DHT.boostrapper(port, [options])`
 
 Sugar for the options needed to run a bootstrap node, ie
 
@@ -144,7 +144,7 @@ Sugar for the options needed to run a bootstrap node, ie
 }
 ```
 
-Additionally since you'll want a known port for a bootstrap node it adds the bind option as a primary argument.
+Additionally since you'll want a known port for a bootstrap node it adds the `port` option as a primary argument.
 
 #### `await node.ready()`
 
@@ -165,7 +165,7 @@ Emitted when the routing table is fully bootstrapped. Emitted as a conveinience.
 
 #### `node.on('listening')`
 
-Emitted when the underlying UDP socket is listening. Emitted as a conveinience.
+Emitted when the underlying UDX socket is listening. Emitted as a conveinience.
 
 #### `node.on('persistent')`
 
@@ -201,12 +201,12 @@ Boolean indicated if your node is behind a firewall.
 This is auto detected by having other node's trying to do a PING to you
 without you contacting them first.
 
-#### `const udpAddr = node.address()`
+#### `const addr = node.address()`
 
-Get the local address of the UDP socket bound.
+Get the local address of the UDX socket bound.
 
 Note that if you are in ephemeral mode, this will return a different
-port than the one you provided in the constructor (under bind), as ephemeral
+port than the one you provided in the constructor (under `port`), as ephemeral
 mode always uses a random port.
 
 #### `node.on('request', req)`
@@ -242,7 +242,7 @@ Options include:
 ```js
 {
   retry: true, // whether the request should retry on timeout
-  socket: udpSocket // request on this specific socket
+  socket: udxSocket // request on this specific socket
 }
 ```
 
