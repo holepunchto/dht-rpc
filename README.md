@@ -203,7 +203,7 @@ without you contacting them first.
 
 #### `const addr = node.address()`
 
-Get the local address of the UDX socket bound.
+Get the local address of the UDP socket bound.
 
 Note that if you are in ephemeral mode, this will return a different
 port than the one you provided in the constructor (under `port`), as ephemeral
