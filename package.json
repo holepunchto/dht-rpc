@@ -14,7 +14,7 @@
     "sodium-universal": "^3.0.4",
     "streamx": "^2.10.3",
     "time-ordered-set": "^1.0.2",
-    "udx-native": "0.0.9"
+    "udx-native": "latest"
   },
   "devDependencies": {
     "brittle": "^2.3.1",
