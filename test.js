@@ -163,23 +163,6 @@ test('request with/without retries', async function (t) {
   t.is(tries, 4)
 })
 
-test('reply onflush', async function (t) {
-  const [, a, b] = await makeSwarm(3, t)
-
-  let flushed = false
-
-  b.on('request', function (req) {
-    req.reply(null, {
-      onflush () {
-        flushed = true
-      }
-    })
-  })
-
-  await a.request({ command: 42 }, { host: '127.0.0.1', port: b.address().port })
-  t.ok(flushed)
-})
-
 test('shorthand commit', async function (t) {
   const swarm = await makeSwarm(40, t)
 

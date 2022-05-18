@@ -619,8 +619,8 @@ class DHT extends EventEmitter {
 
     return false
 
-    function onmessage (_, rinfo) {
-      hosts.push(rinfo.address)
+    function onmessage (_, { host }) {
+      hosts.push(host)
     }
   }
 
