@@ -179,6 +179,10 @@ you are on an open NAT.
 Emitted when the node has detected that the computer has gone to sleep. If this happens,
 it will switch from persistent mode to ephemeral again.
 
+#### `node.on('network-change', interfaces)`
+
+Emitted when the network interfaces of the computer change.
+
 #### `node.refresh()`
 
 Refresh the routing table by looking up a random node in the background.
