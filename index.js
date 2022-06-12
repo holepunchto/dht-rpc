@@ -2,6 +2,7 @@ const dns = require('dns')
 const { EventEmitter } = require('events')
 const Table = require('kademlia-routing-table')
 const TOS = require('time-ordered-set')
+const UDX = require('udx-native')
 const sodium = require('sodium-universal')
 const c = require('compact-encoding')
 const NatSampler = require('nat-sampler')
@@ -28,7 +29,8 @@ class DHT extends EventEmitter {
     this.bootstrapNodes = opts.bootstrap === false ? [] : (opts.bootstrap || []).map(parseNode)
     this.table = new Table(opts.id || randomBytes(32))
     this.nodes = new TOS()
-    this.io = new IO(this.table, {
+    this.udx = opts.udx || new UDX()
+    this.io = new IO(this.table, this.udx, {
       ...opts,
       onrequest: this._onrequest.bind(this),
       onresponse: this._onresponse.bind(this),
@@ -43,7 +45,7 @@ class DHT extends EventEmitter {
     this.destroyed = false
 
     this._nat = new NatSampler()
-    this._bind = opts.bind || 0
+    this._port = opts.port || 0
     this._quickFirewall = opts.quickFirewall !== false
     this._forcePersistent = opts.ephemeral === false
     this._repinging = 0
@@ -60,13 +62,15 @@ class DHT extends EventEmitter {
 
     this.table.on('row', this._onrow)
 
+    this.io.networkInterfaces.on('change', (interfaces) => this._onnetworkchange(interfaces))
+
     if (opts.nodes) {
       for (const node of opts.nodes) this.addNode(node)
     }
   }
 
-  static bootstrapper (bind, opts) {
-    return new this({ bind, firewalled: false, bootstrap: [], ...opts })
+  static bootstrapper (port, opts) {
+    return new this({ port, firewalled: false, bootstrap: [], ...opts })
   }
 
   get id () {
@@ -327,6 +331,10 @@ class DHT extends EventEmitter {
     if ((this._tick - oldest.pinged) < RECENT_NODE && (this._tick - oldest.added) > OLD_NODE) return
 
     this._repingAndSwap(newNode, oldest)
+  }
+
+  _onnetworkchange (interfaces) {
+    this.emit('network-change', interfaces)
   }
 
   _repingAndSwap (newNode, oldNode) {
@@ -619,8 +627,8 @@ class DHT extends EventEmitter {
 
     return false
 
-    function onmessage (_, rinfo) {
-      hosts.push(rinfo.address)
+    function onmessage (_, { host }) {
+      hosts.push(host)
     }
   }
 

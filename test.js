@@ -2,14 +2,12 @@ const test = require('brittle')
 const dgram = require('dgram')
 const DHT = require('./')
 
-test.configure({ serial: true })
-
 test('make tiny swarm', async function (t) {
   await makeSwarm(2, t)
   t.pass('could make swarm')
 })
 
-test('make bigger swarm', async function (t) {
+test('make bigger swarm', { timeout: 60000 }, async function (t) {
   const swarm = await makeSwarm(500, t)
 
   const targetNode = swarm[25]
@@ -165,23 +163,6 @@ test('request with/without retries', async function (t) {
   t.is(tries, 4)
 })
 
-test('reply onflush', async function (t) {
-  const [, a, b] = await makeSwarm(3, t)
-
-  let flushed = false
-
-  b.on('request', function (req) {
-    req.reply(null, {
-      onflush () {
-        flushed = true
-      }
-    })
-  })
-
-  await a.request({ command: 42 }, { host: '127.0.0.1', port: b.address().port })
-  t.ok(flushed)
-})
-
 test('shorthand commit', async function (t) {
   const swarm = await makeSwarm(40, t)
 
@@ -290,12 +271,12 @@ test('addNode / nodes option', async function (t) {
 test('set bind', async function (t) {
   const port = await freePort()
 
-  const a = new DHT({ bind: port, firewalled: false })
+  const a = new DHT({ port, firewalled: false })
   await a.ready()
 
   t.alike(a.address().port, port, 'bound to explicit port')
 
-  const b = new DHT({ bind: port })
+  const b = new DHT({ port })
   await b.ready()
 
   t.not(b.address().port, port, 'bound to different port as explicit one is taken')
