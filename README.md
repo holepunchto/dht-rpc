@@ -6,10 +6,6 @@ Make RPC calls over a [Kademlia](https://pdos.csail.mit.edu/~petar/papers/maymou
 npm install dht-rpc
 ```
 
-## NOTE: v5
-
-Note that the latest release is v5. To see the v4 documentation/code go to https://github.com/mafintosh/dht-rpc/tree/v4
-
 ## Key Features
 
 * Remote IP / firewall detection
