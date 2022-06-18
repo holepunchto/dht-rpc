@@ -39,7 +39,7 @@ class DHT extends EventEmitter {
 
     this.concurrency = opts.concurrency || 10
     this.bootstrapped = false
-    this.ephemeral = true
+    this.ephemeral = opts.id ? !!opts.ephemeral : true
     this.firewalled = this.io.firewalled
     this.adaptive = typeof opts.ephemeral !== 'boolean' && opts.adaptive !== false
     this.destroyed = false
@@ -58,7 +58,8 @@ class DHT extends EventEmitter {
     this._lastHost = null
     this._onrow = (row) => row.on('full', (node) => this._onfullrow(node, row))
     this._nonePersistentSamples = []
-    this._bootstrapping = this._bootstrap().catch(noop)
+    this._bootstrapping = this._bootstrap()
+    this._bootstrapping.catch(noop)
 
     this.table.on('row', this._onrow)
 
