@@ -63,6 +63,7 @@ class DHT extends EventEmitter {
 
     this.table.on('row', this._onrow)
 
+    if (this.ephemeral === false) this.io.ephemeral = false
     this.io.networkInterfaces.on('change', (interfaces) => this._onnetworkchange(interfaces))
 
     if (opts.nodes) {
