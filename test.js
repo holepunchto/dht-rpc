@@ -324,7 +324,7 @@ function freePort () {
 }
 
 async function makeSwarm (n, t) {
-  const node = DHT.bootstrapper()
+  const node = new DHT({ ephemeral: false, firewalled: false })
   await node.ready()
   const all = [node]
   const bootstrap = ['localhost:' + node.address().port]

@@ -69,8 +69,9 @@ class DHT extends EventEmitter {
     }
   }
 
-  static bootstrapper (port, opts) {
-    return new this({ port, firewalled: false, bootstrap: [], ...opts })
+  static bootstrapper (port, host, opts) {
+    const id = peer.id(host, port)
+    return new this({ port, id, ephemeral: false, firewalled: false, anyPort: false, bootstrap: [], ...opts })
   }
 
   get id () {

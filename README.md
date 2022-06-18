@@ -20,13 +20,13 @@ of improvements to NAT detection, secure routing IDs and more.
 Here is an example implementing a simple key value store
 
 First spin up a bootstrap node. You can make multiple if you want for redundancy.
+There is nothing special about a bootstrap node, except it needs to know it's own host and port,
+since it knows no other nodes to infer it from.
 
 ``` js
 import DHT from 'dht-rpc'
 
-// If the bootstrap node doesn't implement the same commands as your other nodes
-// remember to set ephemeral: true so it isn't added to the routing table.
-const bootstrap = DHT.bootstrapper(10001, { ephemeral: true })
+const bootstrap = DHT.bootstrapper(10001, '127.0.0.1')
 ```
 
 Now lets make some dht nodes that can store values in our key value store.
@@ -129,18 +129,10 @@ For the vast majority of use-cases you should always use adaptive mode to ensure
 
 Your DHT routing id is `hash(publicIp + publicPort)` and will be autoconfigured internally.
 
-#### `const node = DHT.bootrapper(port, [options])`
+#### `const node = DHT.bootrapper(port, host, [options])`
 
-Sugar for the options needed to run a bootstrap node, ie
-
-```js
-{
-  firewalled: false, // a bootstrapper can never be firewalled
-  bootstrap: [] // force set no other bootstrappers.
-}
-```
-
-Additionally since you'll want a known port for a bootstrap node it adds the `port` option as a primary argument.
+Make a bootstrap node for your DHT. The port and host needs to be it's globally accessable port and host.
+DHT nodes can use any other DHT node to bootstrap, but a bootstrap node can bootstrap itself, by itself.
 
 #### `await node.ready()`
 
