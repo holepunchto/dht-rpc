@@ -503,9 +503,11 @@ class DHT extends EventEmitter {
 
     const { host, port } = this._nat
 
-    // remember what host we checked and reset the counter
-    this._stableTicks = MORE_STABLE_TICKS
-    this._lastHost = host
+    if (!onlyFirewall) {
+      // remember what host we checked and reset the counter
+      this._stableTicks = MORE_STABLE_TICKS
+      this._lastHost = host
+    }
 
     // check if we have a consistent host and port
     if (host === null || port === 0) {
