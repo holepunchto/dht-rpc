@@ -315,16 +315,12 @@ test('isolated networks', async function (t) {
   const a = await swarm(t, 3, [], { name: 'network-a' })
   const b = await swarm(t, 3, [], { name: 'network-b' })
 
-  let r
+  const q = a.nodes[1].findNode(a.nodes[2].id, { nodes: b.nodes })
+  await q.finished()
 
-  r = await a.nodes[0].ping(a.nodes[1].address())
-  t.ok(r.from.id, 'valid peer id')
-
-  r = await b.nodes[0].ping(b.nodes[1].address())
-  t.ok(r.from.id, 'valid peer id')
-
-  r = await a.nodes[0].ping(b.nodes[1].address())
-  t.absent(r.from.id, 'invalid peer id')
+  for (const node of q.closestNodes) {
+    t.ok(a.nodes.find(n => n.id && n.id.equals(node.id)), 'reply from same network')
+  }
 })
 
 function freePort () {
