@@ -26,11 +26,13 @@ class DHT extends EventEmitter {
   constructor (opts = {}) {
     super()
 
+    this.name = opts.name || null
+    this.network = opts.name ? hashString(opts.name) : null
     this.bootstrapNodes = opts.bootstrap === false ? [] : (opts.bootstrap || []).map(parseNode)
     this.table = new Table(opts.id || randomBytes(32))
     this.nodes = new TOS()
     this.udx = opts.udx || new UDX()
-    this.io = new IO(this.table, this.udx, {
+    this.io = new IO(this.network, this.table, this.udx, {
       ...opts,
       onrequest: this._onrequest.bind(this),
       onresponse: this._onresponse.bind(this),
@@ -72,7 +74,9 @@ class DHT extends EventEmitter {
   }
 
   static bootstrapper (port, host, opts) {
-    const id = peer.id(host, port)
+    const network = opts.name ? hashString(opts.name) : null
+    const id = peer.id(host, port, network)
+
     return new this({ port, id, ephemeral: false, firewalled: false, anyPort: false, bootstrap: [], ...opts })
   }
 
@@ -107,7 +111,7 @@ class DHT extends EventEmitter {
 
   addNode ({ host, port }) {
     this._addNode({
-      id: peer.id(host, port),
+      id: peer.id(host, port, this.network),
       port,
       host,
       token: null,
@@ -527,7 +531,7 @@ class DHT extends EventEmitter {
     // if the firewall probe returned a different host / non consistent port, bail as well
     if (natSampler.host !== host || natSampler.port === 0) return false
 
-    const id = peer.id(natSampler.host, natSampler.port)
+    const id = peer.id(natSampler.host, natSampler.port, this.network)
 
     if (!onlyFirewall) {
       this.ephemeral = this.io.ephemeral = false
@@ -574,7 +578,7 @@ class DHT extends EventEmitter {
 
     for (const node of this.bootstrapNodes) {
       dns.lookup(node.host, { family: 4 }, (_, host) => {
-        if (host) nodes.push({ id: peer.id(host, node.port), host, port: node.port })
+        if (host) nodes.push({ id: peer.id(host, node.port, this.network), host, port: node.port })
         if (--missing === 0) done(nodes)
       })
     }
@@ -676,6 +680,11 @@ function randomBytes (n) {
   const b = b4a.alloc(n)
   sodium.randombytes_buf(b)
   return b
+}
+
+function hashString (s, out = b4a.allocUnsafe(32)) {
+  sodium.crypto_generichash(out, c.encode(c.string, s))
+  return out
 }
 
 function randomOffset (n) {
