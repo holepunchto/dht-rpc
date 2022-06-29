@@ -311,6 +311,25 @@ test('relay', async function (t) {
   t.is(res.to.port, a.address().port)
 })
 
+test('filter nodes from routing table', async function (t) {
+  const [a, b, c] = await makeSwarm(3, t)
+
+  const node = new DHT({
+    ephemeral: false,
+    bootstrap: [a],
+    addNode (from) {
+      return from.port !== b.port
+    }
+  })
+
+  t.teardown(() => node.destroy())
+
+  const q = node.findNode(c.id)
+  await q.finished()
+
+  t.absent(node.table.has(b.id), 'should not have b')
+})
+
 function freePort () {
   return new Promise(resolve => {
     const socket = dgram.createSocket('udp4')
