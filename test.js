@@ -311,6 +311,21 @@ test('relay', async function (t) {
   t.is(res.to.port, a.address().port)
 })
 
+test('filter nodes from routing table', async function (t) {
+  const { bootstrap, nodes: [, b, c] } = await swarm(t, 3)
+
+  const [d] = await swarm(t, 1, bootstrap, {
+    addNode (from) {
+      return from.port !== b.port
+    }
+  })
+
+  const q = d.findNode(c.id)
+  await q.finished()
+
+  t.absent(d.table.has(b.id), 'should not have b')
+})
+
 test('isolated networks', async function (t) {
   const a = await swarm(t, 3, [], { name: 'network-a' })
   const b = await swarm(t, 3, [], { name: 'network-b' })
