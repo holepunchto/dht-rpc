@@ -1,5 +1,7 @@
-const DHT = require('../')
-const crypto = require('crypto')
+import DHT from '../index.js'
+import crypto from 'crypto'
+
+const INSERT = 0
 
 // Let's create 100 dht nodes for our example.
 const swarm = []
@@ -16,17 +18,16 @@ function createNode () {
   const values = new Map()
 
   node.on('request', function (req) {
-    if (req.command === 'values') {
+    if (req.command === INSERT) {
       if (req.token) {
         const key = sha256(req.value).toString('hex')
         values.set(key, req.value)
         console.log('Storing', key, '-->', req.value.toString())
         return req.reply(null)
       }
-
-      const value = values.get(req.target.toString('hex'))
-      req.reply(value)
     }
+    const value = values.get(req.target.toString('hex'))
+    req.reply(value)
   })
 
   return node
