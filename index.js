@@ -1,4 +1,3 @@
-const dns = require('dns')
 const { EventEmitter } = require('events')
 const Table = require('kademlia-routing-table')
 const TOS = require('time-ordered-set')
@@ -571,27 +570,27 @@ class DHT extends EventEmitter {
     return true
   }
 
-  _resolveBootstrapNodes (done) {
-    if (!this.bootstrapNodes.length) return done([])
-
-    let missing = this.bootstrapNodes.length
-    const nodes = []
-
+  async * _resolveBootstrapNodes () {
     for (const node of this.bootstrapNodes) {
-      dns.lookup(node.host, { family: 4 }, (_, host) => {
-        if (host) nodes.push({ id: peer.id(host, node.port), host, port: node.port })
-        if (--missing === 0) done(nodes)
-      })
+      let address
+      try {
+        address = await this.udx.lookup(node.host, { family: 4 })
+      } catch {
+        continue
+      }
+
+      yield {
+        id: peer.id(address.host, node.port),
+        host: address.host,
+        port: node.port
+      }
     }
   }
 
   async _addBootstrapNodes (nodes) {
-    return new Promise((resolve) => {
-      this._resolveBootstrapNodes(function (bootstrappers) {
-        nodes.push(...bootstrappers)
-        resolve()
-      })
-    })
+    for await (const node of this._resolveBootstrapNodes()) {
+      nodes.push(node)
+    }
   }
 
   async _checkIfFirewalled (natSampler = new NatSampler()) {
