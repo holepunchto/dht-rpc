@@ -144,7 +144,11 @@ class DHT extends EventEmitter {
   }
 
   ping ({ host, port }, opts) {
-    const req = this.io.createRequest({ id: null, host, port }, null, true, PING, null, null)
+    let value = null
+
+    if (opts && opts.size && opts.size > 0) value = b4a.alloc(opts.size)
+
+    const req = this.io.createRequest({ id: null, host, port }, null, true, PING, null, value)
     return this._requestToPromise(req, opts)
   }
 

@@ -240,9 +240,17 @@ Options include:
 
 Normally you'd set the token when commiting to the dht in the query's commit hook.
 
-#### `reply = await node.ping(to)`
+#### `reply = await node.ping(to, [options])`
 
-Sugar for `dht.request({ command: 'ping' }, to)`
+Sugar for `dht.request({ command: 'ping' }, to, options)`
+
+Additional options include:
+
+```js
+{
+  size: 0, // size of the value buffer, filled with zeroes
+}
+```
 
 #### `stream = node.query({ target, command, value }, [options])`
 
