@@ -2,6 +2,17 @@ const test = require('brittle')
 const dgram = require('dgram')
 const DHT = require('./')
 
+test('bootstrapper', async function (t) {
+  const node = DHT.bootstrapper(49737)
+
+  await node.ready()
+  t.is(typeof node.address().host, 'string')
+  t.is(typeof node.address().family, 'number')
+  t.is(typeof node.address().port, 'number')
+
+  await node.destroy()
+})
+
 test('make tiny swarm', async function (t) {
   await makeSwarm(2, t)
   t.pass('could make swarm')
