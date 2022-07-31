@@ -2,13 +2,46 @@ const test = require('brittle')
 const dgram = require('dgram')
 const DHT = require('./')
 
-test('bootstrapper', async function (t) {
+test('bootstrapper - default host', async function (t) {
   const node = DHT.bootstrapper(49737)
 
   await node.ready()
-  t.is(typeof node.address().host, 'string')
-  t.is(typeof node.address().family, 'number')
-  t.is(typeof node.address().port, 'number')
+  t.is(node.address().host, '0.0.0.0')
+  t.is(node.address().family, 4)
+  t.is(node.address().port, 49737)
+
+  await node.destroy()
+})
+
+test('bootstrapper - custom host', async function (t) {
+  const node = DHT.bootstrapper(49737, '127.0.0.1')
+
+  await node.ready()
+  t.is(node.address().host, '127.0.0.1')
+  t.is(node.address().family, 4)
+  t.is(node.address().port, 49737)
+
+  await node.destroy()
+})
+
+test('bootstrapper - opts', async function (t) {
+  const node = DHT.bootstrapper(49737, { port: 49738 })
+
+  await node.ready()
+  t.is(node.address().host, '0.0.0.0')
+  t.is(node.address().family, 4)
+  t.is(node.address().port, 49738)
+
+  await node.destroy()
+})
+
+test('bootstrapper - host + opts', async function (t) {
+  const node = DHT.bootstrapper(49737, '127.0.0.1', { port: 49738 })
+
+  await node.ready()
+  t.is(node.address().host, '127.0.0.1')
+  t.is(node.address().family, 4)
+  t.is(node.address().port, 49738)
 
   await node.destroy()
 })
