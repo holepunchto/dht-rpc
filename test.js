@@ -13,6 +13,17 @@ test('bootstrapper', async function (t) {
   await node.destroy()
 })
 
+test('bootstrapper - bind host', async function (t) {
+  const node = DHT.bootstrapper(49737, '127.0.0.1', { host: '127.0.0.1' })
+
+  await node.ready()
+  t.is(node.address().host, '127.0.0.1')
+  t.is(node.address().family, 4)
+  t.is(node.address().port, 49737)
+
+  await node.destroy()
+})
+
 test('bootstrapper - opts', async function (t) {
   const node = DHT.bootstrapper(49737, '127.0.0.1', { port: 49738 })
 
