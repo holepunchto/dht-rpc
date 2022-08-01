@@ -72,9 +72,8 @@ class DHT extends EventEmitter {
   }
 
   static bootstrapper (port, host, opts) {
-    if (typeof host === 'object') [opts, host] = [host, undefined]
-    if (!host) host = '0.0.0.0'
-
+    if (!port) throw new Error('Port is required')
+    if (!host) throw new Error('Host is required')
     const id = peer.id(host, port)
     return new this({ port, id, ephemeral: false, firewalled: false, anyPort: false, bootstrap: [], ...opts })
   }

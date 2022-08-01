@@ -2,22 +2,11 @@ const test = require('brittle')
 const dgram = require('dgram')
 const DHT = require('./')
 
-test('bootstrapper - default host', async function (t) {
-  const node = DHT.bootstrapper(49737)
-
-  await node.ready()
-  t.is(node.address().host, '0.0.0.0')
-  t.is(node.address().family, 4)
-  t.is(node.address().port, 49737)
-
-  await node.destroy()
-})
-
-test('bootstrapper - custom host', async function (t) {
+test('bootstrapper', async function (t) {
   const node = DHT.bootstrapper(49737, '127.0.0.1')
 
   await node.ready()
-  t.is(node.address().host, '127.0.0.1')
+  t.is(node.address().host, '0.0.0.0')
   t.is(node.address().family, 4)
   t.is(node.address().port, 49737)
 
@@ -25,7 +14,7 @@ test('bootstrapper - custom host', async function (t) {
 })
 
 test('bootstrapper - opts', async function (t) {
-  const node = DHT.bootstrapper(49737, { port: 49738 })
+  const node = DHT.bootstrapper(49737, '127.0.0.1', { port: 49738 })
 
   await node.ready()
   t.is(node.address().host, '0.0.0.0')
@@ -35,15 +24,26 @@ test('bootstrapper - opts', async function (t) {
   await node.destroy()
 })
 
-test('bootstrapper - host + opts', async function (t) {
-  const node = DHT.bootstrapper(49737, '127.0.0.1', { port: 49738 })
+test('bootstrapper - port and host are required', function (t) {
+  t.plan(3)
 
-  await node.ready()
-  t.is(node.address().host, '127.0.0.1')
-  t.is(node.address().family, 4)
-  t.is(node.address().port, 49738)
+  try {
+    DHT.bootstrapper()
+  } catch (error) {
+    t.is(error.message, 'Port is required')
+  }
 
-  await node.destroy()
+  try {
+    DHT.bootstrapper(0)
+  } catch (error) {
+    t.is(error.message, 'Port is required')
+  }
+
+  try {
+    DHT.bootstrapper(49737)
+  } catch (error) {
+    t.is(error.message, 'Host is required')
+  }
 })
 
 test('make tiny swarm', async function (t) {
