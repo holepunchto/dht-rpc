@@ -45,6 +45,7 @@ class DHT extends EventEmitter {
 
     this._nat = new NatSampler()
     this._port = opts.port || 0
+    this._host = opts.host || '0.0.0.0'
     this._quickFirewall = opts.quickFirewall !== false
     this._forcePersistent = opts.ephemeral === false
     this._repinging = 0
@@ -72,6 +73,8 @@ class DHT extends EventEmitter {
   }
 
   static bootstrapper (port, host, opts) {
+    if (!port) throw new Error('Port is required')
+    if (!host) throw new Error('Host is required')
     const id = peer.id(host, port)
     return new this({ port, id, ephemeral: false, firewalled: false, anyPort: false, bootstrap: [], ...opts })
   }
