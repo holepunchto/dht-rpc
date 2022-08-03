@@ -35,6 +35,21 @@ test('bootstrapper - opts', async function (t) {
   await node.destroy()
 })
 
+test('bootstrapper - opts.bootstrap', async function (t) {
+  const node1 = DHT.bootstrapper(49737, '127.0.0.1')
+  await node1.ready()
+
+  const bootstrap = [{ host: '127.0.0.1', port: node1.address().port }]
+  const node2 = DHT.bootstrapper(49738, '127.0.0.1', { bootstrap })
+  await node2.ready()
+
+  t.is(node1.bootstrapNodes.length, 0)
+  t.alike(node2.bootstrapNodes, bootstrap)
+
+  await node1.destroy()
+  await node2.destroy()
+})
+
 test('bootstrapper - port and host are required', function (t) {
   t.plan(3)
 
