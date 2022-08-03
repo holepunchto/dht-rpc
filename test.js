@@ -1,38 +1,49 @@
 const test = require('brittle')
-const dgram = require('dgram')
+const UDX = require('udx-native')
 const DHT = require('./')
 
 test('bootstrapper', async function (t) {
-  const node = DHT.bootstrapper(49737, '127.0.0.1')
+  const port = await freePort()
+
+  const node = DHT.bootstrapper(port, '127.0.0.1')
 
   await node.ready()
   t.is(node.address().host, '0.0.0.0')
   t.is(node.address().family, 4)
-  t.is(node.address().port, 49737)
+  t.is(node.address().port, port)
 
   await node.destroy()
 })
 
 test('bootstrapper - bind host', async function (t) {
-  const node = DHT.bootstrapper(49737, '127.0.0.1', { host: '127.0.0.1' })
+  const port = await freePort()
+
+  const node = DHT.bootstrapper(port, '127.0.0.1', { host: '127.0.0.1' })
 
   await node.ready()
   t.is(node.address().host, '127.0.0.1')
   t.is(node.address().family, 4)
-  t.is(node.address().port, 49737)
+  t.is(node.address().port, port)
 
   await node.destroy()
 })
 
-test('bootstrapper - opts', async function (t) {
-  const node = DHT.bootstrapper(49737, '127.0.0.1', { port: 49738 })
+test('bootstrapper - opts.bootstrap', async function (t) {
+  const port1 = await freePort()
+  const port2 = await freePort()
 
-  await node.ready()
-  t.is(node.address().host, '0.0.0.0')
-  t.is(node.address().family, 4)
-  t.is(node.address().port, 49738)
+  const node1 = DHT.bootstrapper(port1, '127.0.0.1')
+  await node1.ready()
 
-  await node.destroy()
+  const bootstrap = [{ host: '127.0.0.1', port: node1.address().port }]
+  const node2 = DHT.bootstrapper(port2, '127.0.0.1', { bootstrap })
+  await node2.ready()
+
+  t.is(node1.bootstrapNodes.length, 0)
+  t.alike(node2.bootstrapNodes, bootstrap)
+
+  await node1.destroy()
+  await node2.destroy()
 })
 
 test('bootstrapper - port and host are required', function (t) {
@@ -385,16 +396,13 @@ test('filter nodes from routing table', async function (t) {
   t.absent(node.table.has(b.id), 'should not have b')
 })
 
-function freePort () {
-  return new Promise(resolve => {
-    const socket = dgram.createSocket('udp4')
-
-    socket.bind(0)
-    socket.on('listening', function () {
-      const { port } = socket.address()
-      socket.close(() => resolve(port))
-    })
-  })
+async function freePort () {
+  const udx = new UDX()
+  const sock = udx.createSocket()
+  sock.bind(0)
+  const port = sock.address().port
+  await sock.close()
+  return port
 }
 
 async function makeSwarm (n, t) {
