@@ -1,5 +1,5 @@
 const test = require('brittle')
-const dgram = require('dgram')
+const UDX = require('udx-native')
 const DHT = require('./')
 
 test('bootstrapper', async function (t) {
@@ -400,16 +400,13 @@ test('filter nodes from routing table', async function (t) {
   t.absent(node.table.has(b.id), 'should not have b')
 })
 
-function freePort () {
-  return new Promise(resolve => {
-    const socket = dgram.createSocket('udp4')
-
-    socket.bind(0)
-    socket.on('listening', function () {
-      const { port } = socket.address()
-      socket.close(() => resolve(port))
-    })
-  })
+async function freePort () {
+  const udx = new UDX()
+  const sock = udx.createSocket()
+  sock.bind(0)
+  const port = sock.address().port
+  await sock.close()
+  return port
 }
 
 async function makeSwarm (n, t) {
