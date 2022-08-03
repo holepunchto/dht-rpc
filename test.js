@@ -28,19 +28,6 @@ test('bootstrapper - bind host', async function (t) {
   await node.destroy()
 })
 
-test('bootstrapper - opts', async function (t) {
-  const port = await freePort()
-
-  const node = DHT.bootstrapper(49737, '127.0.0.1', { port })
-
-  await node.ready()
-  t.is(node.address().host, '0.0.0.0')
-  t.is(node.address().family, 4)
-  t.is(node.address().port, port)
-
-  await node.destroy()
-})
-
 test('bootstrapper - opts.bootstrap', async function (t) {
   const port1 = await freePort()
   const port2 = await freePort()
