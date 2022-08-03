@@ -3,44 +3,53 @@ const UDX = require('udx-native')
 const DHT = require('./')
 
 test('bootstrapper', async function (t) {
-  const node = DHT.bootstrapper(49737, '127.0.0.1')
+  const port = await freePort()
+
+  const node = DHT.bootstrapper(port, '127.0.0.1')
 
   await node.ready()
   t.is(node.address().host, '0.0.0.0')
   t.is(node.address().family, 4)
-  t.is(node.address().port, 49737)
+  t.is(node.address().port, port)
 
   await node.destroy()
 })
 
 test('bootstrapper - bind host', async function (t) {
-  const node = DHT.bootstrapper(49737, '127.0.0.1', { host: '127.0.0.1' })
+  const port = await freePort()
+
+  const node = DHT.bootstrapper(port, '127.0.0.1', { host: '127.0.0.1' })
 
   await node.ready()
   t.is(node.address().host, '127.0.0.1')
   t.is(node.address().family, 4)
-  t.is(node.address().port, 49737)
+  t.is(node.address().port, port)
 
   await node.destroy()
 })
 
 test('bootstrapper - opts', async function (t) {
-  const node = DHT.bootstrapper(49737, '127.0.0.1', { port: 49738 })
+  const port = await freePort()
+
+  const node = DHT.bootstrapper(49737, '127.0.0.1', { port })
 
   await node.ready()
   t.is(node.address().host, '0.0.0.0')
   t.is(node.address().family, 4)
-  t.is(node.address().port, 49738)
+  t.is(node.address().port, port)
 
   await node.destroy()
 })
 
 test('bootstrapper - opts.bootstrap', async function (t) {
-  const node1 = DHT.bootstrapper(49737, '127.0.0.1')
+  const port1 = await freePort()
+  const port2 = await freePort()
+
+  const node1 = DHT.bootstrapper(port1, '127.0.0.1')
   await node1.ready()
 
   const bootstrap = [{ host: '127.0.0.1', port: node1.address().port }]
-  const node2 = DHT.bootstrapper(49738, '127.0.0.1', { bootstrap })
+  const node2 = DHT.bootstrapper(port2, '127.0.0.1', { bootstrap })
   await node2.ready()
 
   t.is(node1.bootstrapNodes.length, 0)
