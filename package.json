@@ -17,7 +17,7 @@
     "udx-native": "^1.2.0"
   },
   "devDependencies": {
-    "brittle": "^2.3.1",
+    "brittle": "^3.0.0",
     "standard": "^17.0.0"
   },
   "scripts": {
