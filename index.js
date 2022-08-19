@@ -74,7 +74,7 @@ class DHT extends EventEmitter {
     }
   }
 
-  static bootstrapper (port, host, opts) {
+  static bootstrapper (port, host, opts = {}) {
     if (!port) throw new Error('Port is required')
     if (!host) throw new Error('Host is required')
     const network = opts.name ? hashString(opts.name) : null
