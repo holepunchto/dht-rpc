@@ -1,6 +1,72 @@
 const test = require('brittle')
-const dgram = require('dgram')
+const UDX = require('udx-native')
 const DHT = require('./')
+
+test('bootstrapper', async function (t) {
+  const port = await freePort()
+
+  const node = DHT.bootstrapper(port, '127.0.0.1')
+
+  await node.ready()
+  t.is(node.address().host, '0.0.0.0')
+  t.is(node.address().family, 4)
+  t.is(node.address().port, port)
+
+  await node.destroy()
+})
+
+test('bootstrapper - bind host', async function (t) {
+  const port = await freePort()
+
+  const node = DHT.bootstrapper(port, '127.0.0.1', { host: '127.0.0.1' })
+
+  await node.ready()
+  t.is(node.address().host, '127.0.0.1')
+  t.is(node.address().family, 4)
+  t.is(node.address().port, port)
+
+  await node.destroy()
+})
+
+test('bootstrapper - opts.bootstrap', async function (t) {
+  const port1 = await freePort()
+  const port2 = await freePort()
+
+  const node1 = DHT.bootstrapper(port1, '127.0.0.1')
+  await node1.ready()
+
+  const bootstrap = [{ host: '127.0.0.1', port: node1.address().port }]
+  const node2 = DHT.bootstrapper(port2, '127.0.0.1', { bootstrap })
+  await node2.ready()
+
+  t.is(node1.bootstrapNodes.length, 0)
+  t.alike(node2.bootstrapNodes, bootstrap)
+
+  await node1.destroy()
+  await node2.destroy()
+})
+
+test('bootstrapper - port and host are required', function (t) {
+  t.plan(3)
+
+  try {
+    DHT.bootstrapper()
+  } catch (error) {
+    t.is(error.message, 'Port is required')
+  }
+
+  try {
+    DHT.bootstrapper(0)
+  } catch (error) {
+    t.is(error.message, 'Port is required')
+  }
+
+  try {
+    DHT.bootstrapper(49737)
+  } catch (error) {
+    t.is(error.message, 'Host is required')
+  }
+})
 
 test('make tiny swarm', async function (t) {
   await swarm(t, 2)
@@ -338,16 +404,13 @@ test('isolated networks', async function (t) {
   }
 })
 
-function freePort () {
-  return new Promise(resolve => {
-    const socket = dgram.createSocket('udp4')
-
-    socket.bind(0)
-    socket.on('listening', function () {
-      const { port } = socket.address()
-      socket.close(() => resolve(port))
-    })
-  })
+async function freePort () {
+  const udx = new UDX()
+  const sock = udx.createSocket()
+  sock.bind(0)
+  const port = sock.address().port
+  await sock.close()
+  return port
 }
 
 async function destroy (...nodes) {

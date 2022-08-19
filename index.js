@@ -1,4 +1,3 @@
-const dns = require('dns')
 const { EventEmitter } = require('events')
 const Table = require('kademlia-routing-table')
 const TOS = require('time-ordered-set')
@@ -48,6 +47,7 @@ class DHT extends EventEmitter {
 
     this._nat = new NatSampler()
     this._port = opts.port || 0
+    this._host = opts.host || '0.0.0.0'
     this._quickFirewall = opts.quickFirewall !== false
     this._forcePersistent = opts.ephemeral === false
     this._repinging = 0
@@ -75,9 +75,10 @@ class DHT extends EventEmitter {
   }
 
   static bootstrapper (port, host, opts) {
+    if (!port) throw new Error('Port is required')
+    if (!host) throw new Error('Host is required')
     const network = opts.name ? hashString(opts.name) : null
     const id = peer.id(host, port, network)
-
     return new this({ port, id, ephemeral: false, firewalled: false, anyPort: false, bootstrap: [], ...opts })
   }
 
@@ -148,7 +149,11 @@ class DHT extends EventEmitter {
   }
 
   ping ({ host, port }, opts) {
-    const req = this.io.createRequest({ id: null, host, port }, null, true, PING, null, null)
+    let value = null
+
+    if (opts && opts.size && opts.size > 0) value = b4a.alloc(opts.size)
+
+    const req = this.io.createRequest({ id: null, host, port }, null, true, PING, null, value)
     return this._requestToPromise(req, opts)
   }
 
@@ -575,27 +580,27 @@ class DHT extends EventEmitter {
     return true
   }
 
-  _resolveBootstrapNodes (done) {
-    if (!this.bootstrapNodes.length) return done([])
-
-    let missing = this.bootstrapNodes.length
-    const nodes = []
-
+  async * _resolveBootstrapNodes () {
     for (const node of this.bootstrapNodes) {
-      dns.lookup(node.host, { family: 4 }, (_, host) => {
-        if (host) nodes.push({ id: peer.id(host, node.port, this.network), host, port: node.port })
-        if (--missing === 0) done(nodes)
-      })
+      let address
+      try {
+        address = await this.udx.lookup(node.host, { family: 4 })
+      } catch {
+        continue
+      }
+
+      yield {
+        id: peer.id(address.host, node.port, this.network),
+        host: address.host,
+        port: node.port
+      }
     }
   }
 
   async _addBootstrapNodes (nodes) {
-    return new Promise((resolve) => {
-      this._resolveBootstrapNodes(function (bootstrappers) {
-        nodes.push(...bootstrappers)
-        resolve()
-      })
-    })
+    for await (const node of this._resolveBootstrapNodes()) {
+      nodes.push(node)
+    }
   }
 
   async _checkIfFirewalled (natSampler = new NatSampler()) {

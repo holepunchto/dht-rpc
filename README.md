@@ -118,6 +118,8 @@ Options include:
   nodes: [{ host, port }, ...],
   // Optionally pass a port you prefer to bind to instead of a random one
   port: 0,
+  // Optionally pass a host you prefer to bind to instead of all networks
+  host: '0.0.0.0',
   // Optionally pass a UDX instance on which sockets will be created.
   udx,
   // dht-rpc will automatically detect if you are firewalled. If you know that you are not set this to false
@@ -134,6 +136,7 @@ Your DHT routing id is `hash(publicIp + publicPort)` and will be autoconfigured 
 #### `const node = DHT.bootrapper(port, host, [options])`
 
 Make a bootstrap node for your DHT. The port and host needs to be it's globally accessable port and host.
+Note: `port` and `host` parameters are used to create the node id. Use `options.host` if you want to bind to i.e. 127.0.0.1.
 DHT nodes can use any other DHT node to bootstrap, but a bootstrap node can bootstrap itself, by itself.
 
 #### `await node.ready()`
@@ -242,9 +245,17 @@ Options include:
 
 Normally you'd set the token when commiting to the dht in the query's commit hook.
 
-#### `reply = await node.ping(to)`
+#### `reply = await node.ping(to, [options])`
 
-Sugar for `dht.request({ command: 'ping' }, to)`
+Sugar for `dht.request({ command: 'ping' }, to, options)`
+
+Additional options include:
+
+```js
+{
+  size: 0, // size of the value buffer, filled with zeroes
+}
+```
 
 #### `stream = node.query({ target, command, value }, [options])`
 
