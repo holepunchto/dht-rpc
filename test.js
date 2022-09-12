@@ -404,6 +404,52 @@ test('isolated networks', async function (t) {
   }
 })
 
+test('recover when nodes go offline', async function (t) {
+  const { bootstrap } = await swarm(t, 1)
+  let node, nodes
+
+  {
+    [node, ...nodes] = await swarm(t, 4, bootstrap)
+
+    const q = node.query({ command: 42, target: Buffer.alloc(32) })
+    await q.finished()
+  }
+
+  await destroy(nodes)
+
+  {
+    [...nodes] = await swarm(t, 3, bootstrap)
+
+    const q = node.query({ command: 42, target: Buffer.alloc(32) })
+    await q.finished()
+  }
+
+  t.pass('recovered')
+})
+
+test('recover when bootstrap is replaced', async function (t) {
+  let { bootstrap, nodes: [first] } = await swarm(t, 1)
+  let [node, ...nodes] = [...await swarm(t, 4, bootstrap), first]
+
+  {
+    const q = node.query({ command: 42, target: Buffer.alloc(32) })
+    await q.finished()
+  }
+
+  await destroy(nodes)
+
+  bootstrap = [{ host: '127.0.0.1', port: node.address().port }];
+
+  [node] = await swarm(t, 3, bootstrap)
+
+  {
+    const q = node.query({ command: 42, target: Buffer.alloc(32) })
+    await q.finished()
+  }
+
+  t.pass('recovered')
+})
+
 async function freePort () {
   const udx = new UDX()
   const sock = udx.createSocket()
