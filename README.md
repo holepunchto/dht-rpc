@@ -78,7 +78,7 @@ const q = node.query({
   command: VALUES,
   value
 }, {
-  // commit true will make the query re-reuqest the 20 closest
+  // commit true will make the query re-request the 20 closest
   // nodes with a valid round trip token to update the values
   commit: true
 })
