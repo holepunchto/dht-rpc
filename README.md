@@ -158,6 +158,10 @@ Emitted when the routing table is fully bootstrapped. Emitted as a conveinience.
 
 Emitted when the underlying UDX socket is listening. Emitted as a conveinience.
 
+#### `node.on('ready')`
+
+Emitted when the node is fully bootstrapped etc.
+
 #### `node.on('persistent')`
 
 Emitted when the node is no longer in ephemeral mode.
