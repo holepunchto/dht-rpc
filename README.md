@@ -178,6 +178,10 @@ it will switch from persistent mode to ephemeral again.
 
 Emitted when the network interfaces of the computer change.
 
+#### `node.on('close')`
+
+Will be emitted after `node.destroy()` is completed.
+
 #### `node.refresh()`
 
 Refresh the routing table by looking up a random node in the background.
