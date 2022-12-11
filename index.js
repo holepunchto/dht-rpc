@@ -227,6 +227,7 @@ class DHT extends EventEmitter {
   }
 
   destroy () {
+    if (this.destroyed) return
     this.destroyed = true
     clearInterval(this._tickInterval)
     const p = this.io.destroy()
