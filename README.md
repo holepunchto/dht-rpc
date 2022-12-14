@@ -131,7 +131,7 @@ For the vast majority of use-cases you should always use adaptive mode to ensure
 
 Your DHT routing id is `hash(publicIp + publicPort)` and will be autoconfigured internally.
 
-#### `const node = DHT.bootrapper(port, host, [options])`
+#### `const node = DHT.bootstrapper(port, host, [options])`
 
 Make a bootstrap node for your DHT. The port and host needs to be it's globally accessable port and host.
 Note: `port` and `host` parameters are used to create the node id. Use `options.host` if you want to bind to i.e. 127.0.0.1.
@@ -193,7 +193,7 @@ If your node does not have a consistent port, this is set to 0.
 
 Boolean indicated if your node is behind a firewall.
 
-This is auto detected by having other node's trying to do a PING to you
+This is auto detected by having other nodes trying to do a PING to you
 without you contacting them first.
 
 #### `const addr = node.address()`
