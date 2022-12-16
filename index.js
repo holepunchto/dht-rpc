@@ -226,13 +226,12 @@ class DHT extends EventEmitter {
     this._backgroundQuery(node ? node.id : this.table.id).on('error', noop)
   }
 
-  destroy () {
+  async destroy () {
     if (this.destroyed) return
     this.destroyed = true
     clearInterval(this._tickInterval)
-    const p = this.io.destroy()
-    p.finally(() => this.emit('close'))
-    return p
+    await this.io.destroy()
+    this.emit('close')
   }
 
   _request (to, internal, command, target, value, session, onresponse, onerror) {
