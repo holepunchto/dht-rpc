@@ -158,6 +158,10 @@ Emitted when the routing table is fully bootstrapped. Emitted as a conveinience.
 
 Emitted when the underlying UDX socket is listening. Emitted as a conveinience.
 
+#### `node.on('ready')`
+
+Emitted when the node is fully bootstrapped etc.
+
 #### `node.on('persistent')`
 
 Emitted when the node is no longer in ephemeral mode.
@@ -173,6 +177,10 @@ it will switch from persistent mode to ephemeral again.
 #### `node.on('network-change', interfaces)`
 
 Emitted when the network interfaces of the computer change.
+
+#### `node.on('close')`
+
+Will be emitted after `node.destroy()` is completed.
 
 #### `node.refresh()`
 

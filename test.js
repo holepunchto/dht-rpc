@@ -417,6 +417,37 @@ test('request session, destroy all', async function (t) {
   }
 })
 
+test('close event', async function (t) {
+  t.plan(1)
+
+  const node = new DHT()
+
+  node.once('close', function () {
+    t.pass('node closed')
+  })
+
+  await node.destroy()
+})
+
+test('close event is only emitted once', async function (t) {
+  t.plan(2)
+
+  const node = new DHT()
+  let count = 0
+
+  node.on('close', function () {
+    if (++count >= 2) t.fail('close was emitted more than once')
+    else t.pass('node closed')
+  })
+
+  await Promise.all([node.destroy(), node.destroy()])
+
+  await node.destroy()
+  await node.destroy()
+
+  t.pass()
+})
+
 async function freePort () {
   const udx = new UDX()
   const sock = udx.createSocket()
