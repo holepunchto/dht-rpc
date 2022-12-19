@@ -396,6 +396,27 @@ test('filter nodes from routing table', async function (t) {
   t.absent(node.table.has(b.id), 'should not have b')
 })
 
+test('request session, destroy all', async function (t) {
+  const [, a, b] = await makeSwarm(3, t)
+
+  a.on('request', () => t.fail())
+
+  const s = b.session()
+  const p = [
+    s.request({ command: 42 }, a),
+    s.request({ command: 42 }, a)
+  ]
+
+  const err = new Error('destroyed')
+
+  s.destroy(err)
+
+  for (const { status, reason } of await Promise.allSettled(p)) {
+    t.is(status, 'rejected')
+    t.is(reason, err)
+  }
+})
+
 async function freePort () {
   const udx = new UDX()
   const sock = udx.createSocket()

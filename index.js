@@ -8,6 +8,7 @@ const NatSampler = require('nat-sampler')
 const b4a = require('b4a')
 const IO = require('./lib/io')
 const Query = require('./lib/query')
+const Session = require('./lib/session')
 const peer = require('./lib/peer')
 const { UNKNOWN_COMMAND, INVALID_TOKEN } = require('./lib/errors')
 const { PING, PING_NAT, FIND_NODE, DOWN_HINT } = require('./lib/commands')
@@ -150,13 +151,17 @@ class DHT extends EventEmitter {
 
     if (opts && opts.size && opts.size > 0) value = b4a.alloc(opts.size)
 
-    const req = this.io.createRequest({ id: null, host, port }, null, true, PING, null, value)
+    const req = this.io.createRequest({ id: null, host, port }, null, true, PING, null, value, (opts && opts.session) || null)
     return this._requestToPromise(req, opts)
   }
 
   request ({ token = null, command, target = null, value = null }, { host, port }, opts) {
-    const req = this.io.createRequest({ id: null, host, port }, token, false, command, target, value)
+    const req = this.io.createRequest({ id: null, host, port }, token, false, command, target, value, (opts && opts.session) || null)
     return this._requestToPromise(req, opts)
+  }
+
+  session () {
+    return new Session(this)
   }
 
   _requestToPromise (req, opts) {
@@ -212,7 +217,7 @@ class DHT extends EventEmitter {
       const value = b4a.allocUnsafe(2)
       c.uint16.encode({ start: 0, end: 2, buffer: value }, self.io.serverSocket.address().port)
 
-      self._request(data.from, true, PING_NAT, null, value, () => { testNat = true }, noop)
+      self._request(data.from, true, PING_NAT, null, value, null, () => { testNat = true }, noop)
     }
   }
 
@@ -227,8 +232,8 @@ class DHT extends EventEmitter {
     return this.io.destroy()
   }
 
-  _request (to, internal, command, target, value, onresponse, onerror) {
-    const req = this.io.createRequest(to, null, internal, command, target, value)
+  _request (to, internal, command, target, value, session, onresponse, onerror) {
+    const req = this.io.createRequest(to, null, internal, command, target, value, session)
     if (req === null) return null
 
     req.onresponse = onresponse
@@ -358,7 +363,7 @@ class DHT extends EventEmitter {
     oldNode.pinged = this._tick
 
     this._repinging++
-    this._request({ id: null, host: oldNode.host, port: oldNode.port }, true, PING, null, null, onsuccess, onswap)
+    this._request({ id: null, host: oldNode.host, port: oldNode.port }, true, PING, null, null, null, onsuccess, onswap)
 
     function onsuccess (m) {
       if (oldNode.seen <= lastSeen) return onswap()
@@ -475,7 +480,7 @@ class DHT extends EventEmitter {
     }
 
     this._checks++
-    this._request({ id: null, host: node.host, port: node.port }, true, PING, null, null, onresponse, onerror)
+    this._request({ id: null, host: node.host, port: node.port }, true, PING, null, null, null, onresponse, onerror)
   }
 
   _ontick () {
@@ -699,7 +704,7 @@ function requestAll (dht, internal, command, value, nodes) {
 
   return new Promise((resolve) => {
     for (const node of nodes) {
-      const req = dht._request(node, internal, command, null, value, onsuccess, onerror)
+      const req = dht._request(node, internal, command, null, value, null, onsuccess, onerror)
       if (!req) return resolve(replies)
     }
 
