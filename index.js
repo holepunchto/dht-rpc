@@ -151,12 +151,12 @@ class DHT extends EventEmitter {
 
     if (opts && opts.size && opts.size > 0) value = b4a.alloc(opts.size)
 
-    const req = this.io.createRequest({ id: null, host, port }, null, true, PING, null, value, opts && opts.session)
+    const req = this.io.createRequest({ id: null, host, port }, null, true, PING, null, value, (opts && opts.session) || null)
     return this._requestToPromise(req, opts)
   }
 
   request ({ token = null, command, target = null, value = null }, { host, port }, opts) {
-    const req = this.io.createRequest({ id: null, host, port }, token, false, command, target, value, opts && opts.session)
+    const req = this.io.createRequest({ id: null, host, port }, token, false, command, target, value, (opts && opts.session) || null)
     return this._requestToPromise(req, opts)
   }
 
