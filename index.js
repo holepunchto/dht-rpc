@@ -227,11 +227,11 @@ class DHT extends EventEmitter {
   }
 
   async destroy () {
-    if (this.destroyed) return
+    const wasDestroyed = this.destroyed
     this.destroyed = true
     clearInterval(this._tickInterval)
     await this.io.destroy()
-    this.emit('close')
+    if (!wasDestroyed) this.emit('close')
   }
 
   _request (to, internal, command, target, value, session, onresponse, onerror) {
