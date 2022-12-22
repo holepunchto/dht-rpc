@@ -8,8 +8,14 @@ test('bootstrapper', async function (t) {
   const node = DHT.bootstrapper(port, '127.0.0.1')
 
   await node.ready()
-  t.is(node.address().host, '0.0.0.0')
-  t.is(node.address().family, 4)
+
+  if (node.address().family === 4) {
+    t.is(node.address().host, '0.0.0.0')
+    t.is(node.address().family, 4)
+  } else {
+    t.is(node.address().host, '::')
+    t.is(node.address().family, 6)
+  }
   t.is(node.address().port, port)
 
   await node.destroy()
