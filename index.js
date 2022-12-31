@@ -78,8 +78,6 @@ class DHT extends EventEmitter {
     if (this.bootstrapper) {
       this._nat.add(this.bootstrapper.host, this.bootstrapper.port)
     }
-
-    console.log(this.name, 'constructor', { ephemeral: this.ephemeral, ioEphemeral: this.io.ephemeral, firewalled: this.firewalled, adaptive: this.adaptive, forcePersistent: this._forcePersistent, quickFirewall: this._quickFirewall })
   }
 
   static bootstrapper (port, host, opts) {
@@ -187,26 +185,21 @@ class DHT extends EventEmitter {
   }
 
   async _bootstrap () {
-    // console.log(this.name, '_bootstrap')
     const self = this
 
     await Promise.resolve() // wait a tick, so apis can be used from the outside
     await this.io.bind()
 
-    // console.log(this.name, 'listening')
     this.emit('listening')
 
     // TODO: some papers describe more advanced ways of bootstrapping - we should prob look into that
 
     let first = this.firewalled && this._quickFirewall && !this._forcePersistent
     let testNat = false
-    // console.log(this.name, { first })
 
     const onlyFirewall = !this._forcePersistent
-    // console.log(this.name, { onlyFirewall })
 
     for (let i = 0; i < 2; i++) {
-      // console.log(this.name, { bootstrapped: this.bootstrapped, testNat, forcePersistent: this._forcePersistent })
       await this._backgroundQuery(this.table.id).on('data', ondata).finished()
 
       if (this.bootstrapped || (!testNat && !this._forcePersistent)) break
@@ -227,8 +220,6 @@ class DHT extends EventEmitter {
 
       if (!first) return
       first = false
-
-      // console.log(self.name, 'ondata', data.from, self.io.serverSocket.address().port)
 
       const value = b4a.allocUnsafe(2)
       c.uint16.encode({ start: 0, end: 2, buffer: value }, self.io.serverSocket.address().port)
@@ -263,7 +254,6 @@ class DHT extends EventEmitter {
 
   // we don't check that this is a bootstrap node but we limit the sample size to very few nodes, so fine
   _sampleBootstrapMaybe (from, to) {
-    // console.log(this.name, '_sampleBootstrapMaybe', from, to)
     if (this._nonePersistentSamples.length >= Math.max(1, this.bootstrapNodes.length)) return
     const id = from.host + ':' + from.port
     if (this._nonePersistentSamples.indexOf(id) > -1) return
@@ -533,14 +523,10 @@ class DHT extends EventEmitter {
   }
 
   async _updateNetworkState (onlyFirewall = false) {
-    console.log(this.name, '_updateNetworkState (step 1)', { ephemeral: this.ephemeral, onlyFirewall, firewalled: this.firewalled })
-
     if (!this.ephemeral && !this.bootstrapper) return false
     if (onlyFirewall && !this.firewalled) return false
 
-
     const { host, port } = this._nat
-    console.log(this.name, '_updateNetworkState (step 2)', { host, port })
 
     if (!onlyFirewall) {
       // remember what host we checked and reset the counter
@@ -554,29 +540,20 @@ class DHT extends EventEmitter {
     }
 
     const natSampler = this.firewalled ? new NatSampler() : this._nat
-    console.log(this.name, '_updateNetworkState (step 3)', { firewalled: this.firewalled }, natSampler === this._nat)
 
     // ask remote nodes to ping us on our server socket to see if we have the port open
     const firewalled = this.firewalled && await this._checkIfFirewalled(natSampler)
     if (firewalled) {
-      console.log(this.name, '_updateNetworkState (step 3.1)', 'firewalled', this.opts.id)
       if (!this.bootstrapper) return false
       natSampler.add(this.bootstrapper.host, this.bootstrapper.port)
     }
-
-    console.log(this.name, '_updateNetworkState (step 4)', natSampler.size, natSampler)
 
     this.firewalled = this.io.firewalled = false
 
     // incase it's called in parallel for some reason, or if our nat status somehow changed
     if (!this.ephemeral && !this.bootstrapper || host !== this._nat.host || port !== this._nat.port) return false
-
-    console.log(this.name, '_updateNetworkState (step 5)')
-
     // if the firewall probe returned a different host / non consistent port, bail as well
     if (natSampler.host !== host || natSampler.port === 0) return false
-
-    console.log(this.name, '_updateNetworkState (step 6)')
 
     const id = peer.id(natSampler.host, natSampler.port)
 
@@ -611,7 +588,6 @@ class DHT extends EventEmitter {
     }
 
     if (!this.ephemeral) {
-      console.log(this.name, 'persistent!!')
       this.emit('persistent')
     }
 
@@ -666,7 +642,6 @@ class DHT extends EventEmitter {
     for (const res of pongs) {
       if (hosts.indexOf(res.from.host) > -1) {
         count++
-        console.log(this.name, '_checkIfFirewalled', res.to)
         natSampler.add(res.to.host, res.to.port)
       }
     }
@@ -691,7 +666,6 @@ class DHT extends EventEmitter {
   }
 
   _backgroundQuery (target) {
-    console.log(this.name, '_backgroundQuery')
     this._refreshTicks = REFRESH_TICKS
 
     const backgroundCon = Math.min(this.concurrency, Math.max(2, (this.concurrency / 8) | 0))
