@@ -26,7 +26,6 @@ class DHT extends EventEmitter {
   constructor (opts = {}) {
     super()
 
-    this.bootstrapper = opts.bootstrapper || null
     this.bootstrapNodes = opts.bootstrap === false ? [] : (opts.bootstrap || []).map(parseNode)
     this.table = new Table(opts.id || randomBytes(32))
     this.nodes = new TOS()
@@ -70,17 +69,16 @@ class DHT extends EventEmitter {
     if (opts.nodes) {
       for (const node of opts.nodes) this.addNode(node)
     }
-
-    if (this.bootstrapper) {
-      this._nat.add(this.bootstrapper.host, this.bootstrapper.port)
-    }
   }
 
   static bootstrapper (port, host, opts) {
     if (!port) throw new Error('Port is required')
     if (!host) throw new Error('Host is required')
     const id = peer.id(host, port)
-    return new this({ port, bootstrapper: { host, port }, id, ephemeral: false, firewalled: false, anyPort: false, bootstrap: [], ...opts })
+    const dht = new this({ port, id, ephemeral: false, firewalled: false, anyPort: false, bootstrap: [], ...opts })
+    dht.bootstrapper = true
+    dht._nat.add(host, port)
+    return dht
   }
 
   get id () {
@@ -539,10 +537,7 @@ class DHT extends EventEmitter {
 
     // ask remote nodes to ping us on our server socket to see if we have the port open
     const firewalled = this.firewalled && await this._checkIfFirewalled(natSampler)
-    if (firewalled) {
-      if (!this.bootstrapper) return false
-      natSampler.add(this.bootstrapper.host, this.bootstrapper.port)
-    }
+    if (firewalled) return false
 
     this.firewalled = this.io.firewalled = false
 
