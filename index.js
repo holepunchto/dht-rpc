@@ -22,13 +22,9 @@ const REFRESH_TICKS = 60 // refresh every ~5min when idle
 const RECENT_NODE = 12 // we've heard from a node less than 1min ago
 const OLD_NODE = 360 // if an node has been around more than 30 min we consider it old
 
-let count = 0
-
 class DHT extends EventEmitter {
   constructor (opts = {}) {
     super()
-
-    this.name = count++
 
     this.bootstrapper = opts.bootstrapper || null
     this.bootstrapNodes = opts.bootstrap === false ? [] : (opts.bootstrap || []).map(parseNode)
