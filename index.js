@@ -547,7 +547,7 @@ class DHT extends EventEmitter {
     this.firewalled = this.io.firewalled = false
 
     // incase it's called in parallel for some reason, or if our nat status somehow changed
-    if (!this.ephemeral && !this.bootstrapper || host !== this._nat.host || port !== this._nat.port) return false
+    if ((!this.ephemeral && !this.bootstrapper) || host !== this._nat.host || port !== this._nat.port) return false
     // if the firewall probe returned a different host / non consistent port, bail as well
     if (natSampler.host !== host || natSampler.port === 0) return false
 
