@@ -39,7 +39,7 @@ class DHT extends EventEmitter {
 
     this.concurrency = opts.concurrency || 10
     this.bootstrapped = false
-    this.ephemeral = opts.id ? !!opts.ephemeral : true
+    this.ephemeral = true
     this.firewalled = this.io.firewalled
     this.adaptive = typeof opts.ephemeral !== 'boolean' && opts.adaptive !== false
     this.destroyed = false
@@ -63,7 +63,6 @@ class DHT extends EventEmitter {
 
     this.table.on('row', this._onrow)
 
-    if (this.ephemeral === false) this.io.ephemeral = false
     this.io.networkInterfaces.on('change', (interfaces) => this._onnetworkchange(interfaces))
 
     if (opts.nodes) {
@@ -76,7 +75,6 @@ class DHT extends EventEmitter {
     if (!host) throw new Error('Host is required')
     const id = peer.id(host, port)
     const dht = new this({ port, id, ephemeral: false, firewalled: false, anyPort: false, bootstrap: [], ...opts })
-    dht.bootstrapper = true
     dht._nat.add(host, port)
     return dht
   }
@@ -517,7 +515,7 @@ class DHT extends EventEmitter {
   }
 
   async _updateNetworkState (onlyFirewall = false) {
-    if (!this.ephemeral && !this.bootstrapper) return false
+    if (!this.ephemeral) return false
     if (onlyFirewall && !this.firewalled) return false
 
     const { host, port } = this._nat
@@ -542,7 +540,7 @@ class DHT extends EventEmitter {
     this.firewalled = this.io.firewalled = false
 
     // incase it's called in parallel for some reason, or if our nat status somehow changed
-    if ((!this.ephemeral && !this.bootstrapper) || host !== this._nat.host || port !== this._nat.port) return false
+    if (!this.ephemeral || host !== this._nat.host || port !== this._nat.port) return false
     // if the firewall probe returned a different host / non consistent port, bail as well
     if (natSampler.host !== host || natSampler.port === 0) return false
 
