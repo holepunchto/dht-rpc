@@ -22,9 +22,16 @@ const REFRESH_TICKS = 60 // refresh every ~5min when idle
 const RECENT_NODE = 12 // we've heard from a node less than 1min ago
 const OLD_NODE = 360 // if an node has been around more than 30 min we consider it old
 
+let count = 0
+
 class DHT extends EventEmitter {
   constructor (opts = {}) {
     super()
+
+    this.name = count++
+
+    // + if { bootstrap:[], ephemeral:false, firewalled:false } (and maybe not opts.id) then use "localAddress" for nat host and ip id?
+    // + what if it manually added nodes? which is basically like adding bootstrap nodes (they could be down as well)
 
     this.bootstrapNodes = opts.bootstrap === false ? [] : (opts.bootstrap || []).map(parseNode)
     this.table = new Table(opts.id || randomBytes(32))
@@ -39,7 +46,7 @@ class DHT extends EventEmitter {
 
     this.concurrency = opts.concurrency || 10
     this.bootstrapped = false
-    this.ephemeral = opts.id ? !!opts.ephemeral : true
+    this.ephemeral = true
     this.firewalled = this.io.firewalled
     this.adaptive = typeof opts.ephemeral !== 'boolean' && opts.adaptive !== false
     this.destroyed = false
@@ -63,7 +70,6 @@ class DHT extends EventEmitter {
 
     this.table.on('row', this._onrow)
 
-    if (this.ephemeral === false) this.io.ephemeral = false
     this.io.networkInterfaces.on('change', (interfaces) => this._onnetworkchange(interfaces))
 
     if (opts.nodes) {
@@ -74,8 +80,12 @@ class DHT extends EventEmitter {
   static bootstrapper (port, host, opts) {
     if (!port) throw new Error('Port is required')
     if (!host) throw new Error('Host is required')
-    const id = peer.id(host, port)
-    return new this({ port, id, ephemeral: false, firewalled: false, anyPort: false, bootstrap: [], ...opts })
+    // + we could detect if host is localhost (127.0.0.1), internal address, etc so we automatically bind to that one as well?
+    // Note: id and nat are linked, so they go together!
+    const id = peer.id(host, port) // + consider just removing opts.id, as it's reconstructed internally when needed, but I guess it's an optimization if we have it
+    const dht = new this({ port, id, ephemeral: false, firewalled: false, anyPort: false, bootstrap: [], ...opts })
+    dht._nat.add(host, port)
+    return dht
   }
 
   get id () {
@@ -214,6 +224,33 @@ class DHT extends EventEmitter {
 
     const onlyFirewall = !this._forcePersistent
 
+    console.log(this.name, '_bootstrap', { first, testNat, onlyFirewall })
+
+    const localAddress = this.localAddress0()
+    console.log(this.name, 'localAddress', localAddress)
+    console.log(this.name, 'clientSocket', this.io.clientSocket.address())
+    console.log(this.name, 'serverSocket', this.io.serverSocket.address())
+
+    if (this.ephemeral && !this.firewalled && this._forcePersistent && this.bootstrapNodes.length === 0 && this._nat.size === 0) {
+      console.log(this.name, 'auto assign nat!!')
+
+      // const id = peer.id(localAddress.host, localAddress.port)
+      // this.table = this.io.table = new Table(id)
+      // this.table.on('row', this._onrow)
+
+      // this._nat.add(localAddress.host, localAddress.port)
+
+      const serverAddress = this.io.serverSocket.address()
+      console.log(this.name, { serverAddress })
+      if (serverAddress.host === '0.0.0.0' || serverAddress.host === '::') {
+        console.log(this.name, 'auto assign nat!!', [localAddress.host, localAddress.port])
+        this._nat.add(localAddress.host, localAddress.port)
+      } else {
+        console.log(this.name, 'auto assign nat!!', [this.io.serverSocket.address().host, this.io.serverSocket.address().port])
+        this._nat.add(this.io.serverSocket.address().host, this.io.serverSocket.address().port)
+      }
+    }
+
     for (let i = 0; i < 2; i++) {
       await this._backgroundQuery(this.table.id).on('data', ondata).finished()
 
@@ -280,6 +317,7 @@ class DHT extends EventEmitter {
 
   // we don't check that this is a bootstrap node but we limit the sample size to very few nodes, so fine
   _sampleBootstrapMaybe (from, to) {
+    console.log(this.name, '_sampleBootstrapMaybe', { from, to })
     if (this._nonePersistentSamples.length >= Math.max(1, this.bootstrapNodes.length)) return
     const id = from.host + ':' + from.port
     if (this._nonePersistentSamples.indexOf(id) > -1) return
@@ -288,6 +326,7 @@ class DHT extends EventEmitter {
   }
 
   _addNodeFromNetwork (sample, from, to) {
+    // console.log(this.name, '_addNodeFromNetwork', { sample, from, to })
     if (this._shouldAddNode !== null && !this._shouldAddNode(from)) {
       return
     }
@@ -413,6 +452,9 @@ class DHT extends EventEmitter {
   }
 
   _onrequest (req, external) {
+    // console.log(this.name, '_onrequest', { command: req.command, from: req.from, to: req.to }, external)
+
+    // + this?
     if (req.from.id !== null) {
       this._addNodeFromNetwork(!external, req.from, req.to)
     }
@@ -470,6 +512,7 @@ class DHT extends EventEmitter {
   }
 
   _onresponse (res, external) {
+    // console.log(this.name, '_onresponse', { from: res.from, to: res.to })
     this._addNodeFromNetwork(!external, res.from, res.to)
   }
 
@@ -519,6 +562,7 @@ class DHT extends EventEmitter {
   }
 
   _ontick () {
+    console.log(this.name, '_ontick')
     const time = Date.now()
 
     if (time - this._lastTick > SLEEPING_INTERVAL) {
@@ -549,6 +593,8 @@ class DHT extends EventEmitter {
   }
 
   async _updateNetworkState (onlyFirewall = false) {
+    console.log(this.name, '_updateNetworkState', { onlyFirewall })
+
     if (!this.ephemeral) return false
     if (onlyFirewall && !this.firewalled) return false
 
@@ -602,6 +648,8 @@ class DHT extends EventEmitter {
 
     // all good! copy over the old routing table to the new one
     if (!b4a.equals(this.table.id, id)) {
+      console.log(this.name, 'new table!!', natSampler.host, natSampler.port)
+
       const nodes = this.table.toArray()
 
       this.table = this.io.table = new Table(id)
@@ -628,8 +676,11 @@ class DHT extends EventEmitter {
     for (const node of this.bootstrapNodes) {
       let address
       try {
-        address = await this.udx.lookup(node.host, { family: 4 })
-      } catch {
+        console.log(this.name, 'udx lookup', node.host)
+        address = await this.udx.lookup(node.host, { family: 4 }) // + why only 4? setting to four, makes the test "first persistent node with local IPv6 host" to fail 50% of the times
+        console.log(this.name, 'udx lookup ->', address)
+      } catch (error) {
+        // [Error: address family not supported] { code: 'EAI_ADDRFAMILY' }
         continue
       }
 
@@ -648,6 +699,8 @@ class DHT extends EventEmitter {
   }
 
   async _checkIfFirewalled (natSampler = new NatSampler()) {
+    console.log(this.name, '_checkIfFirewalled')
+
     const nodes = []
     for (let node = this.nodes.latest; node && nodes.length < 5; node = node.prev) {
       nodes.push(node)
@@ -778,3 +831,23 @@ function requestAll (dht, internal, command, value, nodes) {
 }
 
 function noop () {}
+
+// + temp, we could define this somewhere so it's reused on hyperdht as well
+function localIP (udx, name, skip) {
+  let host = null
+
+  for (const n of udx.networkInterfaces()) {
+    if (!skip) console.log(name, 'localIP', n)
+
+    if (n.family !== 4 || n.internal) continue
+
+    // mac really likes en0, mb a better way but this shouldnt be bad anywhere so return now
+    if (n.name === 'en0') return n.host
+
+    // otherwise pick the first non internal host (let the loop continue in case we see en0)
+    if (host === null) host = n.host
+  }
+
+  if (!skip) console.log(name, 'localIP return', host || '127.0.0.1')
+  return host || '127.0.0.1'
+}
