@@ -22,13 +22,9 @@ const REFRESH_TICKS = 60 // refresh every ~5min when idle
 const RECENT_NODE = 12 // we've heard from a node less than 1min ago
 const OLD_NODE = 360 // if an node has been around more than 30 min we consider it old
 
-let count = 0
-
 class DHT extends EventEmitter {
   constructor (opts = {}) {
     super()
-
-    this.name = count++
 
     this.bootstrapNodes = opts.bootstrap === false ? [] : (opts.bootstrap || []).map(parseNode)
     this.table = new Table(opts.id || randomBytes(32))
@@ -217,26 +213,6 @@ class DHT extends EventEmitter {
 
     // TODO: some papers describe more advanced ways of bootstrapping - we should prob look into that
 
-    console.log(this.name, '_bootstrap')
-    console.log(this.name, 'local ipv4', localIP(this.udx))
-    console.log(this.name, 'local ipv6', localIP(this.udx, 6))
-    console.log(this.name, 'clientSocket', this.io.clientSocket.address())
-    console.log(this.name, 'serverSocket', this.io.serverSocket.address())
-
-    if (this.ephemeral && this._forcePersistent && !this.firewalled) { // this.bootstrapNodes.length === 0
-      // This would be a node like: DHT.bootstrapper(49737, '127.0.0.1') (so it has the correct peer.id)
-      if (this._nat.size > 0) {
-        console.log(this.name, 'forcing persistent')
-        this.ephemeral = this.io.ephemeral = false
-        this.emit('persistent')
-      } else { // This would be a node like: new DHT({ bootstrap: [], ephemeral: false, firewalled: false }) (it will re-create the peer.id)
-        console.log(this.name, 'auto assign local nat')
-        const serverAddress = this.io.serverSocket.address()
-        if (serverAddress.host === '0.0.0.0' || serverAddress.host === '::') this._nat.add(localIP(this.udx), serverAddress.port)
-        else this._nat.add(serverAddress.host, serverAddress.port)
-      }
-    }
-
     let first = this.firewalled && this._quickFirewall && !this._forcePersistent
     let testNat = false
 
@@ -308,7 +284,6 @@ class DHT extends EventEmitter {
 
   // we don't check that this is a bootstrap node but we limit the sample size to very few nodes, so fine
   _sampleBootstrapMaybe (from, to) {
-    console.log(this.name, '_sampleBootstrapMaybe', { from, to })
     if (this._nonePersistentSamples.length >= Math.max(1, this.bootstrapNodes.length)) return
     const id = from.host + ':' + from.port
     if (this._nonePersistentSamples.indexOf(id) > -1) return
@@ -657,9 +632,7 @@ class DHT extends EventEmitter {
     for (const node of this.bootstrapNodes) {
       let address
       try {
-        console.log(this.name, 'udx lookup', node.host)
-        address = await this.udx.lookup(node.host, { family: 4 }) // + why only 4? setting to four, makes the test "first persistent node with local IPv6 host" to fail 50% of the times
-        console.log(this.name, 'udx lookup ->', address)
+        address = await this.udx.lookup(node.host, { family: 4 })
       } catch (error) {
         // [Error: address family not supported] { code: 'EAI_ADDRFAMILY' }
         continue
@@ -810,20 +783,3 @@ function requestAll (dht, internal, command, value, nodes) {
 }
 
 function noop () {}
-
-// + temp, we could define this somewhere so it's reused on hyperdht as well
-function localIP (udx, family = 4) {
-  let host = null
-
-  for (const n of udx.networkInterfaces()) {
-    if (n.family !== family || n.internal) continue
-
-    // mac really likes en0, mb a better way but this shouldnt be bad anywhere so return now
-    if (n.name === 'en0') return n.host
-
-    // otherwise pick the first non internal host (let the loop continue in case we see en0)
-    if (host === null) host = n.host
-  }
-
-  return host || (family === 4 ? '127.0.0.1' : '::1')
-}
