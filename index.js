@@ -27,7 +27,7 @@ class DHT extends EventEmitter {
     super()
 
     this.bootstrapNodes = opts.bootstrap === false ? [] : (opts.bootstrap || []).map(parseNode)
-    this.table = new Table(opts.id || randomBytes(32))
+    this.table = new Table(randomBytes(32))
     this.nodes = new TOS()
     this.udx = opts.udx || new UDX()
     this.io = new IO(this.table, this.udx, {
@@ -76,8 +76,7 @@ class DHT extends EventEmitter {
     // if (host === '0.0.0.0' || host === '::') throw new Error('Invalid host')
     // + should only allow IPv4?
 
-    const id = peer.id(host, port) // + consider just removing opts.id, as it's reconstructed internally when needed, but I guess it's an optimization if we have it
-    const dht = new this({ port, id, ephemeral: false, firewalled: false, anyPort: false, bootstrap: [], ...opts })
+    const dht = new this({ port, ephemeral: false, firewalled: false, anyPort: false, bootstrap: [], ...opts })
     dht._nat.add(host, port)
     return dht
   }
