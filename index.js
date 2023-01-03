@@ -316,7 +316,6 @@ class DHT extends EventEmitter {
   }
 
   _addNodeFromNetwork (sample, from, to) {
-    // console.log(this.name, '_addNodeFromNetwork', { sample, from, to })
     if (this._shouldAddNode !== null && !this._shouldAddNode(from)) {
       return
     }
@@ -442,9 +441,6 @@ class DHT extends EventEmitter {
   }
 
   _onrequest (req, external) {
-    // console.log(this.name, '_onrequest', { command: req.command, from: req.from, to: req.to }, external)
-
-    // + this?
     if (req.from.id !== null) {
       this._addNodeFromNetwork(!external, req.from, req.to)
     }
@@ -502,7 +498,6 @@ class DHT extends EventEmitter {
   }
 
   _onresponse (res, external) {
-    // console.log(this.name, '_onresponse', { from: res.from, to: res.to })
     this._addNodeFromNetwork(!external, res.from, res.to)
   }
 
@@ -552,7 +547,6 @@ class DHT extends EventEmitter {
   }
 
   _ontick () {
-    console.log(this.name, '_ontick')
     const time = Date.now()
 
     if (time - this._lastTick > SLEEPING_INTERVAL) {
@@ -583,8 +577,6 @@ class DHT extends EventEmitter {
   }
 
   async _updateNetworkState (onlyFirewall = false) {
-    console.log(this.name, '_updateNetworkState', { onlyFirewall })
-
     if (!this.ephemeral) return false
     if (onlyFirewall && !this.firewalled) return false
 
@@ -638,8 +630,6 @@ class DHT extends EventEmitter {
 
     // all good! copy over the old routing table to the new one
     if (!b4a.equals(this.table.id, id)) {
-      console.log(this.name, 'new table!!', natSampler.host, natSampler.port)
-
       const nodes = this.table.toArray()
 
       this.table = this.io.table = new Table(id)
@@ -689,8 +679,6 @@ class DHT extends EventEmitter {
   }
 
   async _checkIfFirewalled (natSampler = new NatSampler()) {
-    console.log(this.name, '_checkIfFirewalled')
-
     const nodes = []
     for (let node = this.nodes.latest; node && nodes.length < 5; node = node.prev) {
       nodes.push(node)
