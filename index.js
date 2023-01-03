@@ -633,8 +633,7 @@ class DHT extends EventEmitter {
       let address
       try {
         address = await this.udx.lookup(node.host, { family: 4 })
-      } catch (error) {
-        // [Error: address family not supported] { code: 'EAI_ADDRFAMILY' }
+      } catch {
         continue
       }
 
