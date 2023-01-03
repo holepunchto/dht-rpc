@@ -74,7 +74,7 @@ class DHT extends EventEmitter {
     }
   }
 
-  static bootstrapper (port, host, opts = {}) {
+  static bootstrapper (port, host, opts) {
     if (!port) throw new Error('Port is required')
     if (!host) throw new Error('Host is required')
     // if (host === '0.0.0.0' || host === '::') throw new Error('Invalid host')
