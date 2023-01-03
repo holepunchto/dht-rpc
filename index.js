@@ -82,14 +82,6 @@ class DHT extends EventEmitter {
     if (!host) throw new Error('Host is required')
     // if (host === '0.0.0.0' || host === '::') throw new Error('Invalid host')
 
-    // Note: id and nat are linked, so they go together!
-
-    // + maybe this is too much
-    /* if (!opts.host) {
-      // Auto bind localhost
-      if (host === '127.0.0.1' || host === '::1') opts.host = host
-    } */
-
     const id = peer.id(host, port) // + consider just removing opts.id, as it's reconstructed internally when needed, but I guess it's an optimization if we have it
     const dht = new this({ port, id, ephemeral: false, firewalled: false, anyPort: false, bootstrap: [], ...opts })
     dht._nat.add(host, port)
@@ -228,8 +220,8 @@ class DHT extends EventEmitter {
     // TODO: some papers describe more advanced ways of bootstrapping - we should prob look into that
 
     console.log(this.name, '_bootstrap')
-    console.log(this.name, 'local ipv4', this.localAddress0(4))
-    console.log(this.name, 'local ipv6', this.localAddress0(6))
+    console.log(this.name, 'local ipv4', localIP(this.udx))
+    console.log(this.name, 'local ipv6', localIP(this.udx, 6))
     console.log(this.name, 'clientSocket', this.io.clientSocket.address())
     console.log(this.name, 'serverSocket', this.io.serverSocket.address())
 
@@ -242,7 +234,7 @@ class DHT extends EventEmitter {
       } else { // This would be a node like: new DHT({ bootstrap: [], ephemeral: false, firewalled: false }) (it will re-create the peer.id)
         console.log(this.name, 'auto assign local nat')
         const serverAddress = this.io.serverSocket.address()
-        if (serverAddress.host === '0.0.0.0' || serverAddress.host === '::') this._nat.add(this.localAddress0(4).host, serverAddress.port)
+        if (serverAddress.host === '0.0.0.0' || serverAddress.host === '::') this._nat.add(localIP(this.udx), serverAddress.port)
         else this._nat.add(serverAddress.host, serverAddress.port)
       }
     }
@@ -834,12 +826,10 @@ function requestAll (dht, internal, command, value, nodes) {
 function noop () {}
 
 // + temp, we could define this somewhere so it's reused on hyperdht as well
-function localIP (udx, family, name) {
+function localIP (udx, family = 4) {
   let host = null
 
   for (const n of udx.networkInterfaces()) {
-    // console.log(name, 'localIP', n)
-
     if (n.family !== family || n.internal) continue
 
     // mac really likes en0, mb a better way but this shouldnt be bad anywhere so return now
