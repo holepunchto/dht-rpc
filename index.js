@@ -30,9 +30,6 @@ class DHT extends EventEmitter {
 
     this.name = count++
 
-    // + if { bootstrap:[], ephemeral:false, firewalled:false } (and maybe not opts.id) then use "localAddress" for nat host and ip id?
-    // + what if it manually added nodes? which is basically like adding bootstrap nodes (they could be down as well)
-
     this.bootstrapNodes = opts.bootstrap === false ? [] : (opts.bootstrap || []).map(parseNode)
     this.table = new Table(opts.id || randomBytes(32))
     this.nodes = new TOS()
