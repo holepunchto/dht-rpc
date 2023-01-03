@@ -307,7 +307,7 @@ Other options include:
     // useful if you are re-doing a query from a set of closest nodes.
   ],
   replies: [
-    // similar to nodes, but if you useful if you have an array of closest replies instead
+    // similar to nodes, but useful if you have an array of closest replies instead
     // from a previous query.
   ],
   map (reply) {
@@ -337,7 +337,7 @@ Boolean indicating if this has been destroyed.
 
 #### `node.toArray()`
 
-Get the routing table peers out as an array of `{ host, port}`
+Get the routing table peers out as an array of `{ host, port }`
 
 #### `node.addNode({ host, port })`
 
