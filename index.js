@@ -77,11 +77,19 @@ class DHT extends EventEmitter {
     }
   }
 
-  static bootstrapper (port, host, opts) {
+  static bootstrapper (port, host, opts = {}) {
     if (!port) throw new Error('Port is required')
     if (!host) throw new Error('Host is required')
-    // + we could detect if host is localhost (127.0.0.1), internal address, etc so we automatically bind to that one as well?
+    // if (host === '0.0.0.0' || host === '::') throw new Error('Invalid host')
+
     // Note: id and nat are linked, so they go together!
+
+    // + maybe this is too much
+    /* if (!opts.host) {
+      // Auto bind localhost
+      if (host === '127.0.0.1' || host === '::1') opts.host = host
+    } */
+
     const id = peer.id(host, port) // + consider just removing opts.id, as it's reconstructed internally when needed, but I guess it's an optimization if we have it
     const dht = new this({ port, id, ephemeral: false, firewalled: false, anyPort: false, bootstrap: [], ...opts })
     dht._nat.add(host, port)
@@ -219,37 +227,30 @@ class DHT extends EventEmitter {
 
     // TODO: some papers describe more advanced ways of bootstrapping - we should prob look into that
 
+    console.log(this.name, '_bootstrap')
+    console.log(this.name, 'local ipv4', this.localAddress0(4))
+    console.log(this.name, 'local ipv6', this.localAddress0(6))
+    console.log(this.name, 'clientSocket', this.io.clientSocket.address())
+    console.log(this.name, 'serverSocket', this.io.serverSocket.address())
+
+    if (this.ephemeral && this._forcePersistent && !this.firewalled) { // this.bootstrapNodes.length === 0
+      // This would be a node like: DHT.bootstrapper(49737, '127.0.0.1') (so it has the correct peer.id)
+      if (this._nat.size > 0) {
+        console.log(this.name, 'forcing persistent')
+        this.ephemeral = this.io.ephemeral = false
+        this.emit('persistent')
+      } else { // This would be a node like: new DHT({ bootstrap: [], ephemeral: false, firewalled: false }) (it will re-create the peer.id)
+        console.log(this.name, 'auto assign local nat')
+        const serverAddress = this.io.serverSocket.address()
+        if (serverAddress.host === '0.0.0.0' || serverAddress.host === '::') this._nat.add(this.localAddress0(4).host, serverAddress.port)
+        else this._nat.add(serverAddress.host, serverAddress.port)
+      }
+    }
+
     let first = this.firewalled && this._quickFirewall && !this._forcePersistent
     let testNat = false
 
     const onlyFirewall = !this._forcePersistent
-
-    console.log(this.name, '_bootstrap', { first, testNat, onlyFirewall })
-
-    const localAddress = this.localAddress0()
-    console.log(this.name, 'localAddress', localAddress)
-    console.log(this.name, 'clientSocket', this.io.clientSocket.address())
-    console.log(this.name, 'serverSocket', this.io.serverSocket.address())
-
-    if (this.ephemeral && !this.firewalled && this._forcePersistent && this.bootstrapNodes.length === 0 && this._nat.size === 0) {
-      console.log(this.name, 'auto assign nat!!')
-
-      // const id = peer.id(localAddress.host, localAddress.port)
-      // this.table = this.io.table = new Table(id)
-      // this.table.on('row', this._onrow)
-
-      // this._nat.add(localAddress.host, localAddress.port)
-
-      const serverAddress = this.io.serverSocket.address()
-      console.log(this.name, { serverAddress })
-      if (serverAddress.host === '0.0.0.0' || serverAddress.host === '::') {
-        console.log(this.name, 'auto assign nat!!', [localAddress.host, localAddress.port])
-        this._nat.add(localAddress.host, localAddress.port)
-      } else {
-        console.log(this.name, 'auto assign nat!!', [this.io.serverSocket.address().host, this.io.serverSocket.address().port])
-        this._nat.add(this.io.serverSocket.address().host, this.io.serverSocket.address().port)
-      }
-    }
 
     for (let i = 0; i < 2; i++) {
       await this._backgroundQuery(this.table.id).on('data', ondata).finished()
@@ -833,13 +834,13 @@ function requestAll (dht, internal, command, value, nodes) {
 function noop () {}
 
 // + temp, we could define this somewhere so it's reused on hyperdht as well
-function localIP (udx, name, skip) {
+function localIP (udx, family, name) {
   let host = null
 
   for (const n of udx.networkInterfaces()) {
-    if (!skip) console.log(name, 'localIP', n)
+    // console.log(name, 'localIP', n)
 
-    if (n.family !== 4 || n.internal) continue
+    if (n.family !== family || n.internal) continue
 
     // mac really likes en0, mb a better way but this shouldnt be bad anywhere so return now
     if (n.name === 'en0') return n.host
@@ -848,6 +849,5 @@ function localIP (udx, name, skip) {
     if (host === null) host = n.host
   }
 
-  if (!skip) console.log(name, 'localIP return', host || '127.0.0.1')
-  return host || '127.0.0.1'
+  return host || (family === 4 ? '127.0.0.1' : '::1')
 }
