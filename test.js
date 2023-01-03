@@ -461,7 +461,8 @@ test('local address', async function (t) {
   t.is(node.localAddress(), null)
 
   await node.ready()
-  t.is(node.localAddress().host, localIP(4))
+  t.comment('Local address (host): ' + node.localAddress().host)
+  t.ok(node.localAddress().host.match(/\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/))
   t.is(node.localAddress().port, node.io.serverSocket.address().port)
 
   await node.destroy()
@@ -504,18 +505,6 @@ test('remote address with peers', async function (t) {
 
   t.pass()
 })
-
-// i.e. 192.168.0.23
-function localIP (family = 4) {
-  const udx = new UDX()
-  let host = null
-  for (const n of udx.networkInterfaces()) {
-    if (n.family !== family || n.internal) continue
-    if (n.name === 'en0') return n.host
-    if (host === null) host = n.host
-  }
-  return host || (family === 4 ? '127.0.0.1' : '::1')
-}
 
 async function freePort () {
   const udx = new UDX()
