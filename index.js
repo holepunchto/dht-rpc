@@ -109,6 +109,30 @@ class DHT extends EventEmitter {
     return socket ? socket.address() : null
   }
 
+  localAddress () {
+    if (!this.io.serverSocket) return null
+
+    return {
+      host: localIP(this.udx),
+      port: this.io.serverSocket.address().port
+    }
+  }
+
+  remoteAddress () {
+    if (!this.host) return null
+    if (!this.port) return null
+    if (this.firewalled) return null
+    if (!this.io.serverSocket) return null
+
+    const port = this.io.serverSocket.address().port
+    if (port !== this.port) return null
+
+    return {
+      host: this.host,
+      port
+    }
+  }
+
   addNode ({ host, port }) {
     this._addNode({
       id: peer.id(host, port),
@@ -677,6 +701,22 @@ DHT.ERROR_UNKNOWN_COMMAND = UNKNOWN_COMMAND
 DHT.ERROR_INVALID_TOKEN = INVALID_TOKEN
 
 module.exports = DHT
+
+function localIP (udx, family = 4) {
+  let host = null
+
+  for (const n of udx.networkInterfaces()) {
+    if (n.family !== family || n.internal) continue
+
+    // mac really likes en0, mb a better way but this shouldnt be bad anywhere so return now
+    if (n.name === 'en0') return n.host
+
+    // otherwise pick the first non internal host (let the loop continue in case we see en0)
+    if (host === null) host = n.host
+  }
+
+  return host || (family === 4 ? '127.0.0.1' : '::1')
+}
 
 function parseNode (s) {
   if (typeof s === 'object') return s

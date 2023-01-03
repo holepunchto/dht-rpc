@@ -454,6 +454,69 @@ test('close event is only emitted once', async function (t) {
   t.pass()
 })
 
+test('local address', async function (t) {
+  t.plan(4)
+
+  const node = new DHT()
+  t.is(node.localAddress(), null)
+
+  await node.ready()
+  t.is(node.localAddress().host, localIP(4))
+  t.is(node.localAddress().port, node.io.serverSocket.address().port)
+
+  await node.destroy()
+
+  t.pass()
+})
+
+test('remote address without peers', async function (t) {
+  t.plan(3)
+
+  const node = new DHT()
+  t.is(node.remoteAddress(), null)
+
+  await node.ready()
+  t.is(node.remoteAddress(), null)
+
+  await node.destroy()
+
+  t.pass()
+})
+
+test('remote address with peers', async function (t) {
+  t.plan(6)
+
+  const a = new DHT({ ephemeral: false, firewalled: false })
+  t.is(a.remoteAddress(), null)
+  await a.ready()
+  t.is(a.remoteAddress(), null)
+
+  const bootstrap = ['localhost:' + a.address().port]
+  const b = new DHT({ ephemeral: false, bootstrap })
+  t.is(b.remoteAddress(), null)
+  await b.ready()
+  t.is(b.remoteAddress().host, '127.0.0.1')
+
+  t.is(a.remoteAddress().host, '127.0.0.1')
+
+  await a.destroy()
+  await b.destroy()
+
+  t.pass()
+})
+
+// i.e. 192.168.0.23
+function localIP (family = 4) {
+  const udx = new UDX()
+  let host = null
+  for (const n of udx.networkInterfaces()) {
+    if (n.family !== family || n.internal) continue
+    if (n.name === 'en0') return n.host
+    if (host === null) host = n.host
+  }
+  return host || (family === 4 ? '127.0.0.1' : '::1')
+}
+
 async function freePort () {
   const udx = new UDX()
   const sock = udx.createSocket()
