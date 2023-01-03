@@ -78,6 +78,7 @@ class DHT extends EventEmitter {
     if (!port) throw new Error('Port is required')
     if (!host) throw new Error('Host is required')
     // if (host === '0.0.0.0' || host === '::') throw new Error('Invalid host')
+    // + should only allow IPv4?
 
     const id = peer.id(host, port) // + consider just removing opts.id, as it's reconstructed internally when needed, but I guess it's an optimization if we have it
     const dht = new this({ port, id, ephemeral: false, firewalled: false, anyPort: false, bootstrap: [], ...opts })
