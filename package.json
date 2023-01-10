@@ -15,7 +15,7 @@
     "fast-fifo": "^1.0.0",
     "kademlia-routing-table": "^1.0.0",
     "nat-sampler": "^1.0.1",
-    "sodium-universal": "^3.0.4",
+    "sodium-universal": "^4.0.0",
     "streamx": "^2.10.3",
     "time-ordered-set": "^1.0.2",
     "udx-native": "^1.2.0"
