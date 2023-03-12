@@ -45,8 +45,6 @@ class DHT extends EventEmitter {
     this.destroyed = false
 
     this._nat = new NatSampler()
-    this._port = opts.port || 0
-    this._host = opts.host || '0.0.0.0'
     this._quickFirewall = opts.quickFirewall !== false
     this._forcePersistent = opts.ephemeral === false
     this._repinging = 0
