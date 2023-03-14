@@ -589,10 +589,12 @@ class DHT extends EventEmitter {
     }
 
     if (natSampler !== this._nat) {
-      this._nonePersistentSamples = []
       const prevHost = this.host
       const prevPort = this.port
+
+      this._nonePersistentSamples = []
       this._nat = natSampler
+
       this._natChange(prevHost, prevPort)
     }
 
