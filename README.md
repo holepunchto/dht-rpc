@@ -182,7 +182,7 @@ Emitted when the network interfaces of the computer change.
 Emitted when internal values are changed.
 
 Possible `event` names:
-- `nat`: emitted when `node.host` or `node.port` were potentially changed
+- `nat`: emitted when `node.host` or `node.port` were changed
 
 #### `node.on('close')`
 
