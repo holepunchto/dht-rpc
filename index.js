@@ -268,18 +268,14 @@ class DHT extends EventEmitter {
   }
 
   _natAdd (host, port) {
-    const prevHost = this.host
-    const prevPort = this.port
+    const prevHost = this._nat.host
+    const prevPort = this._nat.port
 
     this._nat.add(host, port)
 
-    this._natChange(prevHost, prevPort)
-  }
+    if (prevHost === this._nat.host && prevPort === this._nat.port) return
 
-  _natChange (prevHost, prevPort) {
-    if (prevHost !== this.host || prevPort !== this.port) {
-      this.emit('update', 'nat')
-    }
+    this.emit('nat-update', this.host, this.port)
   }
 
   // we don't check that this is a bootstrap node but we limit the sample size to very few nodes, so fine
@@ -589,13 +585,15 @@ class DHT extends EventEmitter {
     }
 
     if (natSampler !== this._nat) {
-      const prevHost = this.host
-      const prevPort = this.port
+      const prevHost = this._nat.host
+      const prevPort = this._nat.port
 
       this._nonePersistentSamples = []
       this._nat = natSampler
 
-      this._natChange(prevHost, prevPort)
+      if (!(prevHost === this._nat.host && prevPort === this._nat.port)) {
+        this.emit('nat-update', this.host, this.port)
+      }
     }
 
     // TODO: we should make this a bit more defensive in terms of using more
