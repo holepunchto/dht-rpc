@@ -506,6 +506,35 @@ test('remote address with peers', async function (t) {
   t.pass()
 })
 
+test('nat update event', async function (t) {
+  t.plan(4)
+
+  const a = new DHT({ ephemeral: false, firewalled: false })
+  await a.ready()
+
+  const bootstrap = ['localhost:' + a.address().port]
+  const b = new DHT({ ephemeral: false, bootstrap })
+
+  b.once('update', function (event) {
+    if (event !== 'nat') return
+
+    t.is(b.host, '127.0.0.1')
+    t.is(b.port, b.io.clientSocket.address().port)
+
+    b.once('update', function (event) {
+      if (event !== 'nat') return
+
+      t.is(b.host, '127.0.0.1')
+      t.is(b.port, b.io.serverSocket.address().port)
+    })
+  })
+
+  await b.ready()
+
+  await a.destroy()
+  await b.destroy()
+})
+
 async function freePort () {
   const udx = new UDX()
   const sock = udx.createSocket()
