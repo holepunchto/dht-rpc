@@ -515,17 +515,13 @@ test('nat update event', async function (t) {
   const bootstrap = ['localhost:' + a.address().port]
   const b = new DHT({ ephemeral: false, bootstrap })
 
-  b.once('update', function (event) {
-    if (event !== 'nat') return
+  b.once('nat-update', function (host, port) {
+    t.is(host, '127.0.0.1')
+    t.is(port, b.io.clientSocket.address().port)
 
-    t.is(b.host, '127.0.0.1')
-    t.is(b.port, b.io.clientSocket.address().port)
-
-    b.once('update', function (event) {
-      if (event !== 'nat') return
-
-      t.is(b.host, '127.0.0.1')
-      t.is(b.port, b.io.serverSocket.address().port)
+    b.once('nat-update', function (host, port) {
+      t.is(host, '127.0.0.1')
+      t.is(port, b.io.serverSocket.address().port)
     })
   })
 
