@@ -275,7 +275,7 @@ class DHT extends EventEmitter {
 
     if (prevHost === this._nat.host && prevPort === this._nat.port) return
 
-    this.emit('nat-update', this.host, this.port)
+    this.emit('nat-update', this._nat.host, this._nat.port)
   }
 
   // we don't check that this is a bootstrap node but we limit the sample size to very few nodes, so fine
@@ -592,7 +592,7 @@ class DHT extends EventEmitter {
       this._nat = natSampler
 
       if (!(prevHost === this._nat.host && prevPort === this._nat.port)) {
-        this.emit('nat-update', this.host, this.port)
+        this.emit('nat-update', this._nat.host, this._nat.port)
       }
     }
 
