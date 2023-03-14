@@ -272,6 +272,7 @@ class DHT extends EventEmitter {
     const prevPort = this.port
 
     this._nat.add(host, port)
+
     this._natChange(prevHost, prevPort)
   }
 
