@@ -274,6 +274,7 @@ class DHT extends EventEmitter {
     if (this._nonePersistentSamples.indexOf(id) > -1) return
     this._nonePersistentSamples.push(id)
     this._nat.add(to.host, to.port)
+    this.emit('update', 'nat')
   }
 
   _addNodeFromNetwork (sample, from, to) {
@@ -294,6 +295,7 @@ class DHT extends EventEmitter {
         oldNode.to = to
         oldNode.sampled = this._tick
         this._nat.add(to.host, to.port)
+        this.emit('update', 'nat')
       }
 
       oldNode.pinged = oldNode.seen = this._tick
@@ -327,6 +329,7 @@ class DHT extends EventEmitter {
     if (node.to && node.sampled === 0) {
       node.sampled = this._tick
       this._nat.add(node.to.host, node.to.port)
+      this.emit('update', 'nat')
     }
 
     this.emit('add-node', node)
@@ -576,6 +579,7 @@ class DHT extends EventEmitter {
     if (natSampler !== this._nat) {
       this._nonePersistentSamples = []
       this._nat = natSampler
+      this.emit('update', 'nat')
     }
 
     // TODO: we should make this a bit more defensive in terms of using more
@@ -654,7 +658,7 @@ class DHT extends EventEmitter {
     for (const res of pongs) {
       if (hosts.indexOf(res.from.host) > -1) {
         count++
-        natSampler.add(res.to.host, res.to.port)
+        natSampler.add(res.to.host, res.to.port) // + it could be useful to report this one
       }
     }
 
