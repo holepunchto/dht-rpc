@@ -658,7 +658,7 @@ class DHT extends EventEmitter {
     for (const res of pongs) {
       if (hosts.indexOf(res.from.host) > -1) {
         count++
-        natSampler.add(res.to.host, res.to.port) // + it could be useful to report this one
+        natSampler.add(res.to.host, res.to.port)
       }
     }
 
