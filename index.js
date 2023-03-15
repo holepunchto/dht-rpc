@@ -267,13 +267,24 @@ class DHT extends EventEmitter {
     return req
   }
 
+  _natAdd (host, port) {
+    const prevHost = this._nat.host
+    const prevPort = this._nat.port
+
+    this._nat.add(host, port)
+
+    if (prevHost === this._nat.host && prevPort === this._nat.port) return
+
+    this.emit('nat-update', this._nat.host, this._nat.port)
+  }
+
   // we don't check that this is a bootstrap node but we limit the sample size to very few nodes, so fine
   _sampleBootstrapMaybe (from, to) {
     if (this._nonePersistentSamples.length >= Math.max(1, this.bootstrapNodes.length)) return
     const id = from.host + ':' + from.port
     if (this._nonePersistentSamples.indexOf(id) > -1) return
     this._nonePersistentSamples.push(id)
-    this._nat.add(to.host, to.port)
+    this._natAdd(to.host, to.port)
   }
 
   _addNodeFromNetwork (sample, from, to) {
@@ -293,7 +304,7 @@ class DHT extends EventEmitter {
       if (sample && (oldNode.sampled === 0 || (this._tick - oldNode.sampled) >= OLD_NODE)) {
         oldNode.to = to
         oldNode.sampled = this._tick
-        this._nat.add(to.host, to.port)
+        this._natAdd(to.host, to.port)
       }
 
       oldNode.pinged = oldNode.seen = this._tick
@@ -326,7 +337,7 @@ class DHT extends EventEmitter {
 
     if (node.to && node.sampled === 0) {
       node.sampled = this._tick
-      this._nat.add(node.to.host, node.to.port)
+      this._natAdd(node.to.host, node.to.port)
     }
 
     this.emit('add-node', node)
@@ -574,8 +585,15 @@ class DHT extends EventEmitter {
     }
 
     if (natSampler !== this._nat) {
+      const prevHost = this._nat.host
+      const prevPort = this._nat.port
+
       this._nonePersistentSamples = []
       this._nat = natSampler
+
+      if (prevHost !== this._nat.host || prevPort !== this._nat.port) {
+        this.emit('nat-update', this._nat.host, this._nat.port)
+      }
     }
 
     // TODO: we should make this a bit more defensive in terms of using more

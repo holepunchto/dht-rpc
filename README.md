@@ -178,6 +178,9 @@ it will switch from persistent mode to ephemeral again.
 
 Emitted when the network interfaces of the computer change.
 
+#### `node.on('nat-update', (host, port) => {})`
+Emitted when `node.host` or `node.port` were changed.
+
 #### `node.on('close')`
 
 Will be emitted after `node.destroy()` is completed.
