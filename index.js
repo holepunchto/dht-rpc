@@ -73,8 +73,8 @@ class DHT extends EventEmitter {
   static bootstrapper (port, host, opts) {
     if (!port) throw new Error('Port is required')
     if (!host) throw new Error('Host is required')
-    // if (host === '0.0.0.0' || host === '::') throw new Error('Invalid host')
-    // + should only allow IPv4?
+    if (host === '0.0.0.0' || host === '::') throw new Error('Invalid host')
+    if (!UDX.isIPv4(host)) throw new Error('Host must be a IPv4 address')
 
     const dht = new this({ port, ephemeral: false, firewalled: false, anyPort: false, bootstrap: [], ...opts })
     dht._nat.add(host, port)
