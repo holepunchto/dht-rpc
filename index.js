@@ -27,7 +27,7 @@ class DHT extends EventEmitter {
     super()
 
     this.bootstrapNodes = opts.bootstrap === false ? [] : (opts.bootstrap || []).map(parseNode)
-    this.table = new Table(opts.id || randomBytes(32))
+    this.table = new Table(randomBytes(32))
     this.nodes = new TOS()
     this.udx = opts.udx || new UDX()
     this.io = new IO(this.table, this.udx, {
@@ -39,7 +39,7 @@ class DHT extends EventEmitter {
 
     this.concurrency = opts.concurrency || 10
     this.bootstrapped = false
-    this.ephemeral = opts.id ? !!opts.ephemeral : true
+    this.ephemeral = true
     this.firewalled = this.io.firewalled
     this.adaptive = typeof opts.ephemeral !== 'boolean' && opts.adaptive !== false
     this.destroyed = false
@@ -63,7 +63,6 @@ class DHT extends EventEmitter {
 
     this.table.on('row', this._onrow)
 
-    if (this.ephemeral === false) this.io.ephemeral = false
     this.io.networkInterfaces.on('change', (interfaces) => this._onnetworkchange(interfaces))
 
     if (opts.nodes) {
@@ -74,8 +73,12 @@ class DHT extends EventEmitter {
   static bootstrapper (port, host, opts) {
     if (!port) throw new Error('Port is required')
     if (!host) throw new Error('Host is required')
-    const id = peer.id(host, port)
-    return new this({ port, id, ephemeral: false, firewalled: false, anyPort: false, bootstrap: [], ...opts })
+    if (host === '0.0.0.0' || host === '::') throw new Error('Invalid host')
+    if (!UDX.isIPv4(host)) throw new Error('Host must be a IPv4 address')
+
+    const dht = new this({ port, ephemeral: false, firewalled: false, anyPort: false, bootstrap: [], ...opts })
+    dht._nat.add(host, port)
+    return dht
   }
 
   get id () {
