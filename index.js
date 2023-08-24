@@ -101,15 +101,14 @@ class DHT extends EventEmitter {
     if (buf.byteLength > 1) this.io.onmessage(socket, buf, rinfo)
   }
 
+  bind () {
+    return this.io.bind()
+  }
+
   async rebind () {
-    clearInterval(this._tickInterval)
-    await this.io._destroy()
-
-    this.bootstrapped = false
-    // Should reset firewall to original state?
-    this.io._binding = null
-
-    await this._bootstrap() // .catch(noop)?
+    this._onwakeup()
+    await this.io.rebind()
+    this.refresh()
   }
 
   address () {
@@ -373,10 +372,15 @@ class DHT extends EventEmitter {
     this._refreshTicks = 1 // triggers a refresh next tick (allow network time to wake up also)
     this._lastHost = null // clear network cache check
 
-    if (this.adaptive && !this.ephemeral) {
-      this.ephemeral = true
-      this.io.ephemeral = true
-      this.emit('ephemeral')
+    if (this.adaptive) {
+      this.firewalled = true
+      this.io.firewalled = true
+
+      if (!this.ephemeral) {
+        this.ephemeral = true
+        this.io.ephemeral = true
+        this.emit('ephemeral')
+      }
     }
 
     this.emit('wakeup')
