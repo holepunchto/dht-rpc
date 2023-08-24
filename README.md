@@ -343,12 +343,13 @@ Get the routing table peers out as an array of `{ host, port }`
 
 Manually add a node to the routing table.
 
-#### `await node.rebind()`
+#### `await node.suspend()`
 
-Will close the internal sockets and rebind them, retriggering background bootstrapping etc.
+Tell the DHT you are going to background (ie suspend and allow it to make preperations for that)
 
-If `anyPort` is used and the `port` in the constructor was already in use, then the new random port will be used when rebinding.
-Mostly useful if you run an env where sockets are automatically released when backgrounding.
+#### `await node.resume()`
+
+Tell the DHT you are resuming from suspension.
 
 ## License
 
