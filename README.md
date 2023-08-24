@@ -345,9 +345,10 @@ Manually add a node to the routing table.
 
 #### `await node.rebind()`
 
-Will destroy and bootstrap again the node.
+Will close the internal sockets and rebind them, retriggering background bootstrapping etc.
 
 If `anyPort` is used and the `port` in the constructor was already in use, then the new random port will be used when rebinding.
+Mostly useful if you run an env where sockets are automatically released when backgrounding.
 
 ## License
 
