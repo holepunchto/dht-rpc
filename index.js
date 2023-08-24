@@ -34,8 +34,7 @@ class DHT extends EventEmitter {
       ...opts,
       onrequest: this._onrequest.bind(this),
       onresponse: this._onresponse.bind(this),
-      ontimeout: this._ontimeout.bind(this),
-      onnetworkchange: this._onnetworkchange.bind(this)
+      ontimeout: this._ontimeout.bind(this)
     })
 
     this.concurrency = opts.concurrency || 10
@@ -63,6 +62,8 @@ class DHT extends EventEmitter {
     this._bootstrapping.catch(noop)
 
     this.table.on('row', this._onrow)
+
+    this.io.networkInterfaces.on('change', (interfaces) => this._onnetworkchange(interfaces))
 
     if (opts.nodes) {
       for (const node of opts.nodes) this.addNode(node)
