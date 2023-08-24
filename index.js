@@ -34,7 +34,8 @@ class DHT extends EventEmitter {
       ...opts,
       onrequest: this._onrequest.bind(this),
       onresponse: this._onresponse.bind(this),
-      ontimeout: this._ontimeout.bind(this)
+      ontimeout: this._ontimeout.bind(this),
+      onnetworkchange: this._onnetworkchange.bind(this)
     })
 
     this.concurrency = opts.concurrency || 10
@@ -62,8 +63,6 @@ class DHT extends EventEmitter {
     this._bootstrapping.catch(noop)
 
     this.table.on('row', this._onrow)
-
-    this.io.networkInterfaces.on('change', (interfaces) => this._onnetworkchange(interfaces))
 
     if (opts.nodes) {
       for (const node of opts.nodes) this.addNode(node)
@@ -101,8 +100,15 @@ class DHT extends EventEmitter {
     if (buf.byteLength > 1) this.io.onmessage(socket, buf, rinfo)
   }
 
-  bind () {
-    return this.io.bind()
+  async rebind () {
+    clearInterval(this._tickInterval)
+    await this.io._destroy()
+
+    this.bootstrapped = false
+    // Should reset firewall to original state?
+    this.io._binding = null
+
+    await this._bootstrap() // .catch(noop)?
   }
 
   address () {

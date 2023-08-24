@@ -343,6 +343,12 @@ Get the routing table peers out as an array of `{ host, port }`
 
 Manually add a node to the routing table.
 
+#### `await node.rebind()`
+
+Will destroy and bootstrap again the node.
+
+If `anyPort` is used and the `port` in the constructor was already in use, then the new random port will be used when rebinding.
+
 ## License
 
 MIT
