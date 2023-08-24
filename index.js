@@ -107,6 +107,8 @@ class DHT extends EventEmitter {
   }
 
   async suspend () {
+    await this.io.bind()
+    if (this.suspended || this.destroyed) return
     this.suspended = false
     this.io.suspend()
     this.emit('suspend')
