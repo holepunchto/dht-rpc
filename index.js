@@ -43,6 +43,7 @@ class DHT extends EventEmitter {
     this.firewalled = this.io.firewalled
     this.adaptive = typeof opts.ephemeral !== 'boolean' && opts.adaptive !== false
     this.destroyed = false
+    this.suspended = false
 
     this._nat = new NatSampler()
     this._quickFirewall = opts.quickFirewall !== false
@@ -103,6 +104,23 @@ class DHT extends EventEmitter {
 
   bind () {
     return this.io.bind()
+  }
+
+  async suspend () {
+    await this.io.bind()
+    if (this.suspended || this.destroyed) return
+    this.suspended = false
+    this.io.suspend()
+    this.emit('suspend')
+  }
+
+  async resume () {
+    if (!this.suspended || this.destroyed) return
+    this.suspended = false
+    this._onwakeup()
+    await this.io.resume()
+    this.refresh()
+    this.emit('resume')
   }
 
   address () {
@@ -366,10 +384,15 @@ class DHT extends EventEmitter {
     this._refreshTicks = 1 // triggers a refresh next tick (allow network time to wake up also)
     this._lastHost = null // clear network cache check
 
-    if (this.adaptive && !this.ephemeral) {
-      this.ephemeral = true
-      this.io.ephemeral = true
-      this.emit('ephemeral')
+    if (this.adaptive) {
+      this.firewalled = true
+      this.io.firewalled = true
+
+      if (!this.ephemeral) {
+        this.ephemeral = true
+        this.io.ephemeral = true
+        this.emit('ephemeral')
+      }
     }
 
     this.emit('wakeup')
@@ -524,7 +547,7 @@ class DHT extends EventEmitter {
   _ontick () {
     const time = Date.now()
 
-    if (time - this._lastTick > SLEEPING_INTERVAL) {
+    if (time - this._lastTick > SLEEPING_INTERVAL && this.suspended === false) {
       this._onwakeup()
     } else {
       this._tick++
@@ -532,7 +555,7 @@ class DHT extends EventEmitter {
 
     this._lastTick = time
 
-    if (!this.bootstrapped) return
+    if (!this.bootstrapped || this.suspended) return
 
     if (this.adaptive && this.ephemeral && --this._stableTicks <= 0) {
       if (this._lastHost === this._nat.host) { // do not recheck the same network...

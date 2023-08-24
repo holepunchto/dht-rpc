@@ -343,6 +343,14 @@ Get the routing table peers out as an array of `{ host, port }`
 
 Manually add a node to the routing table.
 
+#### `await node.suspend()`
+
+Tell the DHT you are going to background (ie suspend and allow it to make preperations for that)
+
+#### `await node.resume()`
+
+Tell the DHT you are resuming from suspension.
+
 ## License
 
 MIT

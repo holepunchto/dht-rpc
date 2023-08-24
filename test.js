@@ -531,6 +531,69 @@ test('nat update event', async function (t) {
   await b.destroy()
 })
 
+test('suspend - random port', async function (t) {
+  const a = new DHT({ ephemeral: false, firewalled: false })
+  await a.ready()
+  const bootstrap = ['localhost:' + a.address().port]
+
+  const serverPortBefore = a.io.serverSocket.address().port
+  const clientPortBefore = a.io.clientSocket.address().port
+
+  await a.suspend()
+  await a.resume()
+
+  const serverPortAfter = a.io.serverSocket.address().port
+  const clientPortAfter = a.io.clientSocket.address().port
+
+  t.is(serverPortBefore, serverPortAfter)
+  t.is(clientPortBefore, clientPortAfter)
+
+  // Very basic check that the rebinded node still works
+  const c = new DHT({ ephemeral: false, bootstrap })
+  t.is(c.remoteAddress(), null)
+  await c.ready()
+  t.is(c.remoteAddress().host, '127.0.0.1')
+  await c.destroy()
+
+  await a.destroy()
+})
+
+test('suspend - custom port', async function (t) {
+  const port = await freePort()
+
+  const a = new DHT({ ephemeral: false, firewalled: false, port, anyPort: false })
+  await a.ready()
+
+  const b = new DHT({ ephemeral: false, firewalled: false, port })
+  await b.ready()
+  const bootstrap = ['localhost:' + b.address().port]
+
+  await a.destroy()
+
+  const serverPortBefore = b.io.serverSocket.address().port
+  const clientPortBefore = b.io.clientSocket.address().port
+
+  await a.suspend()
+  await a.resume()
+
+  const serverPortAfter = b.io.serverSocket.address().port
+  const clientPortAfter = b.io.clientSocket.address().port
+
+  t.is(serverPortBefore, serverPortAfter)
+  t.is(clientPortBefore, clientPortAfter)
+
+  t.not(serverPortBefore, port)
+
+  // Very basic check that the rebinded node still works
+  const c = new DHT({ ephemeral: false, bootstrap })
+  t.is(c.remoteAddress(), null)
+  await c.ready()
+  t.is(c.remoteAddress().host, '127.0.0.1')
+  await c.destroy()
+
+  await b.destroy()
+})
+
 async function freePort () {
   const udx = new UDX()
   const sock = udx.createSocket()
