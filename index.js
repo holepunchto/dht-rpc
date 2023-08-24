@@ -43,6 +43,7 @@ class DHT extends EventEmitter {
     this.firewalled = this.io.firewalled
     this.adaptive = typeof opts.ephemeral !== 'boolean' && opts.adaptive !== false
     this.destroyed = false
+    this.suspended = false
 
     this._nat = new NatSampler()
     this._quickFirewall = opts.quickFirewall !== false
@@ -105,10 +106,19 @@ class DHT extends EventEmitter {
     return this.io.bind()
   }
 
-  async rebind () {
+  async suspend () {
+    this.suspended = false
+    this.io.suspend()
+    this.emit('suspend')
+  }
+
+  async resume () {
+    if (!this.suspended || this.destroyed) return
+    this.suspended = false
     this._onwakeup()
-    await this.io.rebind()
+    await this.io.resume()
     this.refresh()
+    this.emit('resume')
   }
 
   address () {
@@ -535,7 +545,7 @@ class DHT extends EventEmitter {
   _ontick () {
     const time = Date.now()
 
-    if (time - this._lastTick > SLEEPING_INTERVAL) {
+    if (time - this._lastTick > SLEEPING_INTERVAL && this.suspended === false) {
       this._onwakeup()
     } else {
       this._tick++
@@ -543,7 +553,7 @@ class DHT extends EventEmitter {
 
     this._lastTick = time
 
-    if (!this.bootstrapped) return
+    if (!this.bootstrapped || this.suspended) return
 
     if (this.adaptive && this.ephemeral && --this._stableTicks <= 0) {
       if (this._lastHost === this._nat.host) { // do not recheck the same network...

@@ -531,7 +531,7 @@ test('nat update event', async function (t) {
   await b.destroy()
 })
 
-test('rebind - random port', async function (t) {
+test('suspend - random port', async function (t) {
   const a = new DHT({ ephemeral: false, firewalled: false })
   await a.ready()
   const bootstrap = ['localhost:' + a.address().port]
@@ -539,7 +539,8 @@ test('rebind - random port', async function (t) {
   const serverPortBefore = a.io.serverSocket.address().port
   const clientPortBefore = a.io.clientSocket.address().port
 
-  await a.rebind()
+  await a.suspend()
+  await a.resume()
 
   const serverPortAfter = a.io.serverSocket.address().port
   const clientPortAfter = a.io.clientSocket.address().port
@@ -557,7 +558,7 @@ test('rebind - random port', async function (t) {
   await a.destroy()
 })
 
-test('rebind - custom port', async function (t) {
+test('suspend - custom port', async function (t) {
   const port = await freePort()
 
   const a = new DHT({ ephemeral: false, firewalled: false, port, anyPort: false })
@@ -572,7 +573,8 @@ test('rebind - custom port', async function (t) {
   const serverPortBefore = b.io.serverSocket.address().port
   const clientPortBefore = b.io.clientSocket.address().port
 
-  await b.rebind()
+  await a.suspend()
+  await a.resume()
 
   const serverPortAfter = b.io.serverSocket.address().port
   const clientPortAfter = b.io.clientSocket.address().port
