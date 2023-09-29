@@ -209,7 +209,7 @@ without you contacting them first.
 
 #### `node.randomized`
 
-Boolean indicating if your node is behind a randomizing NAT.
+Boolean indicating if your node is likely behind a randomizing NAT.
 
 #### `const addr = node.address()`
 
