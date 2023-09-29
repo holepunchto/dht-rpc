@@ -207,6 +207,10 @@ Boolean indicated if your node is behind a firewall.
 This is auto detected by having other nodes trying to do a PING to you
 without you contacting them first.
 
+#### `node.randomized`
+
+Boolean indicating if your node is likely behind a randomizing NAT.
+
 #### `const addr = node.address()`
 
 Get the local address of the UDP socket bound.

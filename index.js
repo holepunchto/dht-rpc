@@ -94,6 +94,10 @@ class DHT extends EventEmitter {
     return this._nat.port
   }
 
+  get randomized () {
+    return this._nat.host !== null && (this._nat.port === 0)
+  }
+
   get socket () {
     return this.firewalled ? this.io.clientSocket : this.io.serverSocket
   }
