@@ -207,7 +207,7 @@ Boolean indicated if your node is behind a firewall.
 This is auto detected by having other nodes trying to do a PING to you
 without you contacting them first.
 
-#### `node.isRandomized`
+#### `node.randomized`
 
 Boolean indicating if your node is behind a randomizing NAT.
 
