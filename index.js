@@ -95,7 +95,7 @@ class DHT extends EventEmitter {
   }
 
   get randomized () {
-    return this._nat.host && (this._nat.port === 0)
+    return this._nat.host !== null && (this._nat.port === 0)
   }
 
   get socket () {
