@@ -389,8 +389,9 @@ class DHT extends EventEmitter {
     this._lastHost = null // clear network cache check
 
     if (this.adaptive) {
-      this.firewalled = true
-      this.io.firewalled = true
+      // TODO: re-enable this as soon as we find out why this is over triggering in some edge cases
+      // this.firewalled = true
+      // this.io.firewalled = true
 
       if (!this.ephemeral) {
         this.ephemeral = true
