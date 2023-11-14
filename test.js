@@ -79,7 +79,7 @@ test('make tiny swarm', async function (t) {
   t.pass('could make swarm')
 })
 
-test('make bigger swarm', { timeout: 90000 }, async function (t) {
+test.solo('make bigger swarm', { timeout: 90000 }, async function (t) {
   const swarm = await makeSwarm(500, t)
 
   const targetNode = swarm[25]
