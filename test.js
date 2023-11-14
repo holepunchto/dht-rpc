@@ -594,6 +594,13 @@ test('suspend - custom port', async function (t) {
   await b.destroy()
 })
 
+test('response includes roundtrip time', async function (t) {
+  const [, a, b] = await makeSwarm(3, t)
+  const NOPE = 442
+  const response = await a.request({ command: NOPE }, { host: '127.0.0.1', port: b.address().port })
+  t.ok(response.rtt !== undefined)
+})
+
 async function freePort () {
   const udx = new UDX()
   const sock = udx.createSocket()
