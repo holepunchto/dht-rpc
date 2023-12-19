@@ -6,6 +6,7 @@ const sodium = require('sodium-universal')
 const c = require('compact-encoding')
 const NatSampler = require('nat-sampler')
 const b4a = require('b4a')
+const safetyCatch = require('safety-catch')
 const IO = require('./lib/io')
 const Query = require('./lib/query')
 const Session = require('./lib/session')
@@ -60,7 +61,7 @@ class DHT extends EventEmitter {
     this._onrow = (row) => row.on('full', (node) => this._onfullrow(node, row))
     this._nonePersistentSamples = []
     this._bootstrapping = this._bootstrap()
-    this._bootstrapping.catch(noop)
+    this._bootstrapping.catch(safetyCatch)
 
     this.table.on('row', this._onrow)
 
@@ -264,13 +265,13 @@ class DHT extends EventEmitter {
       const value = b4a.allocUnsafe(2)
       c.uint16.encode({ start: 0, end: 2, buffer: value }, self.io.serverSocket.address().port)
 
-      self._request(data.from, true, PING_NAT, null, value, null, () => { testNat = true }, noop)
+      self._request(data.from, true, PING_NAT, null, value, null, () => { testNat = true }, safetyCatch)
     }
   }
 
   refresh () {
     const node = this.table.random()
-    this._backgroundQuery(node ? node.id : this.table.id).on('error', noop)
+    this._backgroundQuery(node ? node.id : this.table.id).on('error', safetyCatch)
   }
 
   async destroy () {
@@ -807,5 +808,3 @@ function requestAll (dht, internal, command, value, nodes) {
     }
   })
 }
-
-function noop () {}
