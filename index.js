@@ -12,6 +12,7 @@ const Session = require('./lib/session')
 const peer = require('./lib/peer')
 const { UNKNOWN_COMMAND, INVALID_TOKEN } = require('./lib/errors')
 const { PING, PING_NAT, FIND_NODE, DOWN_HINT } = require('./lib/commands')
+const { createTracer } = require('hypertrace')
 
 const TMP = b4a.allocUnsafe(32)
 const TICK_INTERVAL = 5000
@@ -26,6 +27,7 @@ class DHT extends EventEmitter {
   constructor (opts = {}) {
     super()
 
+    this.tracer = createTracer(this)
     this.bootstrapNodes = opts.bootstrap === false ? [] : (opts.bootstrap || []).map(parseNode)
     this.table = new Table(randomBytes(32))
     this.nodes = new TOS()
@@ -113,6 +115,7 @@ class DHT extends EventEmitter {
   async suspend () {
     await this.io.bind()
     if (this.suspended || this.destroyed) return
+    this.tracer.trace('suspend')
     this.suspended = true
     this.io.suspend()
     this.emit('suspend')
@@ -120,6 +123,7 @@ class DHT extends EventEmitter {
 
   async resume () {
     if (!this.suspended || this.destroyed) return
+    this.tracer.trace('resume')
     this.suspended = false
     this._onwakeup()
     await this.io.resume()
@@ -189,6 +193,7 @@ class DHT extends EventEmitter {
 
   query ({ target, command, value }, opts) {
     if (this.destroyed) throw new Error('Node destroyed')
+    this.tracer.trace('query', { command, value })
     this._refreshTicks = REFRESH_TICKS
     return new Query(this, target, false, command, value || null, opts)
   }
@@ -203,6 +208,7 @@ class DHT extends EventEmitter {
   }
 
   request ({ token = null, command, target = null, value = null }, { host, port }, opts) {
+    this.tracer.trace('request', { command, value, host, port })
     const req = this.io.createRequest({ id: null, host, port }, token, false, command, target, value, (opts && opts.session) || null, (opts && opts.ttl))
     return this._requestToPromise(req, opts)
   }
@@ -274,6 +280,7 @@ class DHT extends EventEmitter {
   }
 
   async destroy () {
+    this.tracer.trace('destroy')
     const emitClose = !this.destroyed
     this.destroyed = true
     clearInterval(this._tickInterval)

@@ -13,6 +13,7 @@
     "compact-encoding-net": "^1.2.0",
     "events": "^3.3.0",
     "fast-fifo": "^1.1.0",
+    "hypertrace": "^1.2.1",
     "kademlia-routing-table": "^1.0.1",
     "nat-sampler": "^1.0.1",
     "sodium-universal": "^4.0.0",
