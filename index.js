@@ -688,7 +688,7 @@ class DHT extends EventEmitter {
     // if no nodes are available, including bootstrappers - bail
     if (nodes.length === 0) return true
 
-    const hosts = []
+    const hosts = new Set()
     const value = b4a.allocUnsafe(2)
 
     c.uint16.encode({ start: 0, end: 2, buffer: value }, this.io.serverSocket.address().port)
@@ -701,7 +701,7 @@ class DHT extends EventEmitter {
 
     let count = 0
     for (const res of pongs) {
-      if (hosts.indexOf(res.from.host) > -1) {
+      if (hosts.has(res.from.host)) {
         count++
         natSampler.add(res.to.host, res.to.port)
       }
@@ -722,7 +722,7 @@ class DHT extends EventEmitter {
     return false
 
     function onmessage (_, { host }) {
-      hosts.push(host)
+      hosts.add(host)
     }
   }
 
