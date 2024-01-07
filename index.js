@@ -697,7 +697,6 @@ class DHT extends EventEmitter {
     this.io.serverSocket.on('message', onmessage)
 
     const pongs = await requestAll(this, true, PING_NAT, value, nodes)
-    if (!pongs.length) return true
 
     let count = 0
     for (const res of pongs) {
@@ -709,7 +708,7 @@ class DHT extends EventEmitter {
 
     this.io.serverSocket.removeListener('message', onmessage)
 
-    // if we got very few replies, consider it a fluke
+    // if we got no or very few replies, consider it a fluke
     if (count < (nodes.length >= 5 ? 3 : 1)) return true
 
     // check that the server socket has the same ip as the client socket
