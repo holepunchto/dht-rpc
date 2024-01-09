@@ -688,7 +688,7 @@ class DHT extends EventEmitter {
     // if no nodes are available, including bootstrappers - bail
     if (nodes.length === 0) return true
 
-    const hosts = []
+    const hosts = new Set()
     const value = b4a.allocUnsafe(2)
 
     c.uint16.encode({ start: 0, end: 2, buffer: value }, this.io.serverSocket.address().port)
@@ -697,11 +697,10 @@ class DHT extends EventEmitter {
     this.io.serverSocket.on('message', onmessage)
 
     const pongs = await requestAll(this, true, PING_NAT, value, nodes)
-    if (!pongs.length) return true
 
     let count = 0
     for (const res of pongs) {
-      if (hosts.indexOf(res.from.host) > -1) {
+      if (hosts.has(res.from.host)) {
         count++
         natSampler.add(res.to.host, res.to.port)
       }
@@ -709,7 +708,7 @@ class DHT extends EventEmitter {
 
     this.io.serverSocket.removeListener('message', onmessage)
 
-    // if we got very few replies, consider it a fluke
+    // if we got no or very few replies, consider it a fluke
     if (count < (nodes.length >= 5 ? 3 : 1)) return true
 
     // check that the server socket has the same ip as the client socket
@@ -722,7 +721,7 @@ class DHT extends EventEmitter {
     return false
 
     function onmessage (_, { host }) {
-      hosts.push(host)
+      hosts.add(host)
     }
   }
 
