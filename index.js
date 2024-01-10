@@ -44,6 +44,7 @@ class DHT extends EventEmitter {
     this.adaptive = typeof opts.ephemeral !== 'boolean' && opts.adaptive !== false
     this.destroyed = false
     this.suspended = false
+    this.online = true
 
     this._nat = new NatSampler()
     this._quickFirewall = opts.quickFirewall !== false
@@ -420,6 +421,7 @@ class DHT extends EventEmitter {
 
   _onnetworkchange (interfaces) {
     this.emit('network-change', interfaces)
+    this.emit('network-update')
   }
 
   _repingAndSwap (newNode, oldNode) {
@@ -739,6 +741,20 @@ class DHT extends EventEmitter {
     })
 
     return q
+  }
+
+  // called by the query
+  _online () {
+    if (this.online) return
+    this.online = true
+    this.emit('network-update')
+  }
+
+  // called by the query
+  _offline () {
+    if (!this.online) return
+    this.online = false
+    this.emit('network-update')
   }
 }
 
