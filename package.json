@@ -7,11 +7,17 @@
     "index.js",
     "lib/*.js"
   ],
+  "imports": {
+    "events": {
+      "bare": "bare-events",
+      "default": "events"
+    }
+  },
   "dependencies": {
     "b4a": "^1.6.1",
+    "bare-events": "^2.2.0",
     "compact-encoding": "^2.11.0",
     "compact-encoding-net": "^1.2.0",
-    "events": "^3.3.0",
     "fast-fifo": "^1.1.0",
     "kademlia-routing-table": "^1.0.1",
     "nat-sampler": "^1.0.1",
