@@ -126,14 +126,14 @@ Options include:
 ```
 
 Nodes per default use something called adaptive mode to decide whether or not they want to join other nodes' routing table.
-This includes things like node uptime, if the node is firewalled etc. Adaptive mode is conservative, so it might take ~20-30 mins for the node to turn persistent. If you are making a test case with your own bootstrap network you'd usually want to turn this off to make sure your test finishes in a timely maner. You can do this by passing `ephemeral: false` in the constructor.
+This includes things like node uptime, if the node is firewalled etc. Adaptive mode is conservative, so it might take ~20-30 mins for the node to turn persistent. If you are making a test case with your own bootstrap network you'd usually want to turn this off to make sure your test finishes in a timely manner. You can do this by passing `ephemeral: false` in the constructor.
 For the vast majority of use-cases you should always use adaptive mode to ensure good DHT health, ie the defaults.
 
 Your DHT routing id is `hash(publicIp + publicPort)` and will be autoconfigured internally.
 
 #### `const node = DHT.bootstrapper(port, host, [options])`
 
-Make a bootstrap node for your DHT. The port and host needs to be it's globally accessable port and host.
+Make a bootstrap node for your DHT. The port and host needs to be its globally accessible port and host.
 Note: `port` and `host` parameters are used to create the node id. Use `options.host` if you want to bind to i.e. 127.0.0.1.
 DHT nodes can use any other DHT node to bootstrap, but a bootstrap node can bootstrap itself, by itself.
 
@@ -148,7 +148,7 @@ Get your own routing ID. Only available when the node is not ephemeral.
 
 #### `node.ephemeral`
 
-A boolean indicating if you are currently epheremal or not
+A boolean indicating if you are currently ephemeral or not
 
 #### `node.on('bootstrap')`
 
@@ -256,7 +256,7 @@ Options include:
 }
 ```
 
-Normally you'd set the token when commiting to the dht in the query's commit hook.
+Normally you'd set the token when committing to the dht in the query's commit hook.
 
 #### `reply = await node.ping(to, [options])`
 
@@ -315,7 +315,7 @@ Other options include:
     // from a previous query.
   ],
   map (reply) {
-    // map the reply into what you want returned on the stram
+    // map the reply into what you want returned on the stream
     return { onlyValue: reply.value }
   }
 }
