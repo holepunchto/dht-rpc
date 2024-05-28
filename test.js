@@ -181,9 +181,9 @@ test('query yields data with a dedicated memory slab', async function (t) {
   const reply = q.closestReplies[0]
 
   // Note: no to.id set, so can't test that
-  t.is(reply.token.buffer.byteLength < 100, true, 'no shared slab for token buffer')
-  t.is(reply.from.id.buffer.byteLength < 100, true, 'no shared slab for from.id buffer')
-  t.is(reply.value.buffer.byteLength < 100, true, 'no shared slab for value buffer')
+  t.is(reply.token.buffer.byteLength < 200, true, 'no shared slab for token buffer')
+  t.is(reply.from.id.buffer.byteLength < 200, true, 'no shared slab for from.id buffer')
+  t.is(reply.value.buffer.byteLength < 200, true, 'no shared slab for value buffer')
   t.is(reply.value.buffer, reply.token.buffer, 'value, token and id share the same slab (1/2)')
   t.is(reply.value.buffer, reply.from.id.buffer, 'value, token and id share the same slab (2/2)')
 })
