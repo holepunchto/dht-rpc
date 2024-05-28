@@ -166,7 +166,7 @@ test('commit after query', async function (t) {
 })
 
 test('query yields data with a dedicated memory slab', async function (t) {
-  const swarm = await makeSwarm(5, t)
+  const swarm = await makeSwarm(2, t)
 
   for (const node of swarm) {
     node.on('request', function (req) {
