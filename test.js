@@ -165,6 +165,29 @@ test('commit after query', async function (t) {
   t.is(commits, swarm[42].table.k)
 })
 
+test('query yields data with a dedicated memory slab', async function (t) {
+  const swarm = await makeSwarm(5, t)
+
+  for (const node of swarm) {
+    node.on('request', function (req) {
+      return req.reply(Buffer.from('a value'))
+    })
+  }
+
+  const q = swarm[0].query({ target: swarm[0].table.id })
+
+  await q.finished()
+
+  const reply = q.closestReplies[0]
+
+  // Note: no to.id set, so can't test that
+  t.is(reply.token.buffer.byteLength < 100, true, 'no shared slab for token buffer')
+  t.is(reply.from.id.buffer.byteLength < 100, true, 'no shared slab for from.id buffer')
+  t.is(reply.value.buffer.byteLength < 100, true, 'no shared slab for value buffer')
+  t.is(reply.value.buffer, reply.token.buffer, 'value, token and id share the same slab (1/2)')
+  t.is(reply.value.buffer, reply.from.id.buffer, 'value, token and id share the same slab (2/2)')
+})
+
 test('map query stream', async function (t) {
   const swarm = await makeSwarm(10, t)
 
