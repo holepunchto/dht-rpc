@@ -39,7 +39,7 @@ test('bootstrapper - opts.bootstrap', async function (t) {
   const port2 = await freePort()
 
   const node1 = DHT.bootstrapper(port1, '127.0.0.1')
-  await node1.fullyBootstrapped()otstrapped()
+  await node1.fullyBootstrapped()
 
   const bootstrap = [{ host: '127.0.0.1', port: node1.address().port }]
   const node2 = DHT.bootstrapper(port2, '127.0.0.1', { bootstrap })
@@ -257,7 +257,7 @@ test('shorthand commit', async function (t) {
   t.ok(notTokens >= tokens)
 })
 
-test('after ready it is always bound', async function (t) {
+test('after fullyBootstrapped it is always bound', async function (t) {
   t.plan(2)
 
   const node = new DHT()
