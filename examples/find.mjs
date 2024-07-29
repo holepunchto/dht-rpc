@@ -5,7 +5,7 @@ const GET = 1
 
 const hex = process.argv[2]
 const node = new DHT({ ephemeral: true, bootstrap: ['localhost:10001'] })
-await node.ready()
+await node.fullyBootstrapped()
 
 const q = node.query({ target: Buffer.from(hex, 'hex'), command: GET }, { commit: true })
 

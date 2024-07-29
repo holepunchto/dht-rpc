@@ -7,7 +7,7 @@ test('bootstrapper', async function (t) {
 
   const node = DHT.bootstrapper(port, '127.0.0.1')
 
-  await node.ready()
+  await node.fullyBootstrapped()
 
   if (node.address().family === 4) {
     t.is(node.address().host, '0.0.0.0')
@@ -26,7 +26,7 @@ test('bootstrapper - bind host', async function (t) {
 
   const node = DHT.bootstrapper(port, '127.0.0.1', { host: '127.0.0.1' })
 
-  await node.ready()
+  await node.fullyBootstrapped()
   t.is(node.address().host, '127.0.0.1')
   t.is(node.address().family, 4)
   t.is(node.address().port, port)
@@ -39,11 +39,11 @@ test('bootstrapper - opts.bootstrap', async function (t) {
   const port2 = await freePort()
 
   const node1 = DHT.bootstrapper(port1, '127.0.0.1')
-  await node1.ready()
+  await node1.fullyBootstrapped()otstrapped()
 
   const bootstrap = [{ host: '127.0.0.1', port: node1.address().port }]
   const node2 = DHT.bootstrapper(port2, '127.0.0.1', { bootstrap })
-  await node2.ready()
+  await node2.fullyBootstrapped()
 
   t.is(node1.bootstrapNodes.length, 0)
   t.alike(node2.bootstrapNodes, bootstrap)
@@ -266,7 +266,7 @@ test('after ready it is always bound', async function (t) {
     t.pass('is listening')
   })
 
-  await node.ready()
+  await node.fullyBootstrapped()
   const addr = node.address()
 
   t.ok(typeof addr.port, 'is number')
@@ -315,11 +315,11 @@ test('addNode / nodes option', async function (t) {
     req.reply(Buffer.from('world'))
   })
 
-  await bootstrap.ready()
-  await a.ready()
+  await bootstrap.fullyBootstrapped()
+  await a.fullyBootstrapped()
 
   const b = new DHT({ ephemeral: false, nodes: [{ host: '127.0.0.1', port: a.address().port }] })
-  await b.ready()
+  await b.fullyBootstrapped()
 
   const bNodes = b.toArray()
 
@@ -344,12 +344,12 @@ test('set bind', async function (t) {
   const port = await freePort()
 
   const a = new DHT({ port, firewalled: false })
-  await a.ready()
+  await a.fullyBootstrapped()
 
   t.alike(a.address().port, port, 'bound to explicit port')
 
   const b = new DHT({ port })
-  await b.ready()
+  await b.fullyBootstrapped()
 
   t.not(b.address().port, port, 'bound to different port as explicit one is taken')
 
@@ -460,7 +460,7 @@ test('local address', async function (t) {
   const node = new DHT()
   t.is(node.localAddress(), null)
 
-  await node.ready()
+  await node.fullyBootstrapped()
   t.comment('Local address (host): ' + node.localAddress().host)
   t.ok(node.localAddress().host.match(/\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/))
   t.is(node.localAddress().port, node.io.serverSocket.address().port)
@@ -476,7 +476,7 @@ test('remote address without peers', async function (t) {
   const node = new DHT()
   t.is(node.remoteAddress(), null)
 
-  await node.ready()
+  await node.fullyBootstrapped()
   t.is(node.remoteAddress(), null)
 
   await node.destroy()
@@ -489,13 +489,13 @@ test('remote address with peers', async function (t) {
 
   const a = new DHT({ ephemeral: false, firewalled: false })
   t.is(a.remoteAddress(), null)
-  await a.ready()
+  await a.fullyBootstrapped()
   t.is(a.remoteAddress(), null)
 
   const bootstrap = ['localhost:' + a.address().port]
   const b = new DHT({ ephemeral: false, bootstrap })
   t.is(b.remoteAddress(), null)
-  await b.ready()
+  await b.fullyBootstrapped()
   t.is(b.remoteAddress().host, '127.0.0.1')
 
   t.is(a.remoteAddress().host, '127.0.0.1')
@@ -510,7 +510,7 @@ test('nat update event', async function (t) {
   t.plan(4)
 
   const a = new DHT({ ephemeral: false, firewalled: false })
-  await a.ready()
+  await a.fullyBootstrapped()
 
   const bootstrap = ['localhost:' + a.address().port]
   const b = new DHT({ ephemeral: false, bootstrap })
@@ -525,7 +525,7 @@ test('nat update event', async function (t) {
     })
   })
 
-  await b.ready()
+  await b.fullyBootstrapped()
 
   await a.destroy()
   await b.destroy()
@@ -533,7 +533,7 @@ test('nat update event', async function (t) {
 
 test('suspend - random port', async function (t) {
   const a = new DHT({ ephemeral: false, firewalled: false })
-  await a.ready()
+  await a.fullyBootstrapped()
   const bootstrap = ['localhost:' + a.address().port]
 
   const serverPortBefore = a.io.serverSocket.address().port
@@ -551,7 +551,7 @@ test('suspend - random port', async function (t) {
   // Very basic check that the rebinded node still works
   const c = new DHT({ ephemeral: false, bootstrap })
   t.is(c.remoteAddress(), null)
-  await c.ready()
+  await c.fullyBootstrapped()
   t.is(c.remoteAddress().host, '127.0.0.1')
   await c.destroy()
 
@@ -562,10 +562,10 @@ test('suspend - custom port', async function (t) {
   const port = await freePort()
 
   const a = new DHT({ ephemeral: false, firewalled: false, port, anyPort: false })
-  await a.ready()
+  await a.fullyBootstrapped()
 
   const b = new DHT({ ephemeral: false, firewalled: false, port })
-  await b.ready()
+  await b.fullyBootstrapped()
   const bootstrap = ['localhost:' + b.address().port]
 
   await a.destroy()
@@ -587,7 +587,7 @@ test('suspend - custom port', async function (t) {
   // Very basic check that the rebinded node still works
   const c = new DHT({ ephemeral: false, bootstrap })
   t.is(c.remoteAddress(), null)
-  await c.ready()
+  await c.fullyBootstrapped()
   t.is(c.remoteAddress().host, '127.0.0.1')
   await c.destroy()
 
@@ -612,12 +612,12 @@ async function freePort () {
 
 async function makeSwarm (n, t) {
   const node = new DHT({ ephemeral: false, firewalled: false })
-  await node.ready()
+  await node.fullyBootstrapped()
   const all = [node]
   const bootstrap = ['localhost:' + node.address().port]
   while (all.length < n) {
     const node = new DHT({ ephemeral: false, bootstrap })
-    await node.ready()
+    await node.fullyBootstrapped()
     all.push(node)
   }
   t.teardown(async function () {
