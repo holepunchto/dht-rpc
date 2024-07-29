@@ -179,8 +179,13 @@ class DHT extends EventEmitter {
     return this.nodes.toArray().map(({ host, port }) => ({ host, port }))
   }
 
-  ready () {
+  async fullyBootstrapped () {
     return this._bootstrapping
+  }
+
+  ready () {
+    // Deprecating, use fullyBootstrapped instead (removed on next major)
+    return this.fullyBootstrapped()
   }
 
   findNode (target, opts) {
