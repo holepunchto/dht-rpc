@@ -305,6 +305,11 @@ test('toArray', async function (t) {
   t.alike(a.toArray(), [{ host: '127.0.0.1', port: b.address().port }])
   t.alike(b.toArray(), [{ host: '127.0.0.1', port: a.address().port }])
   t.alike(bootstrap.toArray().sort(), [{ host: '127.0.0.1', port: a.address().port }, { host: '127.0.0.1', port: b.address().port }].sort())
+
+  t.alike(bootstrap.toArray({ limit: 0 }), [])
+  t.alike(bootstrap.toArray({ limit: 1 }), [{ host: '127.0.0.1', port: a.address().port }])
+  t.alike(bootstrap.toArray({ limit: 2 }).sort(), [{ host: '127.0.0.1', port: a.address().port }, { host: '127.0.0.1', port: b.address().port }].sort())
+  t.alike(bootstrap.toArray({ limit: 10 }).sort(), [{ host: '127.0.0.1', port: a.address().port }, { host: '127.0.0.1', port: b.address().port }].sort())
 })
 
 test('addNode / nodes option', async function (t) {

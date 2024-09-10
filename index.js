@@ -175,8 +175,11 @@ class DHT extends EventEmitter {
     })
   }
 
-  toArray () {
-    return this.nodes.toArray().map(({ host, port }) => ({ host, port }))
+  toArray (opts) {
+    const limit = (opts && opts.limit)
+    if (limit === 0) return []
+    const nodes = this.nodes.toArray()
+    return nodes.slice(0, limit || nodes.length).map(({ host, port }) => ({ host, port }))
   }
 
   ready () {
