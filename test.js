@@ -603,17 +603,19 @@ test('response includes roundtrip time', async function (t) {
 
 test('bootstrap nodes with suggested IP', async function (t) {
   const a = new DHT({ ephemeral: false, firewalled: false })
+  t.is(a.remoteAddress(), null)
   await a.ready()
-  const node = '127.0.0.1@localhost:' + a.address().port
-  const bootstrap = [node]
+  t.is(a.remoteAddress(), null)
 
+  const bootstrap = ['127.0.0.1@localhost:' + a.address().port]
   const b = new DHT({ ephemeral: false, bootstrap })
   t.is(b.remoteAddress(), null)
   await b.ready()
   t.is(b.remoteAddress().host, '127.0.0.1')
+  t.is(a.remoteAddress().host, '127.0.0.1')
 
-  await b.destroy()
   await a.destroy()
+  await b.destroy()
 })
 
 async function freePort () {
