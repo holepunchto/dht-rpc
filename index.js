@@ -660,6 +660,20 @@ class DHT extends EventEmitter {
 
   async * _resolveBootstrapNodes () {
     for (const node of this.bootstrapNodes) {
+      if (node.host.includes('@')) {
+        const [ip] = node.host.split('@')
+        try {
+          const request = this.io.createRequest({ id: null, host: ip, port: node.port }, null, true, PING)
+          await this._requestToPromise(request)
+          yield {
+            id: peer.id(ip, node.port),
+            host: ip,
+            port: node.port
+          }
+        } catch {
+        }
+      }
+
       let address
       try {
         address = await this.udx.lookup(node.host, { family: 4 })
@@ -784,17 +798,6 @@ function localIP (udx, family = 4) {
 function parseNode (s) {
   if (typeof s === 'object') return s
   if (typeof s === 'number') return { host: '127.0.0.1', port: s }
-
-  if (s.includes('@')) {
-    const [ip, hostPort] = s.split('@')
-    const [, port] = hostPort.split(':')
-    if (!port) throw new Error('Bootstrap node format is suggested-ip@host:port')
-
-    return {
-      host: ip,
-      port: Number(port)
-    }
-  }
 
   const [host, port] = s.split(':')
   if (!port) throw new Error('Bootstrap node format is host:port')

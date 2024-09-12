@@ -602,20 +602,19 @@ test('response includes roundtrip time', async function (t) {
 })
 
 test('bootstrap nodes with suggested IP', async function (t) {
-  const a = new DHT({ ephemeral: false, firewalled: false })
-  t.is(a.remoteAddress(), null)
-  await a.ready()
-  t.is(a.remoteAddress(), null)
+  const [bootstrap, a, b] = await makeSwarm(3, t, '127.0.0.1@localhost')
 
-  const bootstrap = ['127.0.0.1@localhost:' + a.address().port]
-  const b = new DHT({ ephemeral: false, bootstrap })
-  t.is(b.remoteAddress(), null)
-  await b.ready()
-  t.is(b.remoteAddress().host, '127.0.0.1')
-  t.is(a.remoteAddress().host, '127.0.0.1')
+  t.alike(a.toArray(), [{ host: '127.0.0.1', port: b.address().port }])
+  t.alike(b.toArray(), [{ host: '127.0.0.1', port: a.address().port }])
+  t.alike(bootstrap.toArray().sort(), [{ host: '127.0.0.1', port: a.address().port }, { host: '127.0.0.1', port: b.address().port }].sort())
+})
 
-  await a.destroy()
-  await b.destroy()
+test('bootstrap nodes with invalid suggested IP', async function (t) {
+  const [bootstrap, a, b] = await makeSwarm(3, t, '127.0.0.255@localhost')
+
+  t.alike(a.toArray(), [{ host: '127.0.0.1', port: b.address().port }])
+  t.alike(b.toArray(), [{ host: '127.0.0.1', port: a.address().port }])
+  t.alike(bootstrap.toArray().sort(), [{ host: '127.0.0.1', port: a.address().port }, { host: '127.0.0.1', port: b.address().port }].sort())
 })
 
 async function freePort () {
@@ -627,11 +626,11 @@ async function freePort () {
   return port
 }
 
-async function makeSwarm (n, t) {
+async function makeSwarm (n, t, bootstrapHost = 'localhost') {
   const node = new DHT({ ephemeral: false, firewalled: false })
   await node.ready()
   const all = [node]
-  const bootstrap = ['localhost:' + node.address().port]
+  const bootstrap = [bootstrapHost + ':' + node.address().port]
   while (all.length < n) {
     const node = new DHT({ ephemeral: false, bootstrap })
     await node.ready()
