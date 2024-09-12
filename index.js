@@ -659,20 +659,19 @@ class DHT extends EventEmitter {
   }
 
   async * _resolveBootstrapNodes () {
-    for (const node of this.bootstrapNodes) {
-      let host = node.host
+    for (let { host, port } of this.bootstrapNodes) {
       if (host.includes('@')) {
-        host = host.split('@')[0]
+        const suggestedIP = host.split('@')[0]
         try {
-          const request = this.io.createRequest({ id: null, host, port: node.port }, null, true, PING)
+          const request = this.io.createRequest({ id: null, host: suggestedIP, port }, null, true, PING)
           await this._requestToPromise(request)
           yield {
-            id: peer.id(host, node.port),
-            host,
-            port: node.port
+            id: peer.id(suggestedIP, port),
+            host: suggestedIP,
+            port
           }
         } catch {
-          host = node.host.split('@')[1]
+          host = host.split('@')[1]
         }
       }
 
@@ -684,9 +683,9 @@ class DHT extends EventEmitter {
       }
 
       yield {
-        id: peer.id(address.host, node.port),
+        id: peer.id(address.host, port),
         host: address.host,
-        port: node.port
+        port
       }
     }
   }

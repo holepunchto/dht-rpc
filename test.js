@@ -601,7 +601,7 @@ test('response includes roundtrip time', async function (t) {
   t.ok(response.rtt !== undefined)
 })
 
-test('bootstrap nodes with suggested IP', async function (t) {
+test('bootstrap with suggested IP', async function (t) {
   const [bootstrap, a, b] = await makeSwarm(3, t, '127.0.0.1@localhost')
 
   t.alike(a.toArray(), [{ host: '127.0.0.1', port: b.address().port }])
@@ -609,7 +609,7 @@ test('bootstrap nodes with suggested IP', async function (t) {
   t.alike(bootstrap.toArray().sort(), [{ host: '127.0.0.1', port: a.address().port }, { host: '127.0.0.1', port: b.address().port }].sort())
 })
 
-test('bootstrap nodes with invalid suggested IP', async function (t) {
+test('bootstrap with invalid suggested IP', async function (t) {
   const [bootstrap, a, b] = await makeSwarm(3, t, '127.0.0.255@localhost')
 
   t.alike(a.toArray(), [{ host: '127.0.0.1', port: b.address().port }])
