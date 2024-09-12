@@ -339,9 +339,9 @@ Shutdown the DHT node.
 
 Boolean indicating if this has been destroyed.
 
-#### `node.toArray()`
+#### `node.toArray([options])`
 
-Get the routing table peers out as an array of `{ host, port }`
+Get the routing table peers out as an array of `{ host, port }`. Use `options.limit` to get a subset.
 
 #### `node.addNode({ host, port })`
 
