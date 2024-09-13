@@ -799,7 +799,6 @@ function localIP (udx, family = 4) {
 function parseNode (s) {
   if (typeof s === 'object') return s
   if (typeof s === 'number') return { host: '127.0.0.1', port: s }
-
   const [host, port] = s.split(':')
   if (!port) throw new Error('Bootstrap node format is host:port')
 
