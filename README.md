@@ -110,7 +110,7 @@ Options include:
 
 ``` js
 {
-  // A list of bootstrap nodes
+  // A list of bootstrap nodes. Optionally prefix a suggested-IP, i.e. '192.168.1.10@bootstrap-node.com:24242'
   bootstrap: [ 'bootstrap-node.com:24242', ... ],
   // Optionally pass in array of { host, port } to add to the routing table if you know any peers
   nodes: [{ host, port }, ...],
