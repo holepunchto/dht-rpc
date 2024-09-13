@@ -660,18 +660,20 @@ class DHT extends EventEmitter {
 
   async * _resolveBootstrapNodes () {
     for (let { host, port } of this.bootstrapNodes) {
-      if (host.includes('@')) {
-        const suggestedIP = host.split('@')[0]
+      const [suggestedIP, fallbackHost] = host.split('@')
+
+      if (fallbackHost) {
         try {
           const request = this.io.createRequest({ id: null, host: suggestedIP, port }, null, true, PING)
           await this._requestToPromise(request)
-          yield {
-            id: peer.id(suggestedIP, port),
-            host: suggestedIP,
-            port
-          }
         } catch {
-          host = host.split('@')[1]
+          host = fallbackHost
+        }
+
+        yield {
+          id: peer.id(suggestedIP, port),
+          host: suggestedIP,
+          port
         }
       }
 
