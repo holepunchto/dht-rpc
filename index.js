@@ -661,25 +661,22 @@ class DHT extends EventEmitter {
   async * _resolveBootstrapNodes () {
     for (let { host, port } of this.bootstrapNodes) {
       let doLookup = false
-
-      if (host.indexOf('@') > -1) {
-        let [suggestedIP, fallbackHost] = host.split('@')
+      if (host.indexOf('@') === -1) {
+        doLookup = true
+      } else {
+        const [suggestedIP, fallbackHost] = host.split('@')
         try {
           await this.ping({ host: suggestedIP, port })
           host = suggestedIP
-          fallbackHost = null
         } catch {
           host = fallbackHost
           doLookup = true
         }
-      } else {
-        doLookup = true
       }
 
       if (doLookup) {
-        let address
         try {
-          address = await this.udx.lookup(host, { family: 4 })
+          const address = await this.udx.lookup(host, { family: 4 })
           host = address.host
         } catch {
           continue
