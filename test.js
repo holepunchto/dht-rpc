@@ -606,6 +606,56 @@ test('response includes roundtrip time', async function (t) {
   t.ok(response.rtt !== undefined)
 })
 
+test('bootstrap with reachable suggested-IP and skip DNS', async function (t) {
+  const ip = '127.0.0.1'
+  const domain = 'invalid'
+  const port = await freePort()
+  const bootstrapSyntax = [ip + '@' + domain + ':' + port]
+
+  const bootstrap = new DHT({ port, ephemeral: false, firewalled: false })
+  await bootstrap.ready()
+
+  const a = new DHT({ bootstrap: bootstrapSyntax, ephemeral: false })
+  await a.ready()
+
+  const b = new DHT({ bootstrap: bootstrapSyntax, ephemeral: false })
+  await b.ready()
+
+  const host = '127.0.0.1'
+  t.alike(a.toArray(), [{ host, port: b.address().port }])
+  t.alike(b.toArray(), [{ host, port: a.address().port }])
+  t.alike(bootstrap.toArray().sort(), [{ host, port: a.address().port }, { host, port: b.address().port }].sort())
+
+  bootstrap.destroy()
+  a.destroy()
+  b.destroy()
+})
+
+test('bootstrap with unreachable suggested-IP and fallback to DNS (reachable)', async function (t) {
+  const ip = '127.0.0.255'
+  const domain = 'localhost'
+  const port = await freePort()
+  const bootstrapSyntax = [ip + '@' + domain + ':' + port]
+
+  const bootstrap = new DHT({ port, ephemeral: false, firewalled: false })
+  await bootstrap.ready()
+
+  const a = new DHT({ bootstrap: bootstrapSyntax, ephemeral: false })
+  await a.ready()
+
+  const b = new DHT({ bootstrap: bootstrapSyntax, ephemeral: false })
+  await b.ready()
+
+  const host = '127.0.0.1'
+  t.alike(a.toArray(), [{ host, port: b.address().port }])
+  t.alike(b.toArray(), [{ host, port: a.address().port }])
+  t.alike(bootstrap.toArray().sort(), [{ host, port: a.address().port }, { host, port: b.address().port }].sort())
+
+  bootstrap.destroy()
+  a.destroy()
+  b.destroy()
+})
+
 async function freePort () {
   const udx = new UDX()
   const sock = udx.createSocket()
