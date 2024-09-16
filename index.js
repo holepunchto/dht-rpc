@@ -663,6 +663,7 @@ class DHT extends EventEmitter {
   async * _resolveBootstrapNodes () {
     for (let { host, port } of this.bootstrapNodes) {
       let doLookup = false
+
       if (host.indexOf('@') === -1) {
         doLookup = true
       } else {
@@ -678,8 +679,7 @@ class DHT extends EventEmitter {
 
       if (doLookup) {
         try {
-          const address = await this.udx.lookup(host, { family: 4 })
-          host = address.host
+          host = UDX.isIPv4(host) ? host : (await this.udx.lookup(host, { family: 4 })).host
         } catch {
           continue
         }
