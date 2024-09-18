@@ -656,6 +656,11 @@ test('bootstrap with unreachable suggested-IP and fallback to DNS (reachable)', 
   b.destroy()
 })
 
+test('peer ids do not retain a slab', async function (t) {
+  const swarm = await makeSwarm(2, t)
+  t.is(swarm[1].id.buffer.byteLength, 32)
+})
+
 async function freePort () {
   const udx = new UDX()
   const sock = udx.createSocket()
