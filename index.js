@@ -45,7 +45,10 @@ class DHT extends EventEmitter {
     this.destroyed = false
     this.suspended = false
     this.online = true
-    this.stats = { queries: { active: 0, total: 0 } }
+    this.stats = {
+      queries: { active: 0, total: 0 },
+      commands: this.io.stats.commands
+    }
 
     this._nat = new NatSampler()
     this._quickFirewall = opts.quickFirewall !== false
