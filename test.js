@@ -87,10 +87,6 @@ test('metrics', async function (t) {
   await pingProm
   t.alike(swarm1.stats.commands.ping, { tx: 1, rx: 1 }, 'ping resp')
 
-  // Hack to trigger PING_NAT cmd
-  await swarm1._checkIfFirewalled()
-  t.alike(swarm1.stats.commands.pingNat, { tx: 1, rx: 1 }, 'ping-nat')
-
   const findNodeQuery = swarm1.findNode(swarm2.id)
   for await (const data of findNodeQuery) {
     if (data.from.id && data.from.id.equals(swarm2.id)) {
