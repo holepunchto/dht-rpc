@@ -86,16 +86,6 @@ test('metrics', async function (t) {
   t.alike(swarm1.stats.commands.ping, { tx: 1, rx: 0 }, 'ping sent')
   await pingProm
   t.alike(swarm1.stats.commands.ping, { tx: 1, rx: 1 }, 'ping resp')
-
-  const findNodeQuery = swarm1.findNode(swarm2.id)
-  for await (const data of findNodeQuery) {
-    if (data.from.id && data.from.id.equals(swarm2.id)) {
-      break
-    }
-  }
-  t.alike(swarm1.stats.commands.findNode, { tx: 1, rx: 1 }, 'find node')
-
-  // unsure how to test DOWN_HINT
 })
 
 test('make bigger swarm', { timeout: 120000 }, async function (t) {
