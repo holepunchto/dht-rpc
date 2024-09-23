@@ -82,6 +82,7 @@ test('make tiny swarm', async function (t) {
 test.solo('metrics', async function (t) {
   const [swarm1, swarm2] = await makeSwarm(2, t)
 
+  console.log('swarm2 address', swarm2.address())
   const pingProm = swarm1.ping(swarm2.address())
   t.alike(swarm1.stats.commands.ping, { tx: 1, rx: 0 }, 'ping sent')
   await pingProm
