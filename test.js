@@ -79,10 +79,9 @@ test('make tiny swarm', async function (t) {
   t.pass('could make swarm')
 })
 
-test.solo('metrics', async function (t) {
+test('metrics', async function (t) {
   const [swarm1, swarm2] = await makeSwarm(2, t)
 
-  console.log('swarm2 address', { host: swarm2.host, port: swarm2.port })
   const pingProm = swarm1.ping({ host: swarm2.host, port: swarm2.port })
   t.alike(swarm1.stats.commands.ping, { tx: 1, rx: 0 }, 'ping sent')
   await pingProm
