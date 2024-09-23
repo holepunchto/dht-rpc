@@ -137,7 +137,7 @@ Make a bootstrap node for your DHT. The port and host needs to be its globally a
 Note: `port` and `host` parameters are used to create the node id. Use `options.host` if you want to bind to i.e. 127.0.0.1.
 DHT nodes can use any other DHT node to bootstrap, but a bootstrap node can bootstrap itself, by itself.
 
-#### `await node.ready()`
+#### `await node.fullyBootstrapped()`
 
 Wait for the node to be fully bootstrapped etc.
 You don't have to wait for this method, but can be useful during testing.
