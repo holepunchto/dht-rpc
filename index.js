@@ -178,7 +178,7 @@ class DHT extends EventEmitter {
   toArray (opts) {
     const limit = (opts && opts.limit)
     if (limit === 0) return []
-    return this.nodes.toArray(limit).map(({ host, port }) => ({ host, port }))
+    return this.nodes.toArray({ limit, reverse: true }).map(({ host, port }) => ({ host, port }))
   }
 
   ready () {

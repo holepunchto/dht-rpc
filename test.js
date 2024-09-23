@@ -304,12 +304,12 @@ test('toArray', async function (t) {
 
   t.alike(a.toArray(), [{ host: '127.0.0.1', port: b.address().port }])
   t.alike(b.toArray(), [{ host: '127.0.0.1', port: a.address().port }])
-  t.alike(bootstrap.toArray().sort(), [{ host: '127.0.0.1', port: a.address().port }, { host: '127.0.0.1', port: b.address().port }].sort())
+  t.alike(bootstrap.toArray().sort(cmpNodes), [{ host: '127.0.0.1', port: a.address().port }, { host: '127.0.0.1', port: b.address().port }].sort(cmpNodes))
 
   t.alike(bootstrap.toArray({ limit: 0 }), [])
-  t.alike(bootstrap.toArray({ limit: 1 }), [{ host: '127.0.0.1', port: a.address().port }])
-  t.alike(bootstrap.toArray({ limit: 2 }).sort(), [{ host: '127.0.0.1', port: a.address().port }, { host: '127.0.0.1', port: b.address().port }].sort())
-  t.alike(bootstrap.toArray({ limit: 10 }).sort(), [{ host: '127.0.0.1', port: a.address().port }, { host: '127.0.0.1', port: b.address().port }].sort())
+  t.alike(bootstrap.toArray({ limit: 1 }), [{ host: '127.0.0.1', port: b.address().port }])
+  t.alike(bootstrap.toArray({ limit: 2 }).sort(cmpNodes), [{ host: '127.0.0.1', port: a.address().port }, { host: '127.0.0.1', port: b.address().port }].sort(cmpNodes))
+  t.alike(bootstrap.toArray({ limit: 10 }).sort(cmpNodes), [{ host: '127.0.0.1', port: a.address().port }, { host: '127.0.0.1', port: b.address().port }].sort(cmpNodes))
 })
 
 test('addNode / nodes option', async function (t) {
@@ -624,7 +624,7 @@ test('bootstrap with reachable suggested-IP and skip DNS', async function (t) {
   const host = '127.0.0.1'
   t.alike(a.toArray(), [{ host, port: b.address().port }])
   t.alike(b.toArray(), [{ host, port: a.address().port }])
-  t.alike(bootstrap.toArray().sort(), [{ host, port: a.address().port }, { host, port: b.address().port }].sort())
+  t.alike(bootstrap.toArray().sort(cmpNodes), [{ host, port: a.address().port }, { host, port: b.address().port }].sort(cmpNodes))
 
   bootstrap.destroy()
   a.destroy()
@@ -649,7 +649,7 @@ test('bootstrap with unreachable suggested-IP and fallback to DNS (reachable)', 
   const host = '127.0.0.1'
   t.alike(a.toArray(), [{ host, port: b.address().port }])
   t.alike(b.toArray(), [{ host, port: a.address().port }])
-  t.alike(bootstrap.toArray().sort(), [{ host, port: a.address().port }, { host, port: b.address().port }].sort())
+  t.alike(bootstrap.toArray().sort(cmpNodes), [{ host, port: a.address().port }, { host, port: b.address().port }].sort(cmpNodes))
 
   bootstrap.destroy()
   a.destroy()
@@ -684,4 +684,8 @@ async function makeSwarm (n, t) {
     for (const node of all) await node.destroy()
   })
   return all
+}
+
+function cmpNodes (a, b) {
+  return a.port - b.port
 }
