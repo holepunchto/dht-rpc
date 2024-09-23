@@ -79,18 +79,17 @@ test('make tiny swarm', async function (t) {
   t.pass('could make swarm')
 })
 
-test('metrics', async function (t) {
+test.solo('metrics', async function (t) {
   const [swarm1, swarm2] = await makeSwarm(2, t)
-  t.pass('could make swarm')
 
   const pingProm = swarm1.ping(swarm2.address())
-  t.alike(swarm1.stats.commands.ping, { tx: 1, rx: 0 })
+  t.alike(swarm1.stats.commands.ping, { tx: 1, rx: 0 }, 'ping sent')
   await pingProm
-  t.alike(swarm1.stats.commands.ping, { tx: 1, rx: 1 })
+  t.alike(swarm1.stats.commands.ping, { tx: 1, rx: 1 }, 'ping resp')
 
   // Hack to trigger PING_NAT cmd
   await swarm1._checkIfFirewalled()
-  t.alike(swarm1.stats.commands.pingNat, { tx: 1, rx: 1 })
+  t.alike(swarm1.stats.commands.pingNat, { tx: 1, rx: 1 }, 'ping-nat')
 
   const findNodeQuery = swarm1.findNode(swarm2.id)
   for await (const data of findNodeQuery) {
@@ -98,7 +97,7 @@ test('metrics', async function (t) {
       break
     }
   }
-  t.alike(swarm1.stats.commands.findNode, { tx: 1, rx: 1 })
+  t.alike(swarm1.stats.commands.findNode, { tx: 1, rx: 1 }, 'find node')
 
   // unsure how to test DOWN_HINT
 })
