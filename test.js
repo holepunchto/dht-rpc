@@ -1,7 +1,6 @@
 const test = require('brittle')
 const UDX = require('udx-native')
 const DHT = require('./')
-const { PING, PING_NAT, FIND_NODE } = require('./lib/commands')
 
 test('bootstrapper', async function (t) {
   const port = await freePort()
@@ -85,13 +84,13 @@ test('metrics', async function (t) {
   t.pass('could make swarm')
 
   const pingProm = swarm1.ping(swarm2.address())
-  t.alike(swarm1.stats.commands[PING], { tx: 1, rx: 0 })
+  t.alike(swarm1.stats.commands.ping, { tx: 1, rx: 0 })
   await pingProm
-  t.alike(swarm1.stats.commands[PING], { tx: 1, rx: 1 })
+  t.alike(swarm1.stats.commands.ping, { tx: 1, rx: 1 })
 
   // Hack to trigger PING_NAT cmd
   await swarm1._checkIfFirewalled()
-  t.alike(swarm1.stats.commands[PING_NAT], { tx: 1, rx: 1 })
+  t.alike(swarm1.stats.commands.pingNat, { tx: 1, rx: 1 })
 
   const findNodeQuery = swarm1.findNode(swarm2.id)
   for await (const data of findNodeQuery) {
@@ -99,7 +98,7 @@ test('metrics', async function (t) {
       break
     }
   }
-  t.alike(swarm1.stats.commands[FIND_NODE], { tx: 1, rx: 1 })
+  t.alike(swarm1.stats.commands.findNode, { tx: 1, rx: 1 })
 
   // unsure how to test DOWN_HINT
 })

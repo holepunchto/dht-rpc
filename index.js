@@ -47,7 +47,12 @@ class DHT extends EventEmitter {
     this.online = true
     this.stats = {
       queries: { active: 0, total: 0 },
-      commands: this.io.stats.commands
+      commands: {
+        ping: this.io.stats.commands[PING],
+        pingNat: this.io.stats.commands[PING_NAT],
+        findNode: this.io.stats.commands[FIND_NODE],
+        downHint: this.io.stats.commands[DOWN_HINT]
+      }
     }
 
     this._nat = new NatSampler()
