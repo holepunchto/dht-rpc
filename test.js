@@ -394,7 +394,7 @@ test('filter nodes from routing table', async function (t) {
   const node = new DHT({
     ephemeral: false,
     bootstrap: [a],
-    addNode (from) {
+    filterNode (from) {
       return from.port !== b.port
     }
   })
