@@ -58,7 +58,7 @@ class DHT extends EventEmitter {
     this._tickInterval = setInterval(this._ontick.bind(this), TICK_INTERVAL)
     this._lastTick = Date.now()
     this._lastHost = null
-    this._filterNode = opts.filterNode || null
+    this._filterNode = opts.filterNode || opts.addNode || null // opts.addNode is deprecating, use opts.filterNode instead
     this._onrow = (row) => row.on('full', (node) => this._onfullrow(node, row))
     this._nonePersistentSamples = []
     this._bootstrapping = this._bootstrap()
