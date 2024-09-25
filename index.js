@@ -45,7 +45,15 @@ class DHT extends EventEmitter {
     this.destroyed = false
     this.suspended = false
     this.online = true
-    this.stats = { queries: { active: 0, total: 0 } }
+    this.stats = {
+      queries: { active: 0, total: 0 },
+      commands: {
+        ping: this.io.stats.commands[PING],
+        pingNat: this.io.stats.commands[PING_NAT],
+        findNode: this.io.stats.commands[FIND_NODE],
+        downHint: this.io.stats.commands[DOWN_HINT]
+      }
+    }
 
     this._nat = new NatSampler()
     this._quickFirewall = opts.quickFirewall !== false

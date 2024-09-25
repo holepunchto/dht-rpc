@@ -79,6 +79,15 @@ test('make tiny swarm', async function (t) {
   t.pass('could make swarm')
 })
 
+test('metrics', async function (t) {
+  const [swarm1, swarm2] = await makeSwarm(2, t)
+
+  const pingProm = swarm1.ping({ host: swarm2.host, port: swarm2.port })
+  t.alike(swarm1.stats.commands.ping, { tx: 1, rx: 0 }, 'ping sent')
+  await pingProm
+  t.alike(swarm1.stats.commands.ping, { tx: 1, rx: 1 }, 'ping resp')
+})
+
 test('make bigger swarm', { timeout: 120000 }, async function (t) {
   const swarm = await makeSwarm(500, t)
 
