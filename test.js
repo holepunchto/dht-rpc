@@ -665,18 +665,20 @@ test('bootstrap with unreachable suggested-IP and fallback to DNS (reachable)', 
   b.destroy()
 })
 
-test('Populate DHT with options.knownNodes', async function (t) {
+test('Populate DHT with options.nodes', async function (t) {
   const a = new DHT({ bootstrap: [] })
   await a.ready()
-  const nodes = [{ host: '127.0.0.1', port: a.address().port }]
-
-  const b = new DHT({ nodes, bootstrap: [] })
+  const b = new DHT({ bootstrap: [] })
   await b.ready()
+  const nodes = [{ host: '127.0.0.1', port: a.address().port }, { host: '127.0.0.1', port: b.address().port }]
 
-  t.alike(b.toArray(), [{ host: '127.0.0.1', port: a.address().port }])
+  const c = new DHT({ nodes, bootstrap: [] })
+  await c.ready()
+  t.alike(c.toArray(), nodes)
 
   a.destroy()
   b.destroy()
+  c.destroy()
 })
 
 test('peer ids do not retain a slab', async function (t) {
