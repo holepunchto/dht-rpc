@@ -76,9 +76,8 @@ class DHT extends EventEmitter {
 
     this.io.networkInterfaces.on('change', (interfaces) => this._onnetworkchange(interfaces))
 
-    const knownNodes = opts.nodes || global.Pear?.config.dht
-    if (knownNodes) {
-      for (const node of knownNodes) this.addNode(node)
+    for (let i = opts.nodes.length - 1; i >= 0; i--) {
+      this.addNode(opts.nodes[i])
     }
   }
 
