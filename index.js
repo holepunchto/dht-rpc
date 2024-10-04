@@ -76,8 +76,10 @@ class DHT extends EventEmitter {
 
     this.io.networkInterfaces.on('change', (interfaces) => this._onnetworkchange(interfaces))
 
-    for (let i = opts.nodes.length - 1; i >= 0; i--) {
-      this.addNode(opts.nodes[i])
+    if (opts.nodes) {
+      for (let i = opts.nodes.length - 1; i >= 0; i--) {
+        this.addNode(opts.nodes[i])
+      }
     }
   }
 
