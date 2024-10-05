@@ -5,12 +5,12 @@ const DHT = require('./')
 test('bootstrapper', async function (t) {
   const port = await freePort()
 
-  const node = DHT.bootstrapper(port, '127.0.0.1')
+  const node = createBootstrapper(port)
 
   await node.fullyBootstrapped()
 
   if (node.address().family === 4) {
-    t.is(node.address().host, '0.0.0.0')
+    t.is(node.address().host, '127.0.0.1')
     t.is(node.address().family, 4)
   } else {
     t.is(node.address().host, '::')
@@ -24,7 +24,7 @@ test('bootstrapper', async function (t) {
 test('bootstrapper - bind host', async function (t) {
   const port = await freePort()
 
-  const node = DHT.bootstrapper(port, '127.0.0.1', { host: '127.0.0.1' })
+  const node = createBootstrapper(port)
 
   await node.fullyBootstrapped()
   t.is(node.address().host, '127.0.0.1')
@@ -38,11 +38,11 @@ test('bootstrapper - opts.bootstrap', async function (t) {
   const port1 = await freePort()
   const port2 = await freePort()
 
-  const node1 = DHT.bootstrapper(port1, '127.0.0.1')
+  const node1 = createBootstrapper(port1)
   await node1.fullyBootstrapped()
 
   const bootstrap = [{ host: '127.0.0.1', port: node1.address().port }]
-  const node2 = DHT.bootstrapper(port2, '127.0.0.1', { bootstrap })
+  const node2 = createBootstrapper(port2, { bootstrap })
   await node2.fullyBootstrapped()
 
   t.is(node1.bootstrapNodes.length, 0)
@@ -269,7 +269,7 @@ test('shorthand commit', async function (t) {
 test('after fullyBootstrapped it is always bound', async function (t) {
   t.plan(2)
 
-  const node = new DHT()
+  const node = createDHT()
 
   node.on('listening', function () {
     t.pass('is listening')
@@ -332,7 +332,7 @@ test('addNode / nodes option', async function (t) {
   await bootstrap.fullyBootstrapped()
   await a.fullyBootstrapped()
 
-  const b = new DHT({ ephemeral: false, nodes: [{ host: '127.0.0.1', port: a.address().port }] })
+  const b = createDHT({ ephemeral: false, nodes: [{ host: '127.0.0.1', port: a.address().port }] })
   await b.fullyBootstrapped()
 
   const bNodes = b.toArray()
@@ -357,12 +357,12 @@ test('addNode / nodes option', async function (t) {
 test('set bind', async function (t) {
   const port = await freePort()
 
-  const a = new DHT({ port, firewalled: false })
+  const a = createDHT({ port, firewalled: false })
   await a.fullyBootstrapped()
 
   t.alike(a.address().port, port, 'bound to explicit port')
 
-  const b = new DHT({ port })
+  const b = createDHT({ port })
   await b.fullyBootstrapped()
 
   t.not(b.address().port, port, 'bound to different port as explicit one is taken')
@@ -400,7 +400,7 @@ test('relay', async function (t) {
 test('filter nodes from routing table', async function (t) {
   const [a, b, c] = await makeSwarm(3, t)
 
-  const node = new DHT({
+  const node = createDHT({
     ephemeral: false,
     bootstrap: [a],
     filterNode (from) {
@@ -440,7 +440,7 @@ test('request session, destroy all', async function (t) {
 test('close event', async function (t) {
   t.plan(1)
 
-  const node = new DHT()
+  const node = createDHT()
 
   node.once('close', function () {
     t.pass('node closed')
@@ -452,7 +452,7 @@ test('close event', async function (t) {
 test('close event is only emitted once', async function (t) {
   t.plan(2)
 
-  const node = new DHT()
+  const node = createDHT()
   let count = 0
 
   node.on('close', function () {
@@ -471,7 +471,7 @@ test('close event is only emitted once', async function (t) {
 test('local address', async function (t) {
   t.plan(4)
 
-  const node = new DHT()
+  const node = createDHT()
   t.is(node.localAddress(), null)
 
   await node.fullyBootstrapped()
@@ -487,7 +487,7 @@ test('local address', async function (t) {
 test('remote address without peers', async function (t) {
   t.plan(3)
 
-  const node = new DHT()
+  const node = createDHT()
   t.is(node.remoteAddress(), null)
 
   await node.fullyBootstrapped()
@@ -501,13 +501,13 @@ test('remote address without peers', async function (t) {
 test('remote address with peers', async function (t) {
   t.plan(6)
 
-  const a = new DHT({ ephemeral: false, firewalled: false })
+  const a = createDHT({ ephemeral: false, firewalled: false })
   t.is(a.remoteAddress(), null)
   await a.fullyBootstrapped()
   t.is(a.remoteAddress(), null)
 
   const bootstrap = ['localhost:' + a.address().port]
-  const b = new DHT({ ephemeral: false, bootstrap })
+  const b = createDHT({ ephemeral: false, bootstrap })
   t.is(b.remoteAddress(), null)
   await b.fullyBootstrapped()
   t.is(b.remoteAddress().host, '127.0.0.1')
@@ -523,11 +523,11 @@ test('remote address with peers', async function (t) {
 test('nat update event', async function (t) {
   t.plan(4)
 
-  const a = new DHT({ ephemeral: false, firewalled: false })
+  const a = createDHT({ ephemeral: false, firewalled: false })
   await a.fullyBootstrapped()
 
   const bootstrap = ['localhost:' + a.address().port]
-  const b = new DHT({ ephemeral: false, bootstrap })
+  const b = createDHT({ ephemeral: false, bootstrap })
 
   b.once('nat-update', function (host, port) {
     t.is(host, '127.0.0.1')
@@ -546,7 +546,7 @@ test('nat update event', async function (t) {
 })
 
 test('suspend - random port', async function (t) {
-  const a = new DHT({ ephemeral: false, firewalled: false })
+  const a = createDHT({ ephemeral: false, firewalled: false })
   await a.fullyBootstrapped()
   const bootstrap = ['localhost:' + a.address().port]
 
@@ -563,7 +563,7 @@ test('suspend - random port', async function (t) {
   t.is(clientPortBefore, clientPortAfter)
 
   // Very basic check that the rebinded node still works
-  const c = new DHT({ ephemeral: false, bootstrap })
+  const c = createDHT({ ephemeral: false, bootstrap })
   t.is(c.remoteAddress(), null)
   await c.fullyBootstrapped()
   t.is(c.remoteAddress().host, '127.0.0.1')
@@ -575,10 +575,10 @@ test('suspend - random port', async function (t) {
 test('suspend - custom port', async function (t) {
   const port = await freePort()
 
-  const a = new DHT({ ephemeral: false, firewalled: false, port, anyPort: false })
+  const a = createDHT({ ephemeral: false, firewalled: false, port, anyPort: false })
   await a.fullyBootstrapped()
 
-  const b = new DHT({ ephemeral: false, firewalled: false, port })
+  const b = createDHT({ ephemeral: false, firewalled: false, port })
   await b.fullyBootstrapped()
   const bootstrap = ['localhost:' + b.address().port]
 
@@ -599,7 +599,7 @@ test('suspend - custom port', async function (t) {
   t.not(serverPortBefore, port)
 
   // Very basic check that the rebinded node still works
-  const c = new DHT({ ephemeral: false, bootstrap })
+  const c = createDHT({ ephemeral: false, bootstrap })
   t.is(c.remoteAddress(), null)
   await c.fullyBootstrapped()
   t.is(c.remoteAddress().host, '127.0.0.1')
@@ -621,14 +621,14 @@ test('bootstrap with reachable suggested-IP and skip DNS', async function (t) {
   const port = await freePort()
   const bootstrapSyntax = [ip + '@' + domain + ':' + port]
 
-  const bootstrap = new DHT({ port, ephemeral: false, firewalled: false })
-  await bootstrap.ready()
+  const bootstrap = createDHT({ port, ephemeral: false, firewalled: false })
+  await bootstrap.fullyBootstrapped()
 
-  const a = new DHT({ bootstrap: bootstrapSyntax, ephemeral: false })
-  await a.ready()
+  const a = createDHT({ bootstrap: bootstrapSyntax, ephemeral: false })
+  await a.fullyBootstrapped()
 
-  const b = new DHT({ bootstrap: bootstrapSyntax, ephemeral: false })
-  await b.ready()
+  const b = createDHT({ bootstrap: bootstrapSyntax, ephemeral: false })
+  await b.fullyBootstrapped()
 
   const host = '127.0.0.1'
   t.alike(a.toArray(), [{ host, port: b.address().port }])
@@ -646,14 +646,14 @@ test('bootstrap with unreachable suggested-IP and fallback to DNS (reachable)', 
   const port = await freePort()
   const bootstrapSyntax = [ip + '@' + domain + ':' + port]
 
-  const bootstrap = new DHT({ port, ephemeral: false, firewalled: false })
-  await bootstrap.ready()
+  const bootstrap = createDHT({ port, ephemeral: false, firewalled: false })
+  await bootstrap.fullyBootstrapped()
 
-  const a = new DHT({ bootstrap: bootstrapSyntax, ephemeral: false })
-  await a.ready()
+  const a = createDHT({ bootstrap: bootstrapSyntax, ephemeral: false })
+  await a.fullyBootstrapped()
 
-  const b = new DHT({ bootstrap: bootstrapSyntax, ephemeral: false })
-  await b.ready()
+  const b = createDHT({ bootstrap: bootstrapSyntax, ephemeral: false })
+  await b.fullyBootstrapped()
 
   const host = '127.0.0.1'
   t.alike(a.toArray(), [{ host, port: b.address().port }])
@@ -666,14 +666,17 @@ test('bootstrap with unreachable suggested-IP and fallback to DNS (reachable)', 
 })
 
 test('Populate DHT with options.nodes', async function (t) {
-  const a = new DHT({ bootstrap: [] })
-  await a.ready()
-  const b = new DHT({ bootstrap: [] })
-  await b.ready()
+  const a = createDHT({ bootstrap: [] })
+  await a.fullyBootstrapped()
+
+  const b = createDHT({ bootstrap: [] })
+  await b.fullyBootstrapped()
+
   const nodes = [{ host: '127.0.0.1', port: a.address().port }, { host: '127.0.0.1', port: b.address().port }]
 
-  const c = new DHT({ nodes, bootstrap: [] })
-  await c.ready()
+  const c = createDHT({ nodes, bootstrap: [] })
+  await c.fullyBootstrapped()
+
   t.alike(c.toArray(), nodes)
 
   a.destroy()
@@ -689,19 +692,19 @@ test('peer ids do not retain a slab', async function (t) {
 async function freePort () {
   const udx = new UDX()
   const sock = udx.createSocket()
-  sock.bind(0)
+  sock.bind(0, '127.0.0.1')
   const port = sock.address().port
   await sock.close()
   return port
 }
 
 async function makeSwarm (n, t) {
-  const node = new DHT({ ephemeral: false, firewalled: false })
+  const node = createDHT({ ephemeral: false, firewalled: false })
   await node.fullyBootstrapped()
   const all = [node]
   const bootstrap = ['localhost:' + node.address().port]
   while (all.length < n) {
-    const node = new DHT({ ephemeral: false, bootstrap })
+    const node = createDHT({ ephemeral: false, bootstrap })
     await node.fullyBootstrapped()
     all.push(node)
   }
@@ -713,4 +716,12 @@ async function makeSwarm (n, t) {
 
 function cmpNodes (a, b) {
   return a.port - b.port
+}
+
+function createDHT (opts) {
+  return new DHT({ ...opts, host: '127.0.0.1' })
+}
+
+function createBootstrapper (port, opts) {
+  return DHT.bootstrapper(port, '127.0.0.1', { ...opts, host: '127.0.0.1' })
 }
