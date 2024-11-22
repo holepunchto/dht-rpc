@@ -371,6 +371,34 @@ test('set bind', async function (t) {
   await b.destroy()
 })
 
+test.skip('bind with port range', async function (t) {
+  // WARNING: flaky tests (assumes the entire port range is free)
+  const port = await freePort()
+  const portRange = [port, port + 3]
+
+  const a = createDHT({ port: portRange, firewalled: false })
+  await a.fullyBootstrapped()
+  t.alike(a.address().port, port, 'bound to explicit port')
+
+  const b = createDHT({ port: portRange, firewalled: false })
+  await b.fullyBootstrapped()
+  t.is(b.address().port, port + 1, 'bound to next port')
+
+  const c = createDHT({ port: portRange, firewalled: false })
+  await c.fullyBootstrapped()
+  t.is(c.address().port, port + 2, 'bound to next port')
+
+  const d = createDHT({ port: portRange, firewalled: false })
+  await d.fullyBootstrapped()
+  // Note: flaky, since it could still bind to that port randomly
+  t.not(d.address().port, port + 3, 'not bound to next port')
+
+  await a.destroy()
+  await b.destroy()
+  await c.destroy()
+  await d.destroy()
+})
+
 test('relay', async function (t) {
   const [, a, b, c] = await makeSwarm(4, t)
 
