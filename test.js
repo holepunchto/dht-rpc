@@ -371,8 +371,20 @@ test('set bind', async function (t) {
   await b.destroy()
 })
 
+test('passing in a port gets translated into a 5-port range', async function (t) {
+  const port = await freePort()
+  const a = createDHT({ port, firewalled: false })
+  t.alike(a.io.portRange, [port, port + 5])
+
+  await a.fullyBootstrapped()
+  t.alike(a.address().port, port, 'passed-in port gets precedence')
+
+  await a.destroy()
+})
+
 test.skip('bind with port range', async function (t) {
   // WARNING: flaky tests (assumes the entire port range is free)
+  // So best to skip when run in CI's
   const port = await freePort()
   const portRange = [port, port + 3]
 
