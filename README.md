@@ -114,7 +114,7 @@ Options include:
   bootstrap: [ 'bootstrap-node.com:24242', ... ],
   // Optionally pass in array of { host, port } to add to the routing table if you know any peers
   nodes: [{ host, port }, ...],
-  // Optionally pass a port you prefer to bind to instead of a random one
+  // Optionally pass a port you prefer to bind to instead of a random one, or a range of ports it will try to bind to in order: [startPort, endPort], endPort exclusive
   port: 0,
   // Optionally pass a host you prefer to bind to instead of all networks
   host: '0.0.0.0',
