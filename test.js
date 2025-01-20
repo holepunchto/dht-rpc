@@ -142,6 +142,16 @@ test('make bigger swarm', { timeout: 120000 }, async function (t) {
   t.is(firewalled, false)
   t.is(port, swarm[490].address().port)
   t.ok(host)
+
+  // Sanity check: nobody timed out, so there should be no down hints sent
+  let downRx = 0
+  let downTx = 0
+  for (const x of swarm) {
+    downRx += x.stats.commands.downHint.rx
+    downTx += x.stats.commands.downHint.tx
+  }
+  t.is(downRx, 0, 'no down hints received')
+  t.is(downTx, 0, 'no down hints sent')
 })
 
 test('commit after query', async function (t) {
@@ -200,7 +210,7 @@ test('timeouts', async function (t) {
   let tries = 0
   const NOPE = 52
 
-  t.plan(4)
+  t.plan(5)
 
   b.on('request', function (req) {
     if (req.command === NOPE) {
@@ -213,6 +223,7 @@ test('timeouts', async function (t) {
   await q.finished()
 
   t.is(tries, 3)
+  t.is(a.stats.commands.downHint.tx, 1, 'a sent a down-hint message')
 })
 
 test('request with/without retries', async function (t) {
