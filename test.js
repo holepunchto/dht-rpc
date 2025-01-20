@@ -468,7 +468,7 @@ test('filter nodes from routing table', async function (t) {
 })
 
 test('request session, destroy all', async function (t) {
-  const [, a, b] = await makeSwarm(10, t)
+  const [, a, b] = await makeSwarm(3, t)
 
   a.on('request', () => t.fail())
 
@@ -486,8 +486,6 @@ test('request session, destroy all', async function (t) {
     t.is(status, 'rejected')
     t.is(reason, err)
   }
-
-  console.log(b.stats)
 })
 
 test('close event', async function (t) {
