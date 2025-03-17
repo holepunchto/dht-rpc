@@ -1,3 +1,4 @@
+/* global Bare */
 const test = require('brittle')
 const UDX = require('udx-native')
 const DHT = require('./')
@@ -657,6 +658,28 @@ test('suspend - custom port', async function (t) {
   await c.destroy()
 
   await b.destroy()
+})
+
+test('suspend - fully suspends I/O', { skip: typeof Bare === 'undefined' }, async function (t) {
+  t.plan(2)
+
+  const dht = createDHT({ ephemeral: false, firewalled: false })
+  await dht.fullyBootstrapped()
+
+  Bare
+    .once('suspend', async () => {
+      await dht.suspend()
+    })
+    .once('idle', async () => {
+      t.pass('became idle')
+      await dht.resume()
+      Bare.resume()
+    })
+    .once('resume', async () => {
+      t.pass('resumed')
+      await dht.destroy()
+    })
+    .suspend()
 })
 
 test('response includes roundtrip time', async function (t) {
