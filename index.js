@@ -137,6 +137,7 @@ class DHT extends EventEmitter {
     this._tickInterval = setInterval(this._ontick.bind(this), TICK_INTERVAL)
     this._onwakeup()
     await this.io.resume()
+    this.io.networkInterfaces.on('change', (interfaces) => this._onnetworkchange(interfaces))
     this.refresh()
     this.emit('resume')
   }
