@@ -126,13 +126,15 @@ class DHT extends EventEmitter {
     await this.io.bind()
     if (this.suspended || this.destroyed) return
     this.suspended = true
-    this.io.suspend()
+    clearInterval(this._tickInterval)
+    await this.io.suspend()
     this.emit('suspend')
   }
 
   async resume () {
     if (!this.suspended || this.destroyed) return
     this.suspended = false
+    this._tickInterval = setInterval(this._ontick.bind(this), TICK_INTERVAL)
     this._onwakeup()
     await this.io.resume()
     this.refresh()
