@@ -28,7 +28,8 @@
   },
   "devDependencies": {
     "brittle": "^3.0.0",
-    "standard": "^17.0.0"
+    "standard": "^17.0.0",
+    "test-suspend": "^1.0.0"
   },
   "scripts": {
     "test": "standard && brittle test.js"
