@@ -665,7 +665,6 @@ test('suspend - fully suspends I/O', { deadlock: false }, async function (t) {
   await dht.fullyBootstrapped()
 
   const s = await suspend()
-
   await dht.suspend()
   t.pass('suspended')
 
