@@ -32,7 +32,8 @@
     "test-suspend": "^1.0.0"
   },
   "scripts": {
-    "test": "standard && brittle test.js"
+    "test": "standard && brittle test.js",
+    "test:bare": "bare test.js"
   },
   "repository": {
     "type": "git",
