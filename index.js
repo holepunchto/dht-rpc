@@ -122,21 +122,27 @@ class DHT extends EventEmitter {
     return this.io.bind()
   }
 
-  async suspend () {
+  async suspend ({ log = noop } = {}) {
+    log('Suspending waiting for io bind...')
     await this.io.bind()
+    log('Done, continuing')
     if (this.suspended || this.destroyed) return
     this.suspended = true
     clearInterval(this._tickInterval)
-    await this.io.suspend()
+    log('Done, suspending io')
+    await this.io.suspend({ log })
+    log('Done, dht suspended')
     this.emit('suspend')
   }
 
-  async resume () {
+  async resume ({ log = noop } = {}) {
     if (!this.suspended || this.destroyed) return
     this.suspended = false
     this._tickInterval = setInterval(this._ontick.bind(this), TICK_INTERVAL)
     this._onwakeup()
+    log('Resuming io')
     await this.io.resume()
+    log('Done, dht resumed')
     this.io.networkInterfaces.on('change', (interfaces) => this._onnetworkchange(interfaces))
     this.refresh()
     this.emit('resume')
