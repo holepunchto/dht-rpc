@@ -1,10 +1,10 @@
 name: Build Status
 on:
   push:
-    branches:
-      - main
     tags: # To trigger the canary
       - '*'
+    branches:
+      - main
   pull_request:
     branches:
       - main
