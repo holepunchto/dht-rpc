@@ -292,7 +292,7 @@ class DHT extends EventEmitter {
       const value = b4a.allocUnsafe(2)
       c.uint16.encode({ start: 0, end: 2, buffer: value }, self.io.serverSocket.address().port)
 
-      self._request(data.from, true, PING_NAT, null, value, null, () => { testNat = true }, noop)
+      self._request(data.from, false, true, PING_NAT, null, value, null, () => { testNat = true }, noop)
     }
   }
 
@@ -309,13 +309,13 @@ class DHT extends EventEmitter {
     if (emitClose) this.emit('close')
   }
 
-  _request (to, internal, command, target, value, session, onresponse, onerror) {
+  _request (to, force, internal, command, target, value, session, onresponse, onerror) {
     const req = this.io.createRequest(to, null, internal, command, target, value, session)
     if (req === null) return null
 
     req.onresponse = onresponse
     req.onerror = onerror
-    req.send()
+    req.send(force)
 
     return req
   }
@@ -458,7 +458,7 @@ class DHT extends EventEmitter {
     oldNode.pinged = this._tick
 
     this._repinging++
-    this._request({ id: null, host: oldNode.host, port: oldNode.port }, true, PING, null, null, null, onsuccess, onswap)
+    this._request({ id: null, host: oldNode.host, port: oldNode.port }, false, true, PING, null, null, null, onsuccess, onswap)
 
     function onsuccess (m) {
       if (oldNode.seen <= lastSeen) return onswap()
@@ -575,7 +575,7 @@ class DHT extends EventEmitter {
     }
 
     this._checks++
-    this._request({ id: null, host: node.host, port: node.port }, true, PING, null, null, null, onresponse, onerror)
+    this._request({ id: null, host: node.host, port: node.port }, false, true, PING, null, null, null, onresponse, onerror)
   }
 
   _ontick () {
@@ -851,7 +851,7 @@ function requestAll (dht, internal, command, value, nodes) {
 
   return new Promise((resolve) => {
     for (const node of nodes) {
-      const req = dht._request(node, internal, command, null, value, null, onsuccess, onerror)
+      const req = dht._request(node, false, internal, command, null, value, null, onsuccess, onerror)
       if (!req) return resolve(replies)
     }
 
