@@ -8,9 +8,9 @@ npm install dht-rpc
 
 ## Key Features
 
-* Remote IP / firewall detection
-* Easily add any command to your DHT
-* Streaming queries and updates
+- Remote IP / firewall detection
+- Easily add any command to your DHT
+- Streaming queries and updates
 
 Note that internally V5 of dht-rpc differs significantly from V4, due to a series
 of improvements to NAT detection, secure routing IDs and more.
@@ -23,7 +23,7 @@ First spin up a bootstrap node. You can make multiple if you want for redundancy
 There is nothing special about a bootstrap node, except it needs to know it's own host and port,
 since it knows no other nodes to infer it from.
 
-``` js
+```js
 import DHT from 'dht-rpc'
 
 const bootstrap = DHT.bootstrapper(10001, '127.0.0.1')
@@ -31,18 +31,16 @@ const bootstrap = DHT.bootstrapper(10001, '127.0.0.1')
 
 Now lets make some dht nodes that can store values in our key value store.
 
-``` js
+```js
 import DHT from 'dht-rpc'
 import crypto from 'crypto'
 
 // Let's create 100 dht nodes for our example.
 for (var i = 0; i < 100; i++) createNode()
 
-function createNode () {
+function createNode() {
   const node = new DHT({
-    bootstrap: [
-      'localhost:10001'
-    ]
+    bootstrap: ['localhost:10001']
   })
 
   const values = new Map()
@@ -50,7 +48,8 @@ function createNode () {
 
   node.on('request', function (req) {
     if (req.command === VALUES) {
-      if (req.token) { // if we are the closest node store the value (ie the node sent a valid roundtrip token)
+      if (req.token) {
+        // if we are the closest node store the value (ie the node sent a valid roundtrip token)
         const key = hash(req.value).toString('hex')
         values.set(key, req.value)
         console.log('Storing', key, '-->', req.value.toString())
@@ -63,32 +62,35 @@ function createNode () {
   })
 }
 
-function hash (value) {
+function hash(value) {
   return crypto.createHash('sha256').update(value).digest()
 }
 ```
 
 To insert a value into this dht make another script that does this following
 
-``` js
+```js
 const node = new DHT()
 
-const q = node.query({
-  target: hash(val),
-  command: VALUES,
-  value
-}, {
-  // commit true will make the query re-request the 20 closest
-  // nodes with a valid round trip token to update the values
-  commit: true
-})
+const q = node.query(
+  {
+    target: hash(val),
+    command: VALUES,
+    value
+  },
+  {
+    // commit true will make the query re-request the 20 closest
+    // nodes with a valid round trip token to update the values
+    commit: true
+  }
+)
 
 await q.finished()
 ```
 
 Then after inserting run this script to query for a value
 
-``` js
+```js
 const target = Buffer.from(hexFromAbove, 'hex')
 for await (const data of node.query({ target, command: VALUES })) {
   if (data.value && hash(data.value).toString('hex') === hexFromAbove) {
@@ -108,7 +110,7 @@ Create a new DHT node.
 
 Options include:
 
-``` js
+```js
 {
   // A list of bootstrap nodes. Optionally prefix a suggested-IP, i.e. '192.168.1.10@bootstrap-node.com:24242'
   bootstrap: [ 'bootstrap-node.com:24242', ... ],
@@ -179,6 +181,7 @@ it will switch from persistent mode to ephemeral again.
 Emitted when the network interfaces of the computer change.
 
 #### `node.on('nat-update', (host, port) => {})`
+
 Emitted when `node.host` or `node.port` were changed.
 
 #### `node.on('close')`
@@ -223,11 +226,11 @@ mode always uses a random port.
 
 Emitted when an incoming DHT request is received. This is where you can add your own RPC methods.
 
-* `req.target` - the dht target the peer is looking (routing is handled behind the scene)
-* `req.command` - the RPC command enum
-* `req.value` - the RPC value buffer
-* `req.token` - If the remote peer echoed back a valid roundtrip token, proving their "from address" this is set
-* `req.from` - who sent this request (host, port)
+- `req.target` - the dht target the peer is looking (routing is handled behind the scene)
+- `req.command` - the RPC command enum
+- `req.value` - the RPC value buffer
+- `req.token` - If the remote peer echoed back a valid roundtrip token, proving their "from address" this is set
+- `req.from` - who sent this request (host, port)
 
 To reply to a request use the `req.reply(value)` method and to reply with an error code use `req.error(errorCode)`.
 
@@ -236,7 +239,7 @@ from error code `16` and up, to avoid future clashes with `dht-rpc` internals.
 
 Currently dht-rpc defines the following errors
 
-``` js
+```js
 DHT.OK = 0 // ie no error
 DHT.ERROR_UNKNOWN_COMMAND = 1 // the command requested does not exist
 DHT.ERROR_INVALID_TOKEN = 2 // the round trip token sent is invalid
@@ -274,14 +277,14 @@ Additional options include:
 
 Query the DHT. Will move as close as possible to the `target` provided, which should be a 32-byte uniformly distributed buffer (ie a hash).
 
-* `target` - find nodes close to this (should be a 32 byte buffer like a hash)
-* `command` - an enum (uint) indicating the method you want to invoke
-* `value` - optional binary payload to send with it
+- `target` - find nodes close to this (should be a 32 byte buffer like a hash)
+- `command` - an enum (uint) indicating the method you want to invoke
+- `value` - optional binary payload to send with it
 
 If you want to modify state stored in the dht, you can use the commit flag to signal the closest
 nodes.
 
-``` js
+```js
 {
   // "commit" the query to the 20 closest nodes so they can modify/update their state
   commit: true
@@ -292,7 +295,7 @@ Commiting a query will just re-request your command to the closest nodes once th
 If you want to do some more specific logic with the closest nodes you can specify a function instead,
 that is called for each close reply.
 
-``` js
+```js
 {
   async commit (reply, dht, query) {
     // normally you'd send back the roundtrip token here, to prove to the remote that you own
@@ -304,7 +307,7 @@ that is called for each close reply.
 
 Other options include:
 
-``` js
+```js
 {
   nodes: [
     // start the query by querying these nodes

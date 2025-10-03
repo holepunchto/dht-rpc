@@ -7,12 +7,10 @@ const INSERT = 0
 const swarm = []
 for (let i = 0; i < 100; i++) swarm[i] = createNode()
 
-function createNode () {
+function createNode() {
   const node = new DHT({
     ephemeral: false,
-    bootstrap: [
-      'localhost:10001'
-    ]
+    bootstrap: ['localhost:10001']
   })
 
   const values = new Map()
@@ -33,6 +31,6 @@ function createNode () {
   return node
 }
 
-function sha256 (val) {
+function sha256(val) {
   return crypto.createHash('sha256').update(val).digest()
 }

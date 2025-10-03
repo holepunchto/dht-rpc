@@ -7,7 +7,10 @@ const hex = process.argv[2]
 const node = new DHT({ ephemeral: true, bootstrap: ['localhost:10001'] })
 await node.fullyBootstrapped()
 
-const q = node.query({ target: Buffer.from(hex, 'hex'), command: GET }, { commit: true })
+const q = node.query(
+  { target: Buffer.from(hex, 'hex'), command: GET },
+  { commit: true }
+)
 
 for await (const data of q) {
   if (data.value && sha256(data.value).toString('hex') === hex) {
@@ -19,6 +22,6 @@ for await (const data of q) {
 
 console.log('(query finished)')
 
-function sha256 (val) {
+function sha256(val) {
   return crypto.createHash('sha256').update(val).digest()
 }

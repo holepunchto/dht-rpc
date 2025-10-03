@@ -23,10 +23,11 @@ const RECENT_NODE = 12 // we've heard from a node less than 1min ago
 const OLD_NODE = 360 // if an node has been around more than 30 min we consider it old
 
 class DHT extends EventEmitter {
-  constructor (opts = {}) {
+  constructor(opts = {}) {
     super()
 
-    this.bootstrapNodes = opts.bootstrap === false ? [] : (opts.bootstrap || []).map(parseNode)
+    this.bootstrapNodes =
+      opts.bootstrap === false ? [] : (opts.bootstrap || []).map(parseNode)
     this.table = new Table(randomBytes(32))
     this.nodes = new TOS()
     this.udx = opts.udx || new UDX()
@@ -41,7 +42,8 @@ class DHT extends EventEmitter {
     this.bootstrapped = false
     this.ephemeral = true
     this.firewalled = this.io.firewalled
-    this.adaptive = typeof opts.ephemeral !== 'boolean' && opts.adaptive !== false
+    this.adaptive =
+      typeof opts.ephemeral !== 'boolean' && opts.adaptive !== false
     this.destroyed = false
     this.suspended = false
     this.online = true
@@ -74,7 +76,9 @@ class DHT extends EventEmitter {
 
     this.table.on('row', this._onrow)
 
-    this.io.networkInterfaces.on('change', (interfaces) => this._onnetworkchange(interfaces))
+    this.io.networkInterfaces.on('change', (interfaces) =>
+      this._onnetworkchange(interfaces)
+    )
 
     if (opts.nodes) {
       for (let i = opts.nodes.length - 1; i >= 0; i--) {
@@ -83,46 +87,53 @@ class DHT extends EventEmitter {
     }
   }
 
-  static bootstrapper (port, host, opts) {
+  static bootstrapper(port, host, opts) {
     if (!port) throw new Error('Port is required')
     if (!host) throw new Error('Host is required')
     if (host === '0.0.0.0' || host === '::') throw new Error('Invalid host')
     if (!UDX.isIPv4(host)) throw new Error('Host must be a IPv4 address')
 
-    const dht = new this({ port, ephemeral: false, firewalled: false, anyPort: false, bootstrap: [], ...opts })
+    const dht = new this({
+      port,
+      ephemeral: false,
+      firewalled: false,
+      anyPort: false,
+      bootstrap: [],
+      ...opts
+    })
     dht._nat.add(host, port)
     return dht
   }
 
-  get id () {
+  get id() {
     return this.ephemeral ? null : this.table.id
   }
 
-  get host () {
+  get host() {
     return this._nat.host
   }
 
-  get port () {
+  get port() {
     return this._nat.port
   }
 
-  get randomized () {
-    return this._nat.host !== null && (this._nat.port === 0)
+  get randomized() {
+    return this._nat.host !== null && this._nat.port === 0
   }
 
-  get socket () {
+  get socket() {
     return this.firewalled ? this.io.clientSocket : this.io.serverSocket
   }
 
-  onmessage (socket, buf, rinfo) {
+  onmessage(socket, buf, rinfo) {
     if (buf.byteLength > 1) this.io.onmessage(socket, buf, rinfo)
   }
 
-  bind () {
+  bind() {
     return this.io.bind()
   }
 
-  async suspend ({ log = noop } = {}) {
+  async suspend({ log = noop } = {}) {
     log('Suspending waiting for io bind...')
     await this.io.bind()
     log('Done, continuing')
@@ -135,7 +146,7 @@ class DHT extends EventEmitter {
     this.emit('suspend')
   }
 
-  async resume ({ log = noop } = {}) {
+  async resume({ log = noop } = {}) {
     if (!this.suspended || this.destroyed) return
     this.suspended = false
     this._tickInterval = setInterval(this._ontick.bind(this), TICK_INTERVAL)
@@ -143,17 +154,19 @@ class DHT extends EventEmitter {
     log('Resuming io')
     await this.io.resume()
     log('Done, dht resumed')
-    this.io.networkInterfaces.on('change', (interfaces) => this._onnetworkchange(interfaces))
+    this.io.networkInterfaces.on('change', (interfaces) =>
+      this._onnetworkchange(interfaces)
+    )
     this.refresh()
     this.emit('resume')
   }
 
-  address () {
+  address() {
     const socket = this.socket
     return socket ? socket.address() : null
   }
 
-  localAddress () {
+  localAddress() {
     if (!this.io.serverSocket) return null
 
     return {
@@ -162,7 +175,7 @@ class DHT extends EventEmitter {
     }
   }
 
-  remoteAddress () {
+  remoteAddress() {
     if (!this.host) return null
     if (!this.port) return null
     if (this.firewalled) return null
@@ -177,7 +190,7 @@ class DHT extends EventEmitter {
     }
   }
 
-  addNode ({ host, port }) {
+  addNode({ host, port }) {
     this._addNode({
       id: peer.id(host, port),
       port,
@@ -194,52 +207,76 @@ class DHT extends EventEmitter {
     })
   }
 
-  toArray (opts) {
-    const limit = (opts && opts.limit)
+  toArray(opts) {
+    const limit = opts && opts.limit
     if (limit === 0) return []
-    return this.nodes.toArray({ limit, reverse: true }).map(({ host, port }) => ({ host, port }))
+    return this.nodes
+      .toArray({ limit, reverse: true })
+      .map(({ host, port }) => ({ host, port }))
   }
 
-  async fullyBootstrapped () {
+  async fullyBootstrapped() {
     return this._bootstrapping
   }
 
-  ready () {
+  ready() {
     // Deprecating, use fullyBootstrapped instead (removed on next major)
     return this.fullyBootstrapped()
   }
 
-  findNode (target, opts) {
+  findNode(target, opts) {
     if (this.destroyed) throw new Error('Node destroyed')
     this._refreshTicks = REFRESH_TICKS
     return new Query(this, target, true, FIND_NODE, null, opts)
   }
 
-  query ({ target, command, value }, opts) {
+  query({ target, command, value }, opts) {
     if (this.destroyed) throw new Error('Node destroyed')
     this._refreshTicks = REFRESH_TICKS
     return new Query(this, target, false, command, value || null, opts)
   }
 
-  ping ({ host, port }, opts) {
+  ping({ host, port }, opts) {
     let value = null
 
     if (opts && opts.size && opts.size > 0) value = b4a.alloc(opts.size)
 
-    const req = this.io.createRequest({ id: null, host, port }, null, true, PING, null, value, (opts && opts.session) || null, (opts && opts.ttl))
+    const req = this.io.createRequest(
+      { id: null, host, port },
+      null,
+      true,
+      PING,
+      null,
+      value,
+      (opts && opts.session) || null,
+      opts && opts.ttl
+    )
     return this._requestToPromise(req, opts)
   }
 
-  request ({ token = null, command, target = null, value = null }, { host, port }, opts) {
-    const req = this.io.createRequest({ id: null, host, port }, token, false, command, target, value, (opts && opts.session) || null, (opts && opts.ttl))
+  request(
+    { token = null, command, target = null, value = null },
+    { host, port },
+    opts
+  ) {
+    const req = this.io.createRequest(
+      { id: null, host, port },
+      token,
+      false,
+      command,
+      target,
+      value,
+      (opts && opts.session) || null,
+      opts && opts.ttl
+    )
     return this._requestToPromise(req, opts)
   }
 
-  session () {
+  session() {
     return new Session(this)
   }
 
-  _requestToPromise (req, opts) {
+  _requestToPromise(req, opts) {
     if (req === null) return Promise.reject(new Error('Node destroyed'))
 
     if (opts && opts.socket) req.socket = opts.socket
@@ -252,7 +289,7 @@ class DHT extends EventEmitter {
     })
   }
 
-  async _bootstrap () {
+  async _bootstrap() {
     const self = this
 
     await Promise.resolve() // wait a tick, so apis can be used from the outside
@@ -279,7 +316,7 @@ class DHT extends EventEmitter {
 
     this.emit('ready')
 
-    function ondata (data) {
+    function ondata(data) {
       // Simple QUICK nat heuristic.
       // If we get ONE positive nat ping before the bootstrap query finishes
       // then we always to a nat test, no matter if we are adaptive...
@@ -290,18 +327,33 @@ class DHT extends EventEmitter {
       first = false
 
       const value = b4a.allocUnsafe(2)
-      c.uint16.encode({ start: 0, end: 2, buffer: value }, self.io.serverSocket.address().port)
+      c.uint16.encode(
+        { start: 0, end: 2, buffer: value },
+        self.io.serverSocket.address().port
+      )
 
-      self._request(data.from, false, true, PING_NAT, null, value, null, () => { testNat = true }, noop)
+      self._request(
+        data.from,
+        false,
+        true,
+        PING_NAT,
+        null,
+        value,
+        null,
+        () => {
+          testNat = true
+        },
+        noop
+      )
     }
   }
 
-  refresh () {
+  refresh() {
     const node = this.table.random()
     this._backgroundQuery(node ? node.id : this.table.id).on('error', noop)
   }
 
-  async destroy () {
+  async destroy() {
     const emitClose = !this.destroyed
     this.destroyed = true
     clearInterval(this._tickInterval)
@@ -309,8 +361,26 @@ class DHT extends EventEmitter {
     if (emitClose) this.emit('close')
   }
 
-  _request (to, force, internal, command, target, value, session, onresponse, onerror) {
-    const req = this.io.createRequest(to, null, internal, command, target, value, session)
+  _request(
+    to,
+    force,
+    internal,
+    command,
+    target,
+    value,
+    session,
+    onresponse,
+    onerror
+  ) {
+    const req = this.io.createRequest(
+      to,
+      null,
+      internal,
+      command,
+      target,
+      value,
+      session
+    )
     if (req === null) return null
 
     req.onresponse = onresponse
@@ -320,7 +390,7 @@ class DHT extends EventEmitter {
     return req
   }
 
-  _natAdd (host, port) {
+  _natAdd(host, port) {
     const prevHost = this._nat.host
     const prevPort = this._nat.port
 
@@ -332,15 +402,19 @@ class DHT extends EventEmitter {
   }
 
   // we don't check that this is a bootstrap node but we limit the sample size to very few nodes, so fine
-  _sampleBootstrapMaybe (from, to) {
-    if (this._nonePersistentSamples.length >= Math.max(1, this.bootstrapNodes.length)) return
+  _sampleBootstrapMaybe(from, to) {
+    if (
+      this._nonePersistentSamples.length >=
+      Math.max(1, this.bootstrapNodes.length)
+    )
+      return
     const id = from.host + ':' + from.port
     if (this._nonePersistentSamples.indexOf(id) > -1) return
     this._nonePersistentSamples.push(id)
     this._natAdd(to.host, to.port)
   }
 
-  _addNodeFromNetwork (sample, from, to) {
+  _addNodeFromNetwork(sample, from, to) {
     if (this._filterNode !== null && !this._filterNode(from)) {
       return
     }
@@ -354,7 +428,10 @@ class DHT extends EventEmitter {
 
     // refresh it, if we've seen this before
     if (oldNode) {
-      if (sample && (oldNode.sampled === 0 || (this._tick - oldNode.sampled) >= OLD_NODE)) {
+      if (
+        sample &&
+        (oldNode.sampled === 0 || this._tick - oldNode.sampled >= OLD_NODE)
+      ) {
         oldNode.to = to
         oldNode.sampled = this._tick
         this._natAdd(to.host, to.port)
@@ -380,7 +457,7 @@ class DHT extends EventEmitter {
     })
   }
 
-  _addNode (node) {
+  _addNode(node) {
     if (this.nodes.has(node) || b4a.equals(node.id, this.table.id)) return
 
     node.added = node.pinged = node.seen = this._tick
@@ -396,11 +473,11 @@ class DHT extends EventEmitter {
     this.emit('add-node', node)
   }
 
-  _removeStaleNode (node, lastSeen) {
+  _removeStaleNode(node, lastSeen) {
     if (node.seen <= lastSeen) this._removeNode(node)
   }
 
-  _removeNode (node) {
+  _removeNode(node) {
     if (!this.nodes.has(node)) return
 
     this.table.remove(node.id)
@@ -409,7 +486,7 @@ class DHT extends EventEmitter {
     this.emit('remove-node', node)
   }
 
-  _onwakeup () {
+  _onwakeup() {
     this._tick += 2 * OLD_NODE // bump the tick enough that everything appears old.
     this._tick += 8 - (this._tick & 7) - 2 // triggers a series of pings in two ticks
     this._stableTicks = MORE_STABLE_TICKS
@@ -431,48 +508,67 @@ class DHT extends EventEmitter {
     this.emit('wakeup')
   }
 
-  _onfullrow (newNode, row) {
+  _onfullrow(newNode, row) {
     if (!this.bootstrapped || this._repinging >= 3) return
 
     let oldest = null
     for (const node of row.nodes) {
       if (node.pinged === this._tick) continue
-      if (oldest === null || oldest.pinged > node.pinged || (oldest.pinged === node.pinged && oldest.added > node.added)) oldest = node
+      if (
+        oldest === null ||
+        oldest.pinged > node.pinged ||
+        (oldest.pinged === node.pinged && oldest.added > node.added)
+      )
+        oldest = node
     }
 
     if (oldest === null) return
-    if ((this._tick - oldest.pinged) < RECENT_NODE && (this._tick - oldest.added) > OLD_NODE) return
+    if (
+      this._tick - oldest.pinged < RECENT_NODE &&
+      this._tick - oldest.added > OLD_NODE
+    )
+      return
 
     this._repingAndSwap(newNode, oldest)
   }
 
-  _onnetworkchange (interfaces) {
+  _onnetworkchange(interfaces) {
     this.emit('network-change', interfaces)
     this.emit('network-update')
   }
 
-  _repingAndSwap (newNode, oldNode) {
+  _repingAndSwap(newNode, oldNode) {
     const self = this
     const lastSeen = oldNode.seen
 
     oldNode.pinged = this._tick
 
     this._repinging++
-    this._request({ id: null, host: oldNode.host, port: oldNode.port }, false, true, PING, null, null, null, onsuccess, onswap)
+    this._request(
+      { id: null, host: oldNode.host, port: oldNode.port },
+      false,
+      true,
+      PING,
+      null,
+      null,
+      null,
+      onsuccess,
+      onswap
+    )
 
-    function onsuccess (m) {
+    function onsuccess(m) {
       if (oldNode.seen <= lastSeen) return onswap()
       self._repinging--
     }
 
-    function onswap (e) {
+    function onswap(e) {
       self._repinging--
       self._removeNode(oldNode)
       self._addNode(newNode)
     }
   }
 
-  _onrequest (req, external) {
+  _onrequest(req, external) {
     if (req.from.id !== null) {
       this._addNodeFromNetwork(!external, req.from, req.to)
     }
@@ -525,21 +621,21 @@ class DHT extends EventEmitter {
     }
   }
 
-  onrequest (req) {
+  onrequest(req) {
     return this.emit('request', req)
   }
 
-  _onresponse (res, external) {
+  _onresponse(res, external) {
     this._addNodeFromNetwork(!external, res.from, res.to)
   }
 
-  _ontimeout (req) {
+  _ontimeout(req) {
     if (!req.to.id) return
     const node = this.table.get(req.to.id)
     if (node) this._removeNode(node)
   }
 
-  _pingSome () {
+  _pingSome() {
     let cnt = this.io.inflight.length > 2 ? 3 : 5
     let oldest = this.nodes.oldest
 
@@ -550,7 +646,7 @@ class DHT extends EventEmitter {
     }
 
     // we've recently pinged the oldest one, so only trigger a couple of repings
-    if ((this._tick - oldest.pinged) < RECENT_NODE) {
+    if (this._tick - oldest.pinged < RECENT_NODE) {
       cnt = 2
     }
 
@@ -561,7 +657,7 @@ class DHT extends EventEmitter {
     }
   }
 
-  _check (node) {
+  _check(node) {
     node.pinged = this._tick
 
     const lastSeen = node.seen
@@ -575,10 +671,20 @@ class DHT extends EventEmitter {
     }
 
     this._checks++
-    this._request({ id: null, host: node.host, port: node.port }, false, true, PING, null, null, null, onresponse, onerror)
+    this._request(
+      { id: null, host: node.host, port: node.port },
+      false,
+      true,
+      PING,
+      null,
+      null,
+      null,
+      onresponse,
+      onerror
+    )
   }
 
-  _ontick () {
+  _ontick() {
     const time = Date.now()
 
     if (time - this._lastTick > SLEEPING_INTERVAL && this.suspended === false) {
@@ -592,7 +698,8 @@ class DHT extends EventEmitter {
     if (!this.bootstrapped || this.suspended) return
 
     if (this.adaptive && this.ephemeral && --this._stableTicks <= 0) {
-      if (this._lastHost === this._nat.host) { // do not recheck the same network...
+      if (this._lastHost === this._nat.host) {
+        // do not recheck the same network...
         this._stableTicks = MORE_STABLE_TICKS
       } else {
         this._updateNetworkState() // the promise returned here never fails so just ignore it
@@ -603,12 +710,15 @@ class DHT extends EventEmitter {
       this._pingSome()
     }
 
-    if (((this._tick & 63) === 0 && this.nodes.length < this.table.k) || --this._refreshTicks <= 0) {
+    if (
+      ((this._tick & 63) === 0 && this.nodes.length < this.table.k) ||
+      --this._refreshTicks <= 0
+    ) {
       this.refresh()
     }
   }
 
-  async _updateNetworkState (onlyFirewall = false) {
+  async _updateNetworkState(onlyFirewall = false) {
     if (!this.ephemeral) return false
     if (onlyFirewall && !this.firewalled) return false
 
@@ -628,13 +738,15 @@ class DHT extends EventEmitter {
     const natSampler = this.firewalled ? new NatSampler() : this._nat
 
     // ask remote nodes to ping us on our server socket to see if we have the port open
-    const firewalled = this.firewalled && await this._checkIfFirewalled(natSampler)
+    const firewalled =
+      this.firewalled && (await this._checkIfFirewalled(natSampler))
     if (firewalled) return false
 
     this.firewalled = this.io.firewalled = false
 
     // incase it's called in parallel for some reason, or if our nat status somehow changed
-    if (!this.ephemeral || host !== this._nat.host || port !== this._nat.port) return false
+    if (!this.ephemeral || host !== this._nat.host || port !== this._nat.port)
+      return false
     // if the firewall probe returned a different host / non consistent port, bail as well
     if (natSampler.host !== host || natSampler.port === 0) return false
 
@@ -684,7 +796,7 @@ class DHT extends EventEmitter {
     return true
   }
 
-  async * _resolveBootstrapNodes () {
+  async *_resolveBootstrapNodes() {
     for (let { host, port } of this.bootstrapNodes) {
       let doLookup = false
 
@@ -703,7 +815,9 @@ class DHT extends EventEmitter {
 
       if (doLookup) {
         try {
-          host = UDX.isIPv4(host) ? host : (await this.udx.lookup(host, { family: 4 })).host
+          host = UDX.isIPv4(host)
+            ? host
+            : (await this.udx.lookup(host, { family: 4 })).host
         } catch {
           continue
         }
@@ -717,15 +831,19 @@ class DHT extends EventEmitter {
     }
   }
 
-  async _addBootstrapNodes (nodes) {
+  async _addBootstrapNodes(nodes) {
     for await (const node of this._resolveBootstrapNodes()) {
       nodes.push(node)
     }
   }
 
-  async _checkIfFirewalled (natSampler = new NatSampler()) {
+  async _checkIfFirewalled(natSampler = new NatSampler()) {
     const nodes = []
-    for (let node = this.nodes.latest; node && nodes.length < 5; node = node.prev) {
+    for (
+      let node = this.nodes.latest;
+      node && nodes.length < 5;
+      node = node.prev
+    ) {
       nodes.push(node)
     }
 
@@ -736,7 +854,10 @@ class DHT extends EventEmitter {
     const hosts = new Set()
     const value = b4a.allocUnsafe(2)
 
-    c.uint16.encode({ start: 0, end: 2, buffer: value }, this.io.serverSocket.address().port)
+    c.uint16.encode(
+      { start: 0, end: 2, buffer: value },
+      this.io.serverSocket.address().port
+    )
 
     // double check they actually came on the server socket...
     this.io.serverSocket.on('message', onmessage)
@@ -757,44 +878,54 @@ class DHT extends EventEmitter {
     if (count < (nodes.length >= 5 ? 3 : 1)) return true
 
     // check that the server socket has the same ip as the client socket
-    if (natSampler.host === null || this._nat.host !== natSampler.host) return true
+    if (natSampler.host === null || this._nat.host !== natSampler.host)
+      return true
 
     // check that the local port of the server socket is the same as the remote port
     // TODO: we might want a flag to opt out of this heuristic for specific remapped port servers
-    if (natSampler.port === 0 || natSampler.port !== this.io.serverSocket.address().port) return true
+    if (
+      natSampler.port === 0 ||
+      natSampler.port !== this.io.serverSocket.address().port
+    )
+      return true
 
     return false
 
-    function onmessage (_, { host }) {
+    function onmessage(_, { host }) {
       hosts.add(host)
     }
   }
 
-  _backgroundQuery (target) {
+  _backgroundQuery(target) {
     this._refreshTicks = REFRESH_TICKS
 
-    const backgroundCon = Math.min(this.concurrency, Math.max(2, (this.concurrency / 8) | 0))
-    const q = new Query(this, target, true, FIND_NODE, null, { concurrency: backgroundCon, maxSlow: 0 })
+    const backgroundCon = Math.min(
+      this.concurrency,
+      Math.max(2, (this.concurrency / 8) | 0)
+    )
+    const q = new Query(this, target, true, FIND_NODE, null, {
+      concurrency: backgroundCon,
+      maxSlow: 0
+    })
 
     q.on('data', () => {
       // yield to other traffic
-      q.concurrency = this.io.inflight.length < 3
-        ? this.concurrency
-        : backgroundCon
+      q.concurrency =
+        this.io.inflight.length < 3 ? this.concurrency : backgroundCon
     })
 
     return q
   }
 
   // called by the query
-  _online () {
+  _online() {
     if (this.online) return
     this.online = true
     this.emit('network-update')
   }
 
   // called by the query
-  _offline () {
+  _offline() {
     if (!this.online) return
     this.online = false
     this.emit('network-update')
@@ -807,7 +938,7 @@ DHT.ERROR_INVALID_TOKEN = INVALID_TOKEN
 
 module.exports = DHT
 
-function localIP (udx, family = 4) {
+function localIP(udx, family = 4) {
   let host = null
 
   for (const n of udx.networkInterfaces()) {
@@ -823,7 +954,7 @@ function localIP (udx, family = 4) {
   return host || (family === 4 ? '127.0.0.1' : '::1')
 }
 
-function parseNode (s) {
+function parseNode(s) {
   if (typeof s === 'object') return s
   if (typeof s === 'number') return { host: '127.0.0.1', port: s }
   const [host, port] = s.split(':')
@@ -835,35 +966,45 @@ function parseNode (s) {
   }
 }
 
-function randomBytes (n) {
+function randomBytes(n) {
   const b = b4a.alloc(n)
   sodium.randombytes_buf(b)
   return b
 }
 
-function randomOffset (n) {
+function randomOffset(n) {
   return n - ((Math.random() * 0.5 * n) | 0)
 }
 
-function requestAll (dht, internal, command, value, nodes) {
+function requestAll(dht, internal, command, value, nodes) {
   let missing = nodes.length
   const replies = []
 
   return new Promise((resolve) => {
     for (const node of nodes) {
-      const req = dht._request(node, false, internal, command, null, value, null, onsuccess, onerror)
+      const req = dht._request(
+        node,
+        false,
+        internal,
+        command,
+        null,
+        value,
+        null,
+        onsuccess,
+        onerror
+      )
       if (!req) return resolve(replies)
     }
 
-    function onsuccess (res) {
+    function onsuccess(res) {
       replies.push(res)
       if (--missing === 0) resolve(replies)
     }
 
-    function onerror () {
+    function onerror() {
       if (--missing === 0) resolve(replies)
     }
   })
 }
 
-function noop () {}
+function noop() {}
