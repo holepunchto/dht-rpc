@@ -26,8 +26,7 @@ class DHT extends EventEmitter {
   constructor(opts = {}) {
     super()
 
-    this.bootstrapNodes =
-      opts.bootstrap === false ? [] : (opts.bootstrap || []).map(parseNode)
+    this.bootstrapNodes = opts.bootstrap === false ? [] : (opts.bootstrap || []).map(parseNode)
     this.table = new Table(randomBytes(32))
     this.nodes = new TOS()
     this.udx = opts.udx || new UDX()
@@ -42,8 +41,7 @@ class DHT extends EventEmitter {
     this.bootstrapped = false
     this.ephemeral = true
     this.firewalled = this.io.firewalled
-    this.adaptive =
-      typeof opts.ephemeral !== 'boolean' && opts.adaptive !== false
+    this.adaptive = typeof opts.ephemeral !== 'boolean' && opts.adaptive !== false
     this.destroyed = false
     this.suspended = false
     this.online = true
@@ -76,9 +74,7 @@ class DHT extends EventEmitter {
 
     this.table.on('row', this._onrow)
 
-    this.io.networkInterfaces.on('change', (interfaces) =>
-      this._onnetworkchange(interfaces)
-    )
+    this.io.networkInterfaces.on('change', (interfaces) => this._onnetworkchange(interfaces))
 
     if (opts.nodes) {
       for (let i = opts.nodes.length - 1; i >= 0; i--) {
@@ -154,9 +150,7 @@ class DHT extends EventEmitter {
     log('Resuming io')
     await this.io.resume()
     log('Done, dht resumed')
-    this.io.networkInterfaces.on('change', (interfaces) =>
-      this._onnetworkchange(interfaces)
-    )
+    this.io.networkInterfaces.on('change', (interfaces) => this._onnetworkchange(interfaces))
     this.refresh()
     this.emit('resume')
   }
@@ -210,9 +204,7 @@ class DHT extends EventEmitter {
   toArray(opts) {
     const limit = opts && opts.limit
     if (limit === 0) return []
-    return this.nodes
-      .toArray({ limit, reverse: true })
-      .map(({ host, port }) => ({ host, port }))
+    return this.nodes.toArray({ limit, reverse: true }).map(({ host, port }) => ({ host, port }))
   }
 
   async fullyBootstrapped() {
@@ -254,11 +246,7 @@ class DHT extends EventEmitter {
     return this._requestToPromise(req, opts)
   }
 
-  request(
-    { token = null, command, target = null, value = null },
-    { host, port },
-    opts
-  ) {
+  request({ token = null, command, target = null, value = null }, { host, port }, opts) {
     const req = this.io.createRequest(
       { id: null, host, port },
       token,
@@ -327,10 +315,7 @@ class DHT extends EventEmitter {
       first = false
 
       const value = b4a.allocUnsafe(2)
-      c.uint16.encode(
-        { start: 0, end: 2, buffer: value },
-        self.io.serverSocket.address().port
-      )
+      c.uint16.encode({ start: 0, end: 2, buffer: value }, self.io.serverSocket.address().port)
 
       self._request(
         data.from,
@@ -361,26 +346,8 @@ class DHT extends EventEmitter {
     if (emitClose) this.emit('close')
   }
 
-  _request(
-    to,
-    force,
-    internal,
-    command,
-    target,
-    value,
-    session,
-    onresponse,
-    onerror
-  ) {
-    const req = this.io.createRequest(
-      to,
-      null,
-      internal,
-      command,
-      target,
-      value,
-      session
-    )
+  _request(to, force, internal, command, target, value, session, onresponse, onerror) {
+    const req = this.io.createRequest(to, null, internal, command, target, value, session)
     if (req === null) return null
 
     req.onresponse = onresponse
@@ -403,11 +370,7 @@ class DHT extends EventEmitter {
 
   // we don't check that this is a bootstrap node but we limit the sample size to very few nodes, so fine
   _sampleBootstrapMaybe(from, to) {
-    if (
-      this._nonePersistentSamples.length >=
-      Math.max(1, this.bootstrapNodes.length)
-    )
-      return
+    if (this._nonePersistentSamples.length >= Math.max(1, this.bootstrapNodes.length)) return
     const id = from.host + ':' + from.port
     if (this._nonePersistentSamples.indexOf(id) > -1) return
     this._nonePersistentSamples.push(id)
@@ -428,10 +391,7 @@ class DHT extends EventEmitter {
 
     // refresh it, if we've seen this before
     if (oldNode) {
-      if (
-        sample &&
-        (oldNode.sampled === 0 || this._tick - oldNode.sampled >= OLD_NODE)
-      ) {
+      if (sample && (oldNode.sampled === 0 || this._tick - oldNode.sampled >= OLD_NODE)) {
         oldNode.to = to
         oldNode.sampled = this._tick
         this._natAdd(to.host, to.port)
@@ -523,11 +483,7 @@ class DHT extends EventEmitter {
     }
 
     if (oldest === null) return
-    if (
-      this._tick - oldest.pinged < RECENT_NODE &&
-      this._tick - oldest.added > OLD_NODE
-    )
-      return
+    if (this._tick - oldest.pinged < RECENT_NODE && this._tick - oldest.added > OLD_NODE) return
 
     this._repingAndSwap(newNode, oldest)
   }
@@ -738,15 +694,13 @@ class DHT extends EventEmitter {
     const natSampler = this.firewalled ? new NatSampler() : this._nat
 
     // ask remote nodes to ping us on our server socket to see if we have the port open
-    const firewalled =
-      this.firewalled && (await this._checkIfFirewalled(natSampler))
+    const firewalled = this.firewalled && (await this._checkIfFirewalled(natSampler))
     if (firewalled) return false
 
     this.firewalled = this.io.firewalled = false
 
     // incase it's called in parallel for some reason, or if our nat status somehow changed
-    if (!this.ephemeral || host !== this._nat.host || port !== this._nat.port)
-      return false
+    if (!this.ephemeral || host !== this._nat.host || port !== this._nat.port) return false
     // if the firewall probe returned a different host / non consistent port, bail as well
     if (natSampler.host !== host || natSampler.port === 0) return false
 
@@ -815,9 +769,7 @@ class DHT extends EventEmitter {
 
       if (doLookup) {
         try {
-          host = UDX.isIPv4(host)
-            ? host
-            : (await this.udx.lookup(host, { family: 4 })).host
+          host = UDX.isIPv4(host) ? host : (await this.udx.lookup(host, { family: 4 })).host
         } catch {
           continue
         }
@@ -839,11 +791,7 @@ class DHT extends EventEmitter {
 
   async _checkIfFirewalled(natSampler = new NatSampler()) {
     const nodes = []
-    for (
-      let node = this.nodes.latest;
-      node && nodes.length < 5;
-      node = node.prev
-    ) {
+    for (let node = this.nodes.latest; node && nodes.length < 5; node = node.prev) {
       nodes.push(node)
     }
 
@@ -854,10 +802,7 @@ class DHT extends EventEmitter {
     const hosts = new Set()
     const value = b4a.allocUnsafe(2)
 
-    c.uint16.encode(
-      { start: 0, end: 2, buffer: value },
-      this.io.serverSocket.address().port
-    )
+    c.uint16.encode({ start: 0, end: 2, buffer: value }, this.io.serverSocket.address().port)
 
     // double check they actually came on the server socket...
     this.io.serverSocket.on('message', onmessage)
@@ -878,15 +823,11 @@ class DHT extends EventEmitter {
     if (count < (nodes.length >= 5 ? 3 : 1)) return true
 
     // check that the server socket has the same ip as the client socket
-    if (natSampler.host === null || this._nat.host !== natSampler.host)
-      return true
+    if (natSampler.host === null || this._nat.host !== natSampler.host) return true
 
     // check that the local port of the server socket is the same as the remote port
     // TODO: we might want a flag to opt out of this heuristic for specific remapped port servers
-    if (
-      natSampler.port === 0 ||
-      natSampler.port !== this.io.serverSocket.address().port
-    )
+    if (natSampler.port === 0 || natSampler.port !== this.io.serverSocket.address().port)
       return true
 
     return false
@@ -899,10 +840,7 @@ class DHT extends EventEmitter {
   _backgroundQuery(target) {
     this._refreshTicks = REFRESH_TICKS
 
-    const backgroundCon = Math.min(
-      this.concurrency,
-      Math.max(2, (this.concurrency / 8) | 0)
-    )
+    const backgroundCon = Math.min(this.concurrency, Math.max(2, (this.concurrency / 8) | 0))
     const q = new Query(this, target, true, FIND_NODE, null, {
       concurrency: backgroundCon,
       maxSlow: 0
@@ -910,8 +848,7 @@ class DHT extends EventEmitter {
 
     q.on('data', () => {
       // yield to other traffic
-      q.concurrency =
-        this.io.inflight.length < 3 ? this.concurrency : backgroundCon
+      q.concurrency = this.io.inflight.length < 3 ? this.concurrency : backgroundCon
     })
 
     return q

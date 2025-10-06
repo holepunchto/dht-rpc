@@ -136,10 +136,7 @@ test('make bigger swarm', { timeout: 120000 }, async function (t) {
     }
   }
 
-  t.ok(
-    found,
-    'found target again in ' + messages + ' message(s) with original replies'
-  )
+  t.ok(found, 'found target again in ' + messages + ' message(s) with original replies')
 
   const { firewalled, host, port } = swarm[490]
 
@@ -181,10 +178,7 @@ test('commit after query', async function (t) {
     { command: BEFORE, target: swarm[0].table.id },
     {
       commit(m, dht, query) {
-        return dht.request(
-          { command: AFTER, target: query.target, token: m.token },
-          m.from
-        )
+        return dht.request({ command: AFTER, target: query.target, token: m.token }, m.from)
       }
     }
   )
@@ -249,10 +243,7 @@ test('request with/without retries', async function (t) {
   })
 
   try {
-    await a.request(
-      { command: NOPE },
-      { host: '127.0.0.1', port: b.address().port }
-    )
+    await a.request({ command: NOPE }, { host: '127.0.0.1', port: b.address().port })
   } catch {
     // do nothing
   }
@@ -286,10 +277,7 @@ test('shorthand commit', async function (t) {
     })
   }
 
-  const q = swarm[0].query(
-    { command: 42, target: Buffer.alloc(32) },
-    { commit: true }
-  )
+  const q = swarm[0].query({ command: 42, target: Buffer.alloc(32) }, { commit: true })
 
   await q.finished()
 
@@ -326,10 +314,7 @@ test('timeouts when commiting', async function (t) {
     }
   })
 
-  const q = a.query(
-    { command: NOPE, target: Buffer.alloc(32) },
-    { commit: true }
-  )
+  const q = a.query({ command: NOPE, target: Buffer.alloc(32) }, { commit: true })
   let error = null
 
   try {
@@ -356,9 +341,7 @@ test('toArray', async function (t) {
   )
 
   t.alike(bootstrap.toArray({ limit: 0 }), [])
-  t.alike(bootstrap.toArray({ limit: 1 }), [
-    { host: '127.0.0.1', port: b.address().port }
-  ])
+  t.alike(bootstrap.toArray({ limit: 1 }), [{ host: '127.0.0.1', port: b.address().port }])
   t.alike(
     bootstrap.toArray({ limit: 2 }).sort(cmpNodes),
     [
@@ -422,11 +405,7 @@ test('set bind', async function (t) {
   const b = createDHT({ port })
   await b.fullyBootstrapped()
 
-  t.not(
-    b.address().port,
-    port,
-    'bound to different port as explicit one is taken'
-  )
+  t.not(b.address().port, port, 'bound to different port as explicit one is taken')
 
   await a.destroy()
   await b.destroy()
@@ -735,10 +714,7 @@ test('suspend - fully suspends I/O', { deadlock: false }, async function (t) {
 test('response includes roundtrip time', async function (t) {
   const [, a, b] = await makeSwarm(3, t)
   const NOPE = 442
-  const response = await a.request(
-    { command: NOPE },
-    { host: '127.0.0.1', port: b.address().port }
-  )
+  const response = await a.request({ command: NOPE }, { host: '127.0.0.1', port: b.address().port })
   t.ok(response.rtt !== undefined)
 })
 
