@@ -174,11 +174,14 @@ test('commit after query', async function (t) {
     })
   }
 
-  const q = swarm[42].query({ command: BEFORE, target: swarm[0].table.id }, {
-    commit (m, dht, query) {
-      return dht.request({ command: AFTER, target: query.target, token: m.token }, m.from)
+  const q = swarm[42].query(
+    { command: BEFORE, target: swarm[0].table.id },
+    {
+      commit(m, dht, query) {
+        return dht.request({ command: AFTER, target: query.target, token: m.token }, m.from)
+      }
     }
-  })
+  )
 
   await q.finished()
 
@@ -190,7 +193,7 @@ test('map query stream', async function (t) {
 
   const expected = []
   const q = swarm[0].findNode(swarm[0].table.id, {
-    map (data) {
+    map(data) {
       if (expected.length > 3) return null
       expected.push(data.from.id)
       return data.from.id
@@ -248,7 +251,11 @@ test('request with/without retries', async function (t) {
   t.is(tries, 3)
 
   try {
-    await a.request({ command: NOPE }, { host: '127.0.0.1', port: b.address().port }, { retry: false })
+    await a.request(
+      { command: NOPE },
+      { host: '127.0.0.1', port: b.address().port },
+      { retry: false }
+    )
   } catch {
     // do nothing
   }
@@ -325,12 +332,30 @@ test('toArray', async function (t) {
 
   t.alike(a.toArray(), [{ host: '127.0.0.1', port: b.address().port }])
   t.alike(b.toArray(), [{ host: '127.0.0.1', port: a.address().port }])
-  t.alike(bootstrap.toArray().sort(cmpNodes), [{ host: '127.0.0.1', port: a.address().port }, { host: '127.0.0.1', port: b.address().port }].sort(cmpNodes))
+  t.alike(
+    bootstrap.toArray().sort(cmpNodes),
+    [
+      { host: '127.0.0.1', port: a.address().port },
+      { host: '127.0.0.1', port: b.address().port }
+    ].sort(cmpNodes)
+  )
 
   t.alike(bootstrap.toArray({ limit: 0 }), [])
   t.alike(bootstrap.toArray({ limit: 1 }), [{ host: '127.0.0.1', port: b.address().port }])
-  t.alike(bootstrap.toArray({ limit: 2 }).sort(cmpNodes), [{ host: '127.0.0.1', port: a.address().port }, { host: '127.0.0.1', port: b.address().port }].sort(cmpNodes))
-  t.alike(bootstrap.toArray({ limit: 10 }).sort(cmpNodes), [{ host: '127.0.0.1', port: a.address().port }, { host: '127.0.0.1', port: b.address().port }].sort(cmpNodes))
+  t.alike(
+    bootstrap.toArray({ limit: 2 }).sort(cmpNodes),
+    [
+      { host: '127.0.0.1', port: a.address().port },
+      { host: '127.0.0.1', port: b.address().port }
+    ].sort(cmpNodes)
+  )
+  t.alike(
+    bootstrap.toArray({ limit: 10 }).sort(cmpNodes),
+    [
+      { host: '127.0.0.1', port: a.address().port },
+      { host: '127.0.0.1', port: b.address().port }
+    ].sort(cmpNodes)
+  )
 })
 
 test('addNode / nodes option', async function (t) {
@@ -344,7 +369,10 @@ test('addNode / nodes option', async function (t) {
   await bootstrap.fullyBootstrapped()
   await a.fullyBootstrapped()
 
-  const b = createDHT({ ephemeral: false, nodes: [{ host: '127.0.0.1', port: a.address().port }] })
+  const b = createDHT({
+    ephemeral: false,
+    nodes: [{ host: '127.0.0.1', port: a.address().port }]
+  })
   await b.fullyBootstrapped()
 
   const bNodes = b.toArray()
@@ -442,7 +470,10 @@ test('relay', async function (t) {
     req.reply(value, { to: { host: '127.0.0.1', port: a.address().port } })
   })
 
-  const res = await a.request({ command: ROUTE, value: Buffer.from('a') }, { host: '127.0.0.1', port: b.address().port })
+  const res = await a.request(
+    { command: ROUTE, value: Buffer.from('a') },
+    { host: '127.0.0.1', port: b.address().port }
+  )
 
   t.alike(res.value, Buffer.from('abc'))
   t.is(res.from.port, c.address().port)
@@ -455,7 +486,7 @@ test('filter nodes from routing table', async function (t) {
   const node = createDHT({
     ephemeral: false,
     bootstrap: [a],
-    filterNode (from) {
+    filterNode(from) {
       return from.port !== b.port
     }
   })
@@ -474,10 +505,7 @@ test('request session, destroy all', async function (t) {
   a.on('request', () => t.fail())
 
   const s = b.session()
-  const p = [
-    s.request({ command: 42 }, a),
-    s.request({ command: 42 }, a)
-  ]
+  const p = [s.request({ command: 42 }, a), s.request({ command: 42 }, a)]
 
   const err = new Error('destroyed')
 
@@ -627,7 +655,12 @@ test('suspend - random port', async function (t) {
 test('suspend - custom port', async function (t) {
   const port = await freePort()
 
-  const a = createDHT({ ephemeral: false, firewalled: false, port, anyPort: false })
+  const a = createDHT({
+    ephemeral: false,
+    firewalled: false,
+    port,
+    anyPort: false
+  })
   await a.fullyBootstrapped()
 
   const b = createDHT({ ephemeral: false, firewalled: false, port })
@@ -703,7 +736,13 @@ test('bootstrap with reachable suggested-IP and skip DNS', async function (t) {
   const host = '127.0.0.1'
   t.alike(a.toArray(), [{ host, port: b.address().port }])
   t.alike(b.toArray(), [{ host, port: a.address().port }])
-  t.alike(bootstrap.toArray().sort(cmpNodes), [{ host, port: a.address().port }, { host, port: b.address().port }].sort(cmpNodes))
+  t.alike(
+    bootstrap.toArray().sort(cmpNodes),
+    [
+      { host, port: a.address().port },
+      { host, port: b.address().port }
+    ].sort(cmpNodes)
+  )
 
   bootstrap.destroy()
   a.destroy()
@@ -728,7 +767,13 @@ test('bootstrap with unreachable suggested-IP and fallback to DNS (reachable)', 
   const host = '127.0.0.1'
   t.alike(a.toArray(), [{ host, port: b.address().port }])
   t.alike(b.toArray(), [{ host, port: a.address().port }])
-  t.alike(bootstrap.toArray().sort(cmpNodes), [{ host, port: a.address().port }, { host, port: b.address().port }].sort(cmpNodes))
+  t.alike(
+    bootstrap.toArray().sort(cmpNodes),
+    [
+      { host, port: a.address().port },
+      { host, port: b.address().port }
+    ].sort(cmpNodes)
+  )
 
   bootstrap.destroy()
   a.destroy()
@@ -742,7 +787,10 @@ test('Populate DHT with options.nodes', async function (t) {
   const b = createDHT({ bootstrap: [] })
   await b.fullyBootstrapped()
 
-  const nodes = [{ host: '127.0.0.1', port: a.address().port }, { host: '127.0.0.1', port: b.address().port }]
+  const nodes = [
+    { host: '127.0.0.1', port: a.address().port },
+    { host: '127.0.0.1', port: b.address().port }
+  ]
 
   const c = createDHT({ nodes, bootstrap: [] })
   await c.fullyBootstrapped()
@@ -759,7 +807,7 @@ test('peer ids do not retain a slab', async function (t) {
   t.is(swarm[1].id.buffer.byteLength, 32)
 })
 
-async function freePort () {
+async function freePort() {
   const udx = new UDX()
   const sock = udx.createSocket()
   sock.bind(0, '127.0.0.1')
@@ -768,7 +816,7 @@ async function freePort () {
   return port
 }
 
-async function makeSwarm (n, t) {
+async function makeSwarm(n, t) {
   const node = createDHT({ ephemeral: false, firewalled: false })
   await node.fullyBootstrapped()
   const all = [node]
@@ -784,14 +832,14 @@ async function makeSwarm (n, t) {
   return all
 }
 
-function cmpNodes (a, b) {
+function cmpNodes(a, b) {
   return a.port - b.port
 }
 
-function createDHT (opts) {
+function createDHT(opts) {
   return new DHT({ ...opts, host: '127.0.0.1' })
 }
 
-function createBootstrapper (port, opts) {
+function createBootstrapper(port, opts) {
   return DHT.bootstrapper(port, '127.0.0.1', { ...opts, host: '127.0.0.1' })
 }

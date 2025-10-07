@@ -11,10 +11,13 @@ const q = node.query({ target: sha256(val), command: INSERT }, { commit })
 await q.finished()
 console.log('Inserted', sha256(val).toString('hex'))
 
-async function commit (reply) {
-  await node.request({ token: reply.token, target: sha256(val), command: INSERT, value: val }, reply.from)
+async function commit(reply) {
+  await node.request(
+    { token: reply.token, target: sha256(val), command: INSERT, value: val },
+    reply.from
+  )
 }
 
-function sha256 (val) {
+function sha256(val) {
   return crypto.createHash('sha256').update(val).digest()
 }

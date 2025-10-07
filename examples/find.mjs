@@ -19,6 +19,6 @@ for await (const data of q) {
 
 console.log('(query finished)')
 
-function sha256 (val) {
+function sha256(val) {
   return crypto.createHash('sha256').update(val).digest()
 }
