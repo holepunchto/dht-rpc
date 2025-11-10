@@ -479,8 +479,9 @@ class DHT extends EventEmitter {
         oldest === null ||
         oldest.pinged > node.pinged ||
         (oldest.pinged === node.pinged && oldest.added > node.added)
-      )
+      ) {
         oldest = node
+      }
     }
 
     if (oldest === null) return
@@ -828,8 +829,9 @@ class DHT extends EventEmitter {
 
     // check that the local port of the server socket is the same as the remote port
     // TODO: we might want a flag to opt out of this heuristic for specific remapped port servers
-    if (natSampler.port === 0 || natSampler.port !== this.io.serverSocket.address().port)
+    if (natSampler.port === 0 || natSampler.port !== this.io.serverSocket.address().port) {
       return true
+    }
 
     return false
 
