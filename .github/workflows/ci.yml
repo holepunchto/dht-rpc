@@ -1,0 +1,40 @@
+name: CI
+on:
+  push:
+    tags:
+      - "*"
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    name: Checks
+    steps:
+      - uses: holepunchto/actions/node-base@current
+      - run: npm run lint
+
+  test:
+    runs-on: ${{ matrix.os }}
+    name: Test ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+          - os: macos-latest
+          - os: windows-latest
+    steps:
+      - uses: holepunchto/actions/node-base@current
+      - run: npm install -g bare-runtime
+      - run: npm test
+
+  trigger_canary:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: [lint, test]
+    uses: holepunchto/actions/trigger-canary/workflow.yml@canary-workflow
+    with:
+      repository_name: ${{ github.event.repository.name }}
+      ref_name: ${{ github.ref_name }}
+    secrets:
+      canary_dispatch_pat: ${{ secrets.CANARY_DISPATCH_PAT }}
