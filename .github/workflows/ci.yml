@@ -37,6 +37,6 @@ jobs:
     steps:
       - uses: holepunchto/actions/trigger-canary@current
         with:
-          repository_name: ${{ github.event.repository.name }}
-          ref_name: ${{ github.ref_name }}
-          canary_dispatch_pat: ${{ secrets.CANARY_DISPATCH_PAT }}
+          repository-name: ${{ github.event.repository.name }}
+          ref-name: ${{ github.ref_name }}
+          canary-dispatch-pat: ${{ secrets.CANARY_DISPATCH_PAT }}
