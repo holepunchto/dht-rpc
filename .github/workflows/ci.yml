@@ -32,7 +32,7 @@ jobs:
   trigger_canary:
     if: startsWith(github.ref, 'refs/tags/')
     needs: [lint, test]
-    uses: holepunchto/actions/trigger-canary/workflow.yml@canary-workflow
+    uses: holepunchto/actions/.github/workflows/trigger-canary.yml@canary-workflow
     with:
       repository_name: ${{ github.event.repository.name }}
       ref_name: ${{ github.ref_name }}
