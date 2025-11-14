@@ -30,6 +30,7 @@ jobs:
       - run: npm test
 
   trigger_canary:
+    name: Trigger canary if tag
     if: startsWith(github.ref, 'refs/tags/')
     needs: [lint, test]
     runs-on: ubuntu-latest
