@@ -90,6 +90,45 @@ test('metrics', async function (t) {
   t.alike(swarm1.stats.commands.ping, { tx: 1, rx: 1 }, 'ping resp')
 })
 
+test('delayed ping', async function (t) {
+  const [swarm1, swarm2] = await makeSwarm(2, t)
+  const start = Date.now()
+  await swarm1.delayedPing({ host: swarm2.host, port: swarm2.port }, 1_100)
+  const end = Date.now()
+  t.ok(end - start >= 1_100, 'ping delayed for at least 1.1 seconds')
+})
+
+test('delayed ping - rejects when delay exceeds client cap', async function (t) {
+  const [swarm1, swarm2] = await makeSwarm(2, t)
+  t.exception(
+    async () => await swarm1.delayedPing({ host: swarm2.host, port: swarm2.port }, 10_001),
+    /Delay exceeds max delay: 10000ms/
+  )
+})
+
+test('delayed ping - server times out when exceeding delay', async function (t) {
+  const swarmServer = createDHT({ ephemeral: false, firewalled: false, maxPingDelay: 1_000 })
+  await swarmServer.fullyBootstrapped()
+  t.teardown(async function () {
+    await swarmServer.destroy()
+  })
+
+  const swarmClient = createDHT({
+    ephemeral: false,
+    firewalled: false,
+    bootstrap: [`localhost:${swarmServer.address().port}`]
+  })
+  await swarmClient.fullyBootstrapped()
+  t.teardown(async function () {
+    await swarmClient.destroy()
+  })
+
+  await t.exception(
+    () => swarmClient.delayedPing({ host: swarmServer.host, port: swarmServer.port }, 1_001),
+    /REQUEST_TIMEOUT/
+  )
+})
+
 test('make bigger swarm', { timeout: 120000 }, async function (t) {
   const swarm = await makeSwarm(500, t)
 
