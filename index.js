@@ -11,7 +11,7 @@ const Query = require('./lib/query')
 const Session = require('./lib/session')
 const peer = require('./lib/peer')
 const { UNKNOWN_COMMAND, INVALID_TOKEN } = require('./lib/errors')
-const { PING, PING_NAT, FIND_NODE, DOWN_HINT } = require('./lib/commands')
+const { PING, PING_NAT, FIND_NODE, DOWN_HINT, DELAYED_PING } = require('./lib/commands')
 
 const TMP = b4a.allocUnsafe(32)
 const TICK_INTERVAL = 5000
@@ -38,6 +38,7 @@ class DHT extends EventEmitter {
     })
 
     this.concurrency = opts.concurrency || 10
+    this.maxPingDelay = opts.maxPingDelay || 10_000
     this.bootstrapped = false
     this.ephemeral = true
     this.firewalled = this.io.firewalled
@@ -72,6 +73,7 @@ class DHT extends EventEmitter {
     this._nonePersistentSamples = []
     this._bootstrapping = this._bootstrap()
     this._bootstrapping.catch(noop)
+    this._pendingTimers = new Set()
 
     this.table.on('row', this._onrow)
 
@@ -247,6 +249,28 @@ class DHT extends EventEmitter {
     return this._requestToPromise(req, opts)
   }
 
+  delayedPing({ host, port }, delayMs, opts) {
+    if (delayMs > this.maxPingDelay) {
+      throw new Error(`Delay exceeds max delay: ${this.maxPingDelay}ms`)
+    }
+
+    const value = b4a.allocUnsafe(4)
+    c.uint32.encode({ start: 0, end: 4, buffer: value }, delayMs)
+
+    const req = this.io.createRequest(
+      { id: null, host, port },
+      null,
+      true,
+      DELAYED_PING,
+      null,
+      value,
+      (opts && opts.session) || null,
+      opts && opts.ttl,
+      delayMs + 1_000 // add 1 second to the timeout to account for network overhead
+    )
+    return this._requestToPromise(req, opts)
+  }
+
   request({ token = null, command, target = null, value = null }, { host, port }, opts) {
     const req = this.io.createRequest(
       { id: null, host, port },
@@ -343,6 +367,7 @@ class DHT extends EventEmitter {
     const emitClose = !this.destroyed
     this.destroyed = true
     clearInterval(this._tickInterval)
+    this._pendingTimers.forEach((timer) => clearTimeout(timer))
     await this.io.destroy()
     if (emitClose) this.emit('close')
   }
@@ -536,6 +561,18 @@ class DHT extends EventEmitter {
         // standard keep alive call
         case PING: {
           req.sendReply(0, null, false, false)
+          return
+        }
+        case DELAYED_PING: {
+          if (req.value === null || req.value.byteLength < 4) return
+          const delayMs = c.uint32.decode({ start: 0, end: 4, buffer: req.value })
+          if (delayMs > this.maxPingDelay) return
+          const timer = setTimeout(() => {
+            if (this.destroyed) return
+            this._pendingTimers.delete(timer)
+            req.sendReply(0, null, false, false)
+          }, delayMs)
+          this._pendingTimers.add(timer)
           return
         }
         // check if the other side can receive a message to their other socket
