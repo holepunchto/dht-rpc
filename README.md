@@ -123,7 +123,9 @@ Options include:
   // Optionally pass a UDX instance on which sockets will be created.
   udx,
   // dht-rpc will automatically detect if you are firewalled. If you know that you are not set this to false
-  firewalled: true
+  firewalled: true,
+  // dht-rpc will hint when a node is down if a request times out. Setting to false disables sending hints
+  sendDownHints: true
 }
 ```
 
