@@ -816,13 +816,13 @@ async function freePort() {
   return port
 }
 
-async function makeSwarm(n, t) {
-  const node = createDHT({ ephemeral: false, firewalled: false })
+async function makeSwarm(n, t, opts = {}) {
+  const node = createDHT({ ...opts, ephemeral: false, firewalled: false })
   await node.fullyBootstrapped()
   const all = [node]
   const bootstrap = ['localhost:' + node.address().port]
   while (all.length < n) {
-    const node = createDHT({ ephemeral: false, bootstrap })
+    const node = createDHT({ ...opts, ephemeral: false, bootstrap })
     await node.fullyBootstrapped()
     all.push(node)
   }
