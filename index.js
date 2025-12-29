@@ -22,6 +22,11 @@ const REFRESH_TICKS = 60 // refresh every ~5min when idle
 const RECENT_NODE = 12 // we've heard from a node less than 1min ago
 const OLD_NODE = 360 // if an node has been around more than 30 min we consider it old
 
+const DEFAULTS = {
+  concurrency: 10,
+  maxWindow: IO.DEFAULT_MAX_WINDOW
+}
+
 class DHT extends EventEmitter {
   constructor(opts = {}) {
     super()
@@ -83,6 +88,8 @@ class DHT extends EventEmitter {
       }
     }
   }
+
+  static DEFAULTS = DEFAULTS
 
   static bootstrapper(port, host, opts) {
     if (!port) throw new Error('Port is required')
