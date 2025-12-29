@@ -249,6 +249,7 @@ test('request with/without retries', async function (t) {
   }
 
   t.is(tries, 3)
+  t.is(a.stats.retries.total, 3 - 1, 'retried n - 1 times')
 
   try {
     await a.request(
@@ -261,6 +262,7 @@ test('request with/without retries', async function (t) {
   }
 
   t.is(tries, 4)
+  t.is(a.stats.retries.total, 3 - 1, 'didnt retry')
 })
 
 test('shorthand commit', async function (t) {

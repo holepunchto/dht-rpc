@@ -53,6 +53,7 @@ class DHT extends EventEmitter {
     this.stats = {
       queries: { active: 0, total: 0 },
       requests: this.io.stats.requests,
+      retries: this.io.stats.retries,
       commands: {
         ping: this.io.stats.commands[PING],
         pingNat: this.io.stats.commands[PING_NAT],
