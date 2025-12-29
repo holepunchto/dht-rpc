@@ -42,7 +42,7 @@ class DHT extends EventEmitter {
       ontimeout: this._ontimeout.bind(this)
     })
 
-    this.concurrency = opts.concurrency || 10
+    this.concurrency = opts.concurrency || DEFAULTS.concurrency
     this.bootstrapped = false
     this.ephemeral = true
     this.firewalled = this.io.firewalled
