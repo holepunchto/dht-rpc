@@ -78,6 +78,7 @@ class DHT extends EventEmitter {
     this._nonePersistentSamples = []
     this._bootstrapping = this._bootstrap()
     this._bootstrapping.catch(noop)
+    this._sendDownHints = opts.sendDownHints !== false
 
     this.table.on('row', this._onrow)
 
@@ -356,6 +357,7 @@ class DHT extends EventEmitter {
   }
 
   _request(to, force, internal, command, target, value, session, onresponse, onerror) {
+    if (!this._sendDownHints && command === DOWN_HINT) return null
     const req = this.io.createRequest(to, null, internal, command, target, value, session)
     if (req === null) return null
 

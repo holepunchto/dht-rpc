@@ -230,6 +230,27 @@ test('timeouts', async function (t) {
   t.is(a.stats.commands.downHint.tx, 1, 'a sent a down-hint message')
 })
 
+test('timeouts - downhints disabled', async function (t) {
+  const [, a, b] = await makeSwarm(3, t, { sendDownHints: false })
+  let tries = 0
+  const NOPE = 52
+
+  t.plan(5)
+
+  b.on('request', function (req) {
+    if (req.command === NOPE) {
+      tries++
+      t.pass('ignoring request')
+    }
+  })
+
+  const q = a.query({ command: NOPE, target: Buffer.alloc(32) })
+  await q.finished()
+
+  t.is(tries, 3)
+  t.is(a.stats.commands.downHint.tx, 0, 'didnt send a down-hint message')
+})
+
 test('request with/without retries', async function (t) {
   const [, a, b] = await makeSwarm(3, t)
   let tries = 0
@@ -818,13 +839,13 @@ async function freePort() {
   return port
 }
 
-async function makeSwarm(n, t) {
-  const node = createDHT({ ephemeral: false, firewalled: false })
+async function makeSwarm(n, t, opts = {}) {
+  const node = createDHT({ ...opts, ephemeral: false, firewalled: false })
   await node.fullyBootstrapped()
   const all = [node]
   const bootstrap = ['localhost:' + node.address().port]
   while (all.length < n) {
-    const node = createDHT({ ephemeral: false, bootstrap })
+    const node = createDHT({ ...opts, ephemeral: false, bootstrap })
     await node.fullyBootstrapped()
     all.push(node)
   }
