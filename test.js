@@ -902,6 +902,13 @@ test('network health', async (t) => {
   t.is(dht.online, true, 'online when 1+ response')
   t.is(dht.degraded, false, 'not degraded when no timeouts')
 
+  await dht.suspend()
+  await dht.resume()
+
+  t.alike(dht.health._window, [])
+  t.is(dht.online, true, 'online after resume')
+  t.is(dht.degraded, false, 'not degraded after resume')
+
   dht.destroy()
 })
 
