@@ -2,7 +2,7 @@ const test = require('brittle')
 const suspend = require('test-suspend')
 const UDX = require('udx-native')
 const DHT = require('./')
-const { NetworkHealth } = require('./lib/io')
+const NetworkHealth = require('./lib/health')
 
 test('bootstrapper', async function (t) {
   const port = await freePort()
@@ -832,8 +832,10 @@ test('peer ids do not retain a slab', async function (t) {
 })
 
 test('network health', async (t) => {
-  const io = { stats: { requests: { responses: 0, timeouts: 0 } } }
-  const health = new NetworkHealth(io, { maxHealthWindow: 3 })
+  const dht = {
+    stats: { requests: { responses: 0, timeouts: 0 } }
+  }
+  const health = new NetworkHealth(dht, { maxHealthWindow: 3 })
 
   t.alike(health._window, [])
   t.is(health.online, true, 'online initially')
@@ -845,7 +847,7 @@ test('network health', async (t) => {
   t.is(health.online, true, 'online when window not full')
   t.is(health.degraded, false, 'not degraded when no timeouts')
 
-  io.stats.requests.responses++
+  dht.stats.requests.responses++
   health.update()
 
   t.alike(health._window, [
@@ -855,7 +857,7 @@ test('network health', async (t) => {
   t.is(health.online, true, 'online when one response')
   t.is(health.degraded, false, 'not degraded when no timeouts')
 
-  io.stats.requests.timeouts++
+  dht.stats.requests.timeouts++
   health.update()
 
   t.alike(health._window, [
@@ -866,7 +868,7 @@ test('network health', async (t) => {
   t.is(health.online, true, 'online when one response')
   t.is(health.degraded, true, 'degraded when one timeout')
 
-  io.stats.requests.timeouts++
+  dht.stats.requests.timeouts++
   health.update()
 
   t.alike(health._window, [
@@ -877,7 +879,7 @@ test('network health', async (t) => {
   t.is(health.online, false, 'offline when no responses')
   t.is(health.degraded, false, 'not degraded when offline')
 
-  io.stats.requests.responses++
+  dht.stats.requests.responses++
   health.update()
 
   t.alike(health._window, [
@@ -888,7 +890,7 @@ test('network health', async (t) => {
   t.is(health.online, true, 'back online when one response')
   t.is(health.degraded, true, 'degraded when one timeout')
 
-  io.stats.requests.responses++
+  dht.stats.requests.responses++
   health.update()
 
   t.alike(health._window, [
