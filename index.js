@@ -24,7 +24,8 @@ const OLD_NODE = 360 // if an node has been around more than 30 min we consider 
 
 const DEFAULTS = {
   concurrency: 10,
-  maxWindow: IO.DEFAULT_MAX_WINDOW
+  maxWindow: IO.DEFAULT_MAX_WINDOW,
+  maxHealthWindow: IO.DEFAULT_MAX_HEALTH_WINDOW
 }
 
 class DHT extends EventEmitter {
@@ -683,6 +684,8 @@ class DHT extends EventEmitter {
     ) {
       this.refresh()
     }
+
+    this.io.health.update()
   }
 
   async _updateNetworkState(onlyFirewall = false) {

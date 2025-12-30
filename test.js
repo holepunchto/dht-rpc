@@ -2,6 +2,7 @@ const test = require('brittle')
 const suspend = require('test-suspend')
 const UDX = require('udx-native')
 const DHT = require('./')
+const { NetworkHealth } = require('./lib/io')
 
 test('bootstrapper', async function (t) {
   const port = await freePort()
@@ -828,6 +829,75 @@ test('Populate DHT with options.nodes', async function (t) {
 test('peer ids do not retain a slab', async function (t) {
   const swarm = await makeSwarm(2, t)
   t.is(swarm[1].id.buffer.byteLength, 32)
+})
+
+test('network health', async (t) => {
+  const io = { stats: { requests: { responses: 0, timeouts: 0 } } }
+  const health = new NetworkHealth(io, { maxHealthWindow: 3 })
+
+  t.alike(health._window, [])
+  t.is(health.online, true, 'online initially')
+  t.is(health.degraded, false, 'not degraded initially')
+
+  health.update()
+
+  t.alike(health._window, [{ responses: 0, timeouts: 0 }])
+  t.is(health.online, true, 'online when window not full')
+  t.is(health.degraded, false, 'not degraded when no timeouts')
+
+  io.stats.requests.responses++
+  health.update()
+
+  t.alike(health._window, [
+    { responses: 0, timeouts: 0 },
+    { responses: 1, timeouts: 0 }
+  ])
+  t.is(health.online, true, 'online when one response')
+  t.is(health.degraded, false, 'not degraded when no timeouts')
+
+  io.stats.requests.timeouts++
+  health.update()
+
+  t.alike(health._window, [
+    { responses: 0, timeouts: 0 },
+    { responses: 1, timeouts: 0 },
+    { responses: 1, timeouts: 1 }
+  ])
+  t.is(health.online, true, 'online when one response')
+  t.is(health.degraded, true, 'degraded when one timeout')
+
+  io.stats.requests.timeouts++
+  health.update()
+
+  t.alike(health._window, [
+    { responses: 1, timeouts: 0 },
+    { responses: 1, timeouts: 1 },
+    { responses: 1, timeouts: 2 }
+  ])
+  t.is(health.online, false, 'offline when no responses')
+  t.is(health.degraded, false, 'not degraded when offline')
+
+  io.stats.requests.responses++
+  health.update()
+
+  t.alike(health._window, [
+    { responses: 1, timeouts: 1 },
+    { responses: 1, timeouts: 2 },
+    { responses: 2, timeouts: 2 }
+  ])
+  t.is(health.online, true, 'back online when one response')
+  t.is(health.degraded, true, 'degraded when one timeout')
+
+  io.stats.requests.responses++
+  health.update()
+
+  t.alike(health._window, [
+    { responses: 1, timeouts: 2 },
+    { responses: 2, timeouts: 2 },
+    { responses: 3, timeouts: 2 }
+  ])
+  t.is(health.online, true, 'online when 1+ response')
+  t.is(health.degraded, false, 'not degraded when no timeouts')
 })
 
 async function freePort() {
