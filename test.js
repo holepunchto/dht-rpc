@@ -832,20 +832,32 @@ test('peer ids do not retain a slab', async function (t) {
 })
 
 test('network health', async (t) => {
+  let state = 'online'
   const dht = {
-    stats: { requests: { responses: 0, timeouts: 0 } }
+    stats: { requests: { responses: 0, timeouts: 0 } },
+    _online() {
+      state = 'online'
+    },
+    _degraded() {
+      state = 'degraded'
+    },
+    _offline() {
+      state = 'offline'
+    }
   }
   const health = new NetworkHealth(dht, { maxHealthWindow: 3 })
 
   t.alike(health._window, [])
   t.is(health.online, true, 'online initially')
   t.is(health.degraded, false, 'not degraded initially')
+  t.is(state, 'online', 'state is online')
 
   health.update()
 
   t.alike(health._window, [{ responses: 0, timeouts: 0 }])
   t.is(health.online, true, 'online when window not full')
   t.is(health.degraded, false, 'not degraded when no timeouts')
+  t.is(state, 'online', 'state is online')
 
   dht.stats.requests.responses++
   health.update()
@@ -856,6 +868,7 @@ test('network health', async (t) => {
   ])
   t.is(health.online, true, 'online when one response')
   t.is(health.degraded, false, 'not degraded when no timeouts')
+  t.is(state, 'online', 'state is online')
 
   dht.stats.requests.timeouts++
   health.update()
@@ -867,6 +880,7 @@ test('network health', async (t) => {
   ])
   t.is(health.online, true, 'online when one response')
   t.is(health.degraded, true, 'degraded when one timeout')
+  t.is(state, 'degraded', 'state is degraded')
 
   dht.stats.requests.timeouts++
   health.update()
@@ -878,6 +892,7 @@ test('network health', async (t) => {
   ])
   t.is(health.online, false, 'offline when no responses')
   t.is(health.degraded, false, 'not degraded when offline')
+  t.is(state, 'offline', 'state is offline')
 
   dht.stats.requests.responses++
   health.update()
@@ -889,6 +904,7 @@ test('network health', async (t) => {
   ])
   t.is(health.online, true, 'back online when one response')
   t.is(health.degraded, true, 'degraded when one timeout')
+  t.is(state, 'degraded', 'state is degraded')
 
   dht.stats.requests.responses++
   health.update()
@@ -900,6 +916,7 @@ test('network health', async (t) => {
   ])
   t.is(health.online, true, 'online when 1+ response')
   t.is(health.degraded, false, 'not degraded when no timeouts')
+  t.is(state, 'online', 'state is online')
 })
 
 async function freePort() {

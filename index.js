@@ -53,6 +53,7 @@ class DHT extends EventEmitter {
     this.destroyed = false
     this.suspended = false
     this.online = true
+    this.degraded = false
     this.stats = {
       queries: { active: 0, total: 0 },
       requests: this.io.stats.requests,
@@ -872,17 +873,27 @@ class DHT extends EventEmitter {
     return q
   }
 
-  // called by the query
+  // called by health
   _online() {
     if (this.online) return
     this.online = true
+    this.degraded = false
     this.emit('network-update')
   }
 
-  // called by the query
+  // called by health
+  _degraded() {
+    if (this.degraded) return
+    this.online = true
+    this.degraded = true
+    this.emit('network-update')
+  }
+
+  // called by health
   _offline() {
     if (!this.online) return
     this.online = false
+    this.degraded = false
     this.emit('network-update')
   }
 }
