@@ -875,7 +875,7 @@ class DHT extends EventEmitter {
 
   // called by health
   _online() {
-    if (this.online) return
+    if (this.online && !this.degraded) return
     this.online = true
     this.degraded = false
     this.emit('network-update')

@@ -2,7 +2,6 @@ const test = require('brittle')
 const suspend = require('test-suspend')
 const UDX = require('udx-native')
 const DHT = require('./')
-const NetworkHealth = require('./lib/health')
 
 test('bootstrapper', async function (t) {
   const port = await freePort()
@@ -832,91 +831,78 @@ test('peer ids do not retain a slab', async function (t) {
 })
 
 test('network health', async (t) => {
-  let state = 'online'
-  const dht = {
-    stats: { requests: { responses: 0, timeouts: 0 } },
-    _online() {
-      state = 'online'
-    },
-    _degraded() {
-      state = 'degraded'
-    },
-    _offline() {
-      state = 'offline'
-    }
-  }
-  const health = new NetworkHealth(dht, { maxHealthWindow: 3 })
+  const dht = createDHT({ maxHealthWindow: 3 })
 
-  t.alike(health._window, [])
-  t.is(health.online, true, 'online initially')
-  t.is(health.degraded, false, 'not degraded initially')
-  t.is(state, 'online', 'state is online')
+  t.alike(dht.health._window, [])
+  t.is(dht.online, true, 'online initially')
+  t.is(dht.degraded, false, 'not degraded initially')
 
-  health.update()
+  dht.health.update()
 
-  t.alike(health._window, [{ responses: 0, timeouts: 0 }])
-  t.is(health.online, true, 'online when window not full')
-  t.is(health.degraded, false, 'not degraded when no timeouts')
-  t.is(state, 'online', 'state is online')
+  t.alike(dht.health._window, [{ active: 0, total: 0, responses: 0, timeouts: 0, retries: 0 }])
+  t.is(dht.online, true, 'online when window not full')
+  t.is(dht.degraded, false, 'not degraded when no timeouts')
 
+  dht.stats.requests.total++
   dht.stats.requests.responses++
-  health.update()
+  dht.health.update()
 
-  t.alike(health._window, [
-    { responses: 0, timeouts: 0 },
-    { responses: 1, timeouts: 0 }
+  t.alike(dht.health._window, [
+    { active: 0, total: 0, responses: 0, timeouts: 0, retries: 0 },
+    { active: 0, total: 1, responses: 1, timeouts: 0, retries: 0 }
   ])
-  t.is(health.online, true, 'online when one response')
-  t.is(health.degraded, false, 'not degraded when no timeouts')
-  t.is(state, 'online', 'state is online')
+  t.is(dht.online, true, 'online when one response')
+  t.is(dht.degraded, false, 'not degraded when no timeouts')
 
+  dht.stats.requests.total++
   dht.stats.requests.timeouts++
-  health.update()
+  dht.health.update()
 
-  t.alike(health._window, [
-    { responses: 0, timeouts: 0 },
-    { responses: 1, timeouts: 0 },
-    { responses: 1, timeouts: 1 }
+  t.alike(dht.health._window, [
+    { active: 0, total: 0, responses: 0, timeouts: 0, retries: 0 },
+    { active: 0, total: 1, responses: 1, timeouts: 0, retries: 0 },
+    { active: 0, total: 2, responses: 1, timeouts: 1, retries: 0 }
   ])
-  t.is(health.online, true, 'online when one response')
-  t.is(health.degraded, true, 'degraded when one timeout')
-  t.is(state, 'degraded', 'state is degraded')
+  t.is(dht.online, true, 'online when one response')
+  t.is(dht.degraded, true, 'degraded when one timeout')
 
+  dht.stats.requests.total++
   dht.stats.requests.timeouts++
-  health.update()
+  dht.health.update()
 
-  t.alike(health._window, [
-    { responses: 1, timeouts: 0 },
-    { responses: 1, timeouts: 1 },
-    { responses: 1, timeouts: 2 }
+  t.alike(dht.health._window, [
+    { active: 0, total: 1, responses: 1, timeouts: 0, retries: 0 },
+    { active: 0, total: 2, responses: 1, timeouts: 1, retries: 0 },
+    { active: 0, total: 3, responses: 1, timeouts: 2, retries: 0 }
   ])
-  t.is(health.online, false, 'offline when no responses')
-  t.is(health.degraded, false, 'not degraded when offline')
-  t.is(state, 'offline', 'state is offline')
+  t.is(dht.online, false, 'offline when no responses')
+  t.is(dht.degraded, false, 'not degraded when offline')
 
+  dht.stats.requests.total++
   dht.stats.requests.responses++
-  health.update()
+  dht.health.update()
 
-  t.alike(health._window, [
-    { responses: 1, timeouts: 1 },
-    { responses: 1, timeouts: 2 },
-    { responses: 2, timeouts: 2 }
+  t.alike(dht.health._window, [
+    { active: 0, total: 2, responses: 1, timeouts: 1, retries: 0 },
+    { active: 0, total: 3, responses: 1, timeouts: 2, retries: 0 },
+    { active: 0, total: 4, responses: 2, timeouts: 2, retries: 0 }
   ])
-  t.is(health.online, true, 'back online when one response')
-  t.is(health.degraded, true, 'degraded when one timeout')
-  t.is(state, 'degraded', 'state is degraded')
+  t.is(dht.online, true, 'back online when one response')
+  t.is(dht.degraded, true, 'degraded when one timeout')
 
+  dht.stats.requests.total++
   dht.stats.requests.responses++
-  health.update()
+  dht.health.update()
 
-  t.alike(health._window, [
-    { responses: 1, timeouts: 2 },
-    { responses: 2, timeouts: 2 },
-    { responses: 3, timeouts: 2 }
+  t.alike(dht.health._window, [
+    { active: 0, total: 3, responses: 1, timeouts: 2, retries: 0 },
+    { active: 0, total: 4, responses: 2, timeouts: 2, retries: 0 },
+    { active: 0, total: 5, responses: 3, timeouts: 2, retries: 0 }
   ])
-  t.is(health.online, true, 'online when 1+ response')
-  t.is(health.degraded, false, 'not degraded when no timeouts')
-  t.is(state, 'online', 'state is online')
+  t.is(dht.online, true, 'online when 1+ response')
+  t.is(dht.degraded, false, 'not degraded when no timeouts')
+
+  dht.destroy()
 })
 
 async function freePort() {
