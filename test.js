@@ -846,8 +846,8 @@ test('network health', async (t) => {
   dht.health.update()
 
   t.alike(dht.health._window, [
-    { responses: 0, timeouts: 0 },
-    { responses: 0, timeouts: 0 }
+    { responses: 0, timeouts: 0 }, // tail
+    { responses: 0, timeouts: 0 } // head
   ])
   t.is(dht.online, true, 'online when window not full')
   t.is(dht.degraded, false, 'not degraded when no timeouts')
@@ -855,9 +855,9 @@ test('network health', async (t) => {
   dht.health.update()
 
   t.alike(dht.health._window, [
+    { responses: 0, timeouts: 0 }, // tail
     { responses: 0, timeouts: 0 },
-    { responses: 0, timeouts: 0 },
-    { responses: 0, timeouts: 0 }
+    { responses: 0, timeouts: 0 } // head
   ])
   t.is(dht.online, true, 'online when window not full')
   t.is(dht.degraded, false, 'not degraded when no timeouts')
@@ -866,10 +866,10 @@ test('network health', async (t) => {
   dht.health.update()
 
   t.alike(dht.health._window, [
+    { responses: 0, timeouts: 0 }, //tail
     { responses: 0, timeouts: 0 },
     { responses: 0, timeouts: 0 },
-    { responses: 0, timeouts: 0 },
-    { responses: 1, timeouts: 0 }
+    { responses: 1, timeouts: 0 } // head
   ])
   t.is(dht.online, true, 'online when one response')
   t.is(dht.degraded, false, 'not degraded when no timeouts')
@@ -878,10 +878,10 @@ test('network health', async (t) => {
   dht.health.update()
 
   t.alike(dht.health._window, [
+    { responses: 1, timeouts: 1 }, // head
+    { responses: 0, timeouts: 0 }, // tail
     { responses: 0, timeouts: 0 },
-    { responses: 0, timeouts: 0 },
-    { responses: 1, timeouts: 0 },
-    { responses: 1, timeouts: 1 }
+    { responses: 1, timeouts: 0 }
   ])
   t.is(dht.online, true, 'online when one response')
   t.is(dht.degraded, true, 'degraded when one timeout')
@@ -889,10 +889,10 @@ test('network health', async (t) => {
   dht.health.update()
 
   t.alike(dht.health._window, [
-    { responses: 0, timeouts: 0 },
-    { responses: 1, timeouts: 0 },
     { responses: 1, timeouts: 1 },
-    { responses: 1, timeouts: 1 }
+    { responses: 1, timeouts: 1 }, // head
+    { responses: 0, timeouts: 0 }, // tail
+    { responses: 1, timeouts: 0 }
   ])
   t.is(dht.online, true, 'online when one response')
   t.is(dht.degraded, true, 'degraded when one timeout')
@@ -901,10 +901,10 @@ test('network health', async (t) => {
   dht.health.update()
 
   t.alike(dht.health._window, [
-    { responses: 1, timeouts: 0 },
     { responses: 1, timeouts: 1 },
     { responses: 1, timeouts: 1 },
-    { responses: 1, timeouts: 2 }
+    { responses: 1, timeouts: 2 }, // head
+    { responses: 1, timeouts: 0 } // tail
   ])
   t.is(dht.online, false, 'offline when no responses')
   t.is(dht.degraded, false, 'not degraded when offline')
@@ -913,10 +913,10 @@ test('network health', async (t) => {
   dht.health.update()
 
   t.alike(dht.health._window, [
-    { responses: 1, timeouts: 1 },
+    { responses: 1, timeouts: 1 }, // tail
     { responses: 1, timeouts: 1 },
     { responses: 1, timeouts: 2 },
-    { responses: 2, timeouts: 2 }
+    { responses: 2, timeouts: 2 } // head
   ])
   t.is(dht.online, true, 'back online when one response')
   t.is(dht.degraded, true, 'degraded when one timeout')
@@ -925,10 +925,10 @@ test('network health', async (t) => {
   dht.health.update()
 
   t.alike(dht.health._window, [
-    { responses: 1, timeouts: 1 },
+    { responses: 3, timeouts: 2 }, // head
+    { responses: 1, timeouts: 1 }, // tail
     { responses: 1, timeouts: 2 },
-    { responses: 2, timeouts: 2 },
-    { responses: 3, timeouts: 2 }
+    { responses: 2, timeouts: 2 }
   ])
   t.is(dht.online, true, 'online when 1+ response')
   t.is(dht.degraded, true, 'degraded when one timeout')
@@ -936,10 +936,10 @@ test('network health', async (t) => {
   dht.health.update()
 
   t.alike(dht.health._window, [
-    { responses: 1, timeouts: 2 },
-    { responses: 2, timeouts: 2 },
     { responses: 3, timeouts: 2 },
-    { responses: 3, timeouts: 2 }
+    { responses: 3, timeouts: 2 }, // head
+    { responses: 1, timeouts: 2 }, // tail
+    { responses: 2, timeouts: 2 }
   ])
   t.is(dht.online, true, 'online when 1+ response')
   t.is(dht.degraded, false, 'not degraded when no timeouts')
