@@ -831,7 +831,7 @@ test('peer ids do not retain a slab', async function (t) {
 })
 
 test('network health', async (t) => {
-  const dht = createDHT({ maxHealthWindow: 3 })
+  const dht = createDHT({ maxHealthWindow: 4 })
 
   t.alike(dht.health._window, [])
   t.is(dht.online, true, 'online initially')
@@ -843,10 +843,31 @@ test('network health', async (t) => {
   t.is(dht.online, true, 'online when window not full')
   t.is(dht.degraded, false, 'not degraded when no timeouts')
 
+  dht.health.update()
+
+  t.alike(dht.health._window, [
+    { responses: 0, timeouts: 0 },
+    { responses: 0, timeouts: 0 }
+  ])
+  t.is(dht.online, true, 'online when window not full')
+  t.is(dht.degraded, false, 'not degraded when no timeouts')
+
+  dht.health.update()
+
+  t.alike(dht.health._window, [
+    { responses: 0, timeouts: 0 },
+    { responses: 0, timeouts: 0 },
+    { responses: 0, timeouts: 0 }
+  ])
+  t.is(dht.online, true, 'online when window not full')
+  t.is(dht.degraded, false, 'not degraded when no timeouts')
+
   dht.stats.requests.responses++
   dht.health.update()
 
   t.alike(dht.health._window, [
+    { responses: 0, timeouts: 0 },
+    { responses: 0, timeouts: 0 },
     { responses: 0, timeouts: 0 },
     { responses: 1, timeouts: 0 }
   ])
@@ -858,7 +879,19 @@ test('network health', async (t) => {
 
   t.alike(dht.health._window, [
     { responses: 0, timeouts: 0 },
+    { responses: 0, timeouts: 0 },
     { responses: 1, timeouts: 0 },
+    { responses: 1, timeouts: 1 }
+  ])
+  t.is(dht.online, true, 'online when one response')
+  t.is(dht.degraded, true, 'degraded when one timeout')
+
+  dht.health.update()
+
+  t.alike(dht.health._window, [
+    { responses: 0, timeouts: 0 },
+    { responses: 1, timeouts: 0 },
+    { responses: 1, timeouts: 1 },
     { responses: 1, timeouts: 1 }
   ])
   t.is(dht.online, true, 'online when one response')
@@ -870,6 +903,7 @@ test('network health', async (t) => {
   t.alike(dht.health._window, [
     { responses: 1, timeouts: 0 },
     { responses: 1, timeouts: 1 },
+    { responses: 1, timeouts: 1 },
     { responses: 1, timeouts: 2 }
   ])
   t.is(dht.online, false, 'offline when no responses')
@@ -879,6 +913,7 @@ test('network health', async (t) => {
   dht.health.update()
 
   t.alike(dht.health._window, [
+    { responses: 1, timeouts: 1 },
     { responses: 1, timeouts: 1 },
     { responses: 1, timeouts: 2 },
     { responses: 2, timeouts: 2 }
@@ -890,8 +925,20 @@ test('network health', async (t) => {
   dht.health.update()
 
   t.alike(dht.health._window, [
+    { responses: 1, timeouts: 1 },
     { responses: 1, timeouts: 2 },
     { responses: 2, timeouts: 2 },
+    { responses: 3, timeouts: 2 }
+  ])
+  t.is(dht.online, true, 'online when 1+ response')
+  t.is(dht.degraded, true, 'degraded when one timeout')
+
+  dht.health.update()
+
+  t.alike(dht.health._window, [
+    { responses: 1, timeouts: 2 },
+    { responses: 2, timeouts: 2 },
+    { responses: 3, timeouts: 2 },
     { responses: 3, timeouts: 2 }
   ])
   t.is(dht.online, true, 'online when 1+ response')
