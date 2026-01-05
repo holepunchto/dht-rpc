@@ -894,16 +894,16 @@ test('health - degraded', async (t) => {
   t.is(dht.degraded, false, 'not degraded when responses < sanity')
 
   dht.stats.requests.responses = 80
-  dht.stats.requests.timeouts = 20
+  dht.stats.requests.timeouts = 40
   dht.health.update()
 
-  t.is(dht.degraded, true, 'degraded when responses > sanity and timeouts > 10%')
+  t.is(dht.degraded, true, 'degraded when responses > sanity and timeouts > 25%')
 
   dht.stats.requests.responses = 200
-  dht.stats.requests.timeouts = 20
+  dht.stats.requests.timeouts = 40
   dht.health.update()
 
-  t.is(dht.degraded, false, 'not degraded when timeout rate < 10%')
+  t.is(dht.degraded, false, 'not degraded when timeout rate < 25%')
 
   dht.destroy()
 })
