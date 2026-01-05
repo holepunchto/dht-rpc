@@ -830,6 +830,138 @@ test('peer ids do not retain a slab', async function (t) {
   t.is(swarm[1].id.buffer.byteLength, 32)
 })
 
+test('health - window wraps around', async (t) => {
+  const dht = createDHT({ maxHealthWindow: 4 })
+
+  t.alike(dht.health._window, [])
+
+  fillHealthWindow(dht)
+
+  t.alike(dht.health._window, [
+    { responses: 0, timeouts: 0 }, // tail
+    { responses: 0, timeouts: 0 },
+    { responses: 0, timeouts: 0 },
+    { responses: 0, timeouts: 0 } // head
+  ])
+
+  dht.stats.requests.responses++
+  dht.health.update()
+
+  t.alike(dht.health._window, [
+    { responses: 1, timeouts: 0 }, // head
+    { responses: 0, timeouts: 0 },
+    { responses: 0, timeouts: 0 },
+    { responses: 0, timeouts: 0 } // tail
+  ])
+
+  dht.destroy()
+})
+
+test('health - online', async (t) => {
+  const dht = createDHT({ maxHealthWindow: 4 })
+
+  t.is(dht.online, true, 'online initially')
+
+  fillHealthWindow(dht)
+
+  t.is(dht.online, true, 'online after initially idle')
+
+  dht.health.online = false
+
+  dht.stats.requests.responses = 1
+  dht.stats.requests.timeouts = 0
+  dht.health.update()
+
+  t.is(dht.online, true, 'online after offline')
+  t.is(dht.degraded, false)
+
+  dht.destroy()
+})
+
+test('health - degraded', async (t) => {
+  const dht = createDHT({ maxHealthWindow: 4 })
+
+  t.is(dht.degraded, false, 'not degraded initially')
+
+  fillHealthWindow(dht)
+
+  t.is(dht.degraded, false, 'not degraded after initially idle')
+
+  dht.stats.requests.responses = 0
+  dht.stats.requests.timeouts = 20
+  dht.health.update()
+
+  t.is(dht.degraded, false, 'not degraded when responses < sanity')
+
+  dht.stats.requests.responses = 80
+  dht.stats.requests.timeouts = 20
+  dht.health.update()
+
+  t.is(dht.degraded, true, 'degraded when responses > sanity and timeouts > 10%')
+
+  dht.stats.requests.responses = 200
+  dht.stats.requests.timeouts = 20
+  dht.health.update()
+
+  t.is(dht.degraded, false, 'not degraded when timeout rate < 10%')
+
+  dht.destroy()
+})
+
+test('health - offline', async (t) => {
+  const dht = createDHT({ maxHealthWindow: 4 })
+
+  fillHealthWindow(dht)
+
+  dht.stats.requests.responses = 0
+  dht.stats.requests.timeouts = 20
+  dht.health.update()
+
+  t.is(dht.online, false, 'offline when no responses & timeouts > sanity')
+
+  dht.health.degraded = true
+
+  dht.health.update()
+
+  t.is(dht.online, false, 'offline when no responses & timeouts > sanity')
+  t.is(dht.degraded, false, 'not degraded when offline')
+
+  dht.health.reset()
+  fillHealthWindow(dht)
+  dht.health.online = false
+
+  dht.stats.requests.responses = 0
+  dht.stats.requests.timeouts = 1
+  dht.health.update()
+
+  t.is(dht.online, false, 'should stay offline when timeouts < sanity')
+
+  dht.destroy()
+})
+
+test('health - resume', async (t) => {
+  const dht = createDHT({ maxHealthWindow: 4 })
+
+  fillHealthWindow(dht)
+
+  dht.health.online = false
+
+  await dht.suspend()
+  await dht.resume()
+
+  t.is(dht.health._window.length, 0, 'window is empty after resume')
+  t.is(dht.online, true, 'online after resume')
+  t.is(dht.degraded, false, 'not degraded after resume')
+
+  dht.destroy()
+})
+
+function fillHealthWindow(dht) {
+  for (let i = 0; i < 4; i++) {
+    dht.health.update()
+  }
+}
+
 async function freePort() {
   const udx = new UDX()
   const sock = udx.createSocket()

@@ -6,6 +6,7 @@ const sodium = require('sodium-universal')
 const c = require('compact-encoding')
 const NatSampler = require('nat-sampler')
 const b4a = require('b4a')
+const NetworkHealth = require('./lib/health')
 const IO = require('./lib/io')
 const Query = require('./lib/query')
 const Session = require('./lib/session')
@@ -24,7 +25,8 @@ const OLD_NODE = 360 // if an node has been around more than 30 min we consider 
 
 const DEFAULTS = {
   concurrency: 10,
-  maxWindow: IO.DEFAULT_MAX_WINDOW
+  maxWindow: IO.DEFAULT_MAX_WINDOW,
+  maxHealthWindow: NetworkHealth.DEFAULT_MAX_HEALTH_WINDOW
 }
 
 class DHT extends EventEmitter {
@@ -41,6 +43,7 @@ class DHT extends EventEmitter {
       onresponse: this._onresponse.bind(this),
       ontimeout: this._ontimeout.bind(this)
     })
+    this.health = new NetworkHealth(this, opts)
 
     this.concurrency = opts.concurrency || DEFAULTS.concurrency
     this.bootstrapped = false
@@ -50,6 +53,7 @@ class DHT extends EventEmitter {
     this.destroyed = false
     this.suspended = false
     this.online = true
+    this.degraded = false
     this.stats = {
       queries: { active: 0, total: 0 },
       requests: this.io.stats.requests,
@@ -158,6 +162,7 @@ class DHT extends EventEmitter {
     this._onwakeup()
     log('Resuming io')
     await this.io.resume()
+    this.health.reset()
     log('Done, dht resumed')
     this.io.networkInterfaces.on('change', (interfaces) => this._onnetworkchange(interfaces))
     this.refresh()
@@ -683,6 +688,8 @@ class DHT extends EventEmitter {
     ) {
       this.refresh()
     }
+
+    this.health.update()
   }
 
   async _updateNetworkState(onlyFirewall = false) {
@@ -866,17 +873,27 @@ class DHT extends EventEmitter {
     return q
   }
 
-  // called by the query
+  // called by health
   _online() {
-    if (this.online) return
+    if (this.online && !this.degraded) return
     this.online = true
+    this.degraded = false
     this.emit('network-update')
   }
 
-  // called by the query
+  // called by health
+  _degraded() {
+    if (this.degraded) return
+    this.online = true
+    this.degraded = true
+    this.emit('network-update')
+  }
+
+  // called by health
   _offline() {
     if (!this.online) return
     this.online = false
+    this.degraded = false
     this.emit('network-update')
   }
 }
