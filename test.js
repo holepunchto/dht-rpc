@@ -289,6 +289,39 @@ test('request with/without retries', async function (t) {
   t.is(a.stats.requests.retries, 3 - 1, 'didnt retry')
 })
 
+test('ratelimit internal commands', async function (t) {
+  const [, a, b, c] = await makeSwarm(4, t, { internalCommandsRateLimit: { downHint: 1 } })
+  let tries = 0
+  const NOPE = 52
+
+  t.plan(3 + 4)
+
+  b.on('request', function (req) {
+    if (req.command === NOPE) {
+      tries++
+      t.pass('ignoring request')
+    }
+  })
+
+  const queryOpts = { retries: 1 }
+  const q = a.query({ command: NOPE, target: b.id }, queryOpts)
+  await q.finished()
+
+  const q2 = a.query({ command: NOPE, target: b.id }, queryOpts)
+  await q2.finished()
+
+  t.is(tries, 2)
+  t.is(a.stats.commands.downHint.tx, 1, 'didnt send more than ratelimit')
+
+  a._ontick() // Simulate waiting for tick
+
+  const q3 = a.query({ command: NOPE, target: b.id }, queryOpts)
+  await q3.finished()
+
+  t.is(tries, 3)
+  t.is(a.stats.commands.downHint.tx, 2, 'rate limit was reset on tick')
+})
+
 test('shorthand commit', async function (t) {
   const swarm = await makeSwarm(40, t)
 

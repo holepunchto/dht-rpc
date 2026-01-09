@@ -689,6 +689,7 @@ class DHT extends EventEmitter {
       this.refresh()
     }
 
+    this.io._ontick()
     this.health.update()
   }
 
