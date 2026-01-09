@@ -234,9 +234,9 @@ test('timeouts', async function (t) {
 test('timeouts - downhints disabled', async function (t) {
   const [, a, b] = await makeSwarm(3, t, { sendDownHints: false })
   let tries = 0
-   // Set to same command as DOWN_HINT but not internal to prove only DOWN_HINT is not sent
+  // Set to same command as DOWN_HINT but not internal to prove only DOWN_HINT is not sent
   const LOOKUP = DOWN_HINT // Command used in hyperdht
-  const NOPE = LOOKUP 
+  const NOPE = LOOKUP
 
   t.plan(5)
 
