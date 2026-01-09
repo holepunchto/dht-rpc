@@ -2,6 +2,7 @@ const test = require('brittle')
 const suspend = require('test-suspend')
 const UDX = require('udx-native')
 const DHT = require('./')
+const { DOWN_HINT } = require('./lib/commands.js')
 
 test('bootstrapper', async function (t) {
   const port = await freePort()
@@ -233,7 +234,9 @@ test('timeouts', async function (t) {
 test('timeouts - downhints disabled', async function (t) {
   const [, a, b] = await makeSwarm(3, t, { sendDownHints: false })
   let tries = 0
-  const NOPE = 52
+   // Set to same command as DOWN_HINT but not internal to prove only DOWN_HINT is not sent
+  const LOOKUP = DOWN_HINT // Command used in hyperdht
+  const NOPE = LOOKUP 
 
   t.plan(5)
 
