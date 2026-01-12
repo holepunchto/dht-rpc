@@ -431,11 +431,7 @@ test('ratelimit ping', async function (t) {
   await a.ping({ host: b.host, port: b.port }, queryOpts)
   await t.exception(a.ping({ host: b.host, port: b.port }, queryOpts), 'PING hit rate limit')
 
-  t.is(
-    a.stats.commands.ping.tx - bootstrapStats.ping.tx,
-    1,
-    'didnt send more than ratelimit'
-  )
+  t.is(a.stats.commands.ping.tx - bootstrapStats.ping.tx, 1, 'didnt send more than ratelimit')
 
   a._ontick() // Simulate waiting for tick
 
@@ -460,11 +456,7 @@ test('ratelimit ping via _check', async function (t) {
   // allow to run in background
   await new Promise((resolve) => setTimeout(resolve, 100))
 
-  t.is(
-    a.stats.commands.ping.tx - bootstrapStats.ping.tx,
-    1,
-    'didnt send more than ratelimit'
-  )
+  t.is(a.stats.commands.ping.tx - bootstrapStats.ping.tx, 1, 'didnt send more than ratelimit')
 
   a._ontick() // Simulate waiting for tick
   t.comment('tick')
