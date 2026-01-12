@@ -338,11 +338,11 @@ class DHT extends EventEmitter {
       // This should be expanded in the future to try more than one node etc, not always hit the first etc
       // If this fails, then nbd, as the onstable hook will pick it up later.
 
-      // Check rate limit if configured
-      if (self.io._internalRateLimitCheck(PING_NAT)) return
-
       if (!first) return
       first = false
+
+      // Check rate limit if configured
+      if (self.io._internalRateLimitCheck(PING_NAT)) return
 
       const value = b4a.allocUnsafe(2)
       c.uint16.encode({ start: 0, end: 2, buffer: value }, self.io.serverSocket.address().port)

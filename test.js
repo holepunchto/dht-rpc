@@ -497,6 +497,13 @@ test('ratelimit ping via _repingAndSwap', async function (t) {
   t.is(a.stats.commands.ping.tx - bootstrapStats.ping.tx, 2, 'rate limit was reset on tick')
 })
 
+test('ratelimit pingNat while bootstrapping', async function (t) {
+  const [, a] = await makeSwarm(2, t, { internalCommandsRateLimit: { pingNat: 0 } })
+  t.plan(1)
+
+  t.is(a.stats.commands.pingNat.tx, 0, 'didnt send more than ratelimit')
+})
+
 test('shorthand commit', async function (t) {
   const swarm = await makeSwarm(40, t)
 
