@@ -127,7 +127,13 @@ Options include:
   // dht-rpc will hint when a node is down if a request times out. Setting to false disables sending hints
   sendDownHints: true,
   // How many down hints can be sent per tick. -1 is unlimited
-  downHintsRateLimit: -1
+  downHintsRateLimit: -1,
+  // Advanced. Optionally rate limit internal commands sent per tick. -1 is unlimited
+  internalCommandsRateLimit: {
+    ping: -1,
+    pingNat: -1,
+    findNode: -1,
+  }
 }
 ```
 
