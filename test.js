@@ -289,7 +289,7 @@ test('request with/without retries', async function (t) {
   t.is(a.stats.requests.retries, 3 - 1, 'didnt retry')
 })
 
-test('ratelimit internal commands', async function (t) {
+test('ratelimit downhint commands', async function (t) {
   const [, a, b, c] = await makeSwarm(4, t, { internalCommandsRateLimit: { downHint: 1 } })
   let tries = 0
   const NOPE = 52
