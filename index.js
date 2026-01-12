@@ -82,7 +82,7 @@ class DHT extends EventEmitter {
     this._bootstrapping = this._bootstrap()
     this._bootstrapping.catch(noop)
     this._sendDownHints = opts.sendDownHints !== false
-    this._downHintsRateLimit = opts.downHintsRateLimit || -1
+    this._downHintsRateLimit = opts.downHintsRateLimit !== undefined ? opts.downHintsRateLimit : -1
     this._downHintsSentPerTick = 0
 
     this.table.on('row', this._onrow)
