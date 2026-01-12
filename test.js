@@ -313,6 +313,8 @@ test('ratelimit downhint commands', async function (t) {
   t.is(tries, 2)
   t.is(a.stats.commands.downHint.tx, 1, 'didnt send more than ratelimit')
 
+  if ((a._tick + 1) % 8 === 0) a._tick++ // ensure ontick doesn't make requests
+  if (a._refreshTicks <= 1) a._refreshTicks = 60
   a._ontick() // Simulate waiting for tick
 
   const q3 = a.query({ command: NOPE, target: b.id }, queryOpts)
@@ -346,6 +348,8 @@ test('ratelimit downhint can be 0', async function (t) {
   t.is(tries, 2)
   t.is(a.stats.commands.downHint.tx, 0, 'didnt send down hint')
 
+  if ((a._tick + 1) % 8 === 0) a._tick++ // ensure ontick doesn't make requests
+  if (a._refreshTicks <= 1) a._refreshTicks = 60
   a._ontick() // Simulate waiting for tick
 
   const q3 = a.query({ command: NOPE, target: b.id }, queryOpts)
@@ -375,12 +379,13 @@ test('ratelimit findNode', async function (t) {
     'didnt send more than ratelimit'
   )
 
+  if ((a._tick + 1) % 8 === 0) a._tick++ // ensure ontick doesn't make requests
+  if (a._refreshTicks <= 1) a._refreshTicks = 60
   a._ontick() // Simulate waiting for tick
 
   const q3 = a.findNode(b.id, queryOpts)
   await q3.finished()
 
-  // TODO Flaky because of DHT._ontick happening with a ._tick = 64 which triggers refreshing and _pingSome
   // 6 because each query visits 3 other nodes
   t.is(a.stats.commands.findNode.tx - bootstrapStats.findNode.tx, 6, 'rate limit was reset on tick')
 })
@@ -407,13 +412,14 @@ test('ratelimit findNode via _backgroundQuery', async function (t) {
     'didnt send more than ratelimit'
   )
 
+  if ((a._tick + 1) % 8 === 0) a._tick++ // ensure ontick doesn't make requests
+  if (a._refreshTicks <= 1) a._refreshTicks = 60
   a._ontick() // Simulate waiting for tick
 
   a.refresh()
   // allow to run in background
   await new Promise((resolve) => setTimeout(resolve, 100))
 
-  // TODO Flaky because of DHT._ontick happening with a ._tick = 64 which triggers refreshing and _pingSome
   // 6 because each query visits 3 other nodes
   t.is(a.stats.commands.findNode.tx - bootstrapStats.findNode.tx, 6, 'rate limit was reset on tick')
 })
@@ -430,11 +436,12 @@ test('ratelimit ping', async function (t) {
 
   t.is(a.stats.commands.ping.tx - bootstrapStats.ping.tx, 1, 'didnt send more than ratelimit')
 
+  if ((a._tick + 1) % 8 === 0) a._tick++ // ensure ontick doesn't make requests
+  if (a._refreshTicks <= 1) a._refreshTicks = 60
   a._ontick() // Simulate waiting for tick
 
   await a.ping({ host: b.host, port: b.port }, queryOpts)
 
-  // TODO Flaky because of DHT._ontick happening with a ._tick = 64 which triggers refreshing and _pingSome
   t.is(a.stats.commands.ping.tx - bootstrapStats.ping.tx, 2, 'rate limit was reset on tick')
 })
 
@@ -454,6 +461,8 @@ test('ratelimit ping via _check', async function (t) {
 
   t.is(a.stats.commands.ping.tx - bootstrapStats.ping.tx, 1, 'didnt send more than ratelimit')
 
+  if ((a._tick + 1) % 8 === 0) a._tick++ // ensure ontick doesn't make requests
+  if (a._refreshTicks <= 1) a._refreshTicks = 60
   a._ontick() // Simulate waiting for tick
   t.comment('tick')
 
@@ -461,7 +470,6 @@ test('ratelimit ping via _check', async function (t) {
   // allow to run in background
   await new Promise((resolve) => setTimeout(resolve, 100))
 
-  // TODO Flaky because of DHT._ontick happening with a ._tick = 64 which triggers refreshing and _pingSome
   t.is(a.stats.commands.ping.tx - bootstrapStats.ping.tx, 2, 'rate limit was reset on tick')
 })
 
@@ -481,6 +489,9 @@ test('ratelimit ping via _repingAndSwap', async function (t) {
 
   t.is(a.stats.commands.ping.tx - bootstrapStats.ping.tx, 1, 'didnt send more than ratelimit')
 
+  // ensure ontick doesn't make requests
+  if ((a._tick + 1) % 8 === 0) a._tick++
+  if (a._refreshTicks <= 1) a._refreshTicks = 60
   a._ontick() // Simulate waiting for tick
   t.comment('tick')
 
@@ -488,7 +499,6 @@ test('ratelimit ping via _repingAndSwap', async function (t) {
   // allow to run in background
   await new Promise((resolve) => setTimeout(resolve, 100))
 
-  // TODO Flaky because of DHT._ontick happening with a ._tick = 64 which triggers refreshing and _pingSome
   t.is(a.stats.commands.ping.tx - bootstrapStats.ping.tx, 2, 'rate limit was reset on tick')
 })
 
