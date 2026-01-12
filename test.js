@@ -469,6 +469,34 @@ test('ratelimit ping via _check', async function (t) {
   t.is(a.stats.commands.ping.tx - bootstrapStats.ping.tx, 2, 'rate limit was reset on tick')
 })
 
+test('ratelimit ping via _repingAndSwap', async function (t) {
+  const [, a, b, c] = await makeSwarm(4, t, { internalCommandsRateLimit: { ping: 1 } })
+  t.plan(2)
+
+  await a.fullyBootstrapped()
+  const bootstrapStats = JSON.parse(JSON.stringify(a.stats.commands))
+
+  a._repingAndSwap(a.table.get(b.id), a.table.get(c.id))
+  // allow to run in background
+  await new Promise((resolve) => setTimeout(resolve, 100))
+
+  a._repingAndSwap(a.table.get(c.id), a.table.get(b.id))
+  // allow to run in background
+  await new Promise((resolve) => setTimeout(resolve, 100))
+
+  t.is(a.stats.commands.ping.tx - bootstrapStats.ping.tx, 1, 'didnt send more than ratelimit')
+
+  a._ontick() // Simulate waiting for tick
+  t.comment('tick')
+
+  a._repingAndSwap(a.table.get(c.id), a.table.get(b.id))
+  // allow to run in background
+  await new Promise((resolve) => setTimeout(resolve, 100))
+
+  // TODO Flaky because of DHT._ontick happening with a ._tick = 64 which triggers refreshing and _pingSome
+  t.is(a.stats.commands.ping.tx - bootstrapStats.ping.tx, 2, 'rate limit was reset on tick')
+})
+
 test('shorthand commit', async function (t) {
   const swarm = await makeSwarm(40, t)
 
