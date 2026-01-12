@@ -359,7 +359,6 @@ test('ratelimit findNode', async function (t) {
   const [, a, b, c] = await makeSwarm(4, t, { internalCommandsRateLimit: { findNode: 2 + 1 } })
   t.plan(2)
 
-  await a.fullyBootstrapped()
   const bootstrapStats = JSON.parse(JSON.stringify(a.stats.commands))
 
   const queryOpts = { retries: 1 }
@@ -390,7 +389,6 @@ test('ratelimit findNode via _backgroundQuery', async function (t) {
   const [, a, b, c] = await makeSwarm(4, t, { internalCommandsRateLimit: { findNode: 2 + 1 } })
   t.plan(3)
 
-  await a.fullyBootstrapped()
   const bootstrapStats = JSON.parse(JSON.stringify(a.stats.commands))
   t.is(bootstrapStats.findNode.tx, 2)
 
@@ -424,7 +422,6 @@ test('ratelimit ping', async function (t) {
   const [, a, b, c] = await makeSwarm(4, t, { internalCommandsRateLimit: { ping: 1 } })
   t.plan(3)
 
-  await a.fullyBootstrapped()
   const bootstrapStats = JSON.parse(JSON.stringify(a.stats.commands))
 
   const queryOpts = { retry: false }
@@ -445,7 +442,6 @@ test('ratelimit ping via _check', async function (t) {
   const [, a, b, c] = await makeSwarm(4, t, { internalCommandsRateLimit: { ping: 1 } })
   t.plan(2)
 
-  await a.fullyBootstrapped()
   const bootstrapStats = JSON.parse(JSON.stringify(a.stats.commands))
 
   a._check(a.table.get(b.id))
@@ -473,7 +469,6 @@ test('ratelimit ping via _repingAndSwap', async function (t) {
   const [, a, b, c] = await makeSwarm(4, t, { internalCommandsRateLimit: { ping: 1 } })
   t.plan(2)
 
-  await a.fullyBootstrapped()
   const bootstrapStats = JSON.parse(JSON.stringify(a.stats.commands))
 
   a._repingAndSwap(a.table.get(b.id), a.table.get(c.id))
