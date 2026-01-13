@@ -14,7 +14,7 @@
     }
   },
   "dependencies": {
-    "adaptive-timeout": "^1.0.0",
+    "adaptive-timeout": "^1.0.1",
     "b4a": "^1.6.1",
     "bare-events": "^2.2.0",
     "compact-encoding": "^2.11.0",
@@ -25,7 +25,7 @@
     "sodium-universal": "^5.0.0",
     "streamx": "^2.13.2",
     "time-ordered-set": "^2.0.0",
-    "udx-native": "^1.5.3",
+    "udx-native": "^1.5.3"
   },
   "devDependencies": {
     "brittle": "^3.0.0",
