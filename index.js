@@ -6,7 +6,6 @@ const sodium = require('sodium-universal')
 const c = require('compact-encoding')
 const NatSampler = require('nat-sampler')
 const b4a = require('b4a')
-const { Readable } = require('streamx')
 const NetworkHealth = require('./lib/health')
 const IO = require('./lib/io')
 const Query = require('./lib/query')
@@ -83,7 +82,8 @@ class DHT extends EventEmitter {
     this._bootstrapping = this._bootstrap()
     this._bootstrapping.catch(noop)
     this._sendDownHints = opts.sendDownHints !== false
-    this._downHintsRateLimit = opts.downHintsRateLimit !== undefined ? opts.downHintsRateLimit : 10 * 5
+    this._downHintsRateLimit =
+      opts.downHintsRateLimit !== undefined ? opts.downHintsRateLimit : 10 * 5
     this._downHintsSentPerTick = 0
 
     this.table.on('row', this._onrow)
@@ -236,11 +236,6 @@ class DHT extends EventEmitter {
   findNode(target, opts) {
     if (this.destroyed) throw new Error('Node destroyed')
     this._refreshTicks = REFRESH_TICKS
-    // Check rate limit if configured
-    if (this.io._internalRateLimitCheck(FIND_NODE)) {
-      return new EmptyQuery()
-    }
-
     return new Query(this, target, true, FIND_NODE, null, opts)
   }
 
@@ -254,11 +249,6 @@ class DHT extends EventEmitter {
     let value = null
 
     if (opts && opts.size && opts.size > 0) value = b4a.alloc(opts.size)
-
-    // Check rate limit if configured
-    if (this.io._internalRateLimitCheck(PING)) {
-      return Promise.reject(new Error('PING hit rate limit'))
-    }
 
     const req = this.io.createRequest(
       { id: null, host, port },
@@ -340,9 +330,6 @@ class DHT extends EventEmitter {
 
       if (!first) return
       first = false
-
-      // Check rate limit if configured
-      if (self.io._internalRateLimitCheck(PING_NAT)) return
 
       const value = b4a.allocUnsafe(2)
       c.uint16.encode({ start: 0, end: 2, buffer: value }, self.io.serverSocket.address().port)
@@ -527,10 +514,6 @@ class DHT extends EventEmitter {
 
   _repingAndSwap(newNode, oldNode) {
     const self = this
-
-    // Check rate limit if configured
-    if (this.io._internalRateLimitCheck(PING)) return
-
     const lastSeen = oldNode.seen
 
     oldNode.pinged = this._tick
@@ -650,9 +633,6 @@ class DHT extends EventEmitter {
   }
 
   _check(node) {
-    // Check rate limit if configured
-    if (this.io._internalRateLimitCheck(PING)) return
-
     node.pinged = this._tick
 
     const lastSeen = node.seen
@@ -713,7 +693,6 @@ class DHT extends EventEmitter {
     }
 
     this._downHintsSentPerTick = 0
-    this.io._ontick()
     this.health.update()
   }
 
@@ -885,11 +864,6 @@ class DHT extends EventEmitter {
     this._refreshTicks = REFRESH_TICKS
 
     const backgroundCon = Math.min(this.concurrency, Math.max(2, (this.concurrency / 8) | 0))
-    // Check rate limit if configured
-    if (this.io._internalRateLimitCheck(FIND_NODE)) {
-      return new EmptyQuery()
-    }
-
     const q = new Query(this, target, true, FIND_NODE, null, {
       concurrency: backgroundCon,
       maxSlow: 0
@@ -933,23 +907,6 @@ DHT.ERROR_UNKNOWN_COMMAND = UNKNOWN_COMMAND
 DHT.ERROR_INVALID_TOKEN = INVALID_TOKEN
 
 module.exports = DHT
-
-class EmptyQuery extends Readable {
-  constructor() {
-    super({
-      read(cb) {
-        this.push(null)
-        cb(null)
-      }
-    })
-
-    this.closestReplies = []
-  }
-
-  finished() {
-    return Promise.resolve()
-  }
-}
 
 function localIP(udx, family = 4) {
   let host = null
@@ -995,9 +952,6 @@ function requestAll(dht, internal, command, value, nodes) {
 
   return new Promise((resolve) => {
     for (const node of nodes) {
-      if (internal && dht.io._internalRateLimitCheck(command)) {
-        return resolve(replies)
-      }
       const req = dht._request(
         node,
         false,
