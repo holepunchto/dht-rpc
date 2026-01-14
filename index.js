@@ -279,9 +279,10 @@ class DHT extends EventEmitter {
       null,
       value,
       (opts && opts.session) || null,
-      opts && opts.ttl,
-      delayMs + 1_000 // add 1 second to the timeout to account for network overhead
+      opts && opts.ttl
     )
+    // add 1 second to the timeout to account for network overhead
+    req.timeout = delayMs + 1_000
     return this._requestToPromise(req, opts)
   }
 
