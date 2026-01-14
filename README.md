@@ -265,13 +265,14 @@ Normally you'd set the token when committing to the dht in the query's commit ho
 
 #### `reply = await node.ping(to, [options])`
 
-Sugar for `dht.request({ command: 'ping' }, to, options)`
+Ping a remote node described by `to`. The return promise resolves if the remote node replies. `to` is an object with the shape `{ host, port }`.
 
 Additional options include:
 
 ```js
 {
   size: 0, // size of the value buffer, filled with zeroes
+  ttl: 0 // Set the ttl for the packet sent. `0` is the default ttl.
 }
 ```
 
