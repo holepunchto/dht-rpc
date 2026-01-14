@@ -249,7 +249,7 @@ DHT.ERROR_INVALID_TOKEN = 2 // the round trip token sent is invalid
 
 #### `reply = await node.request({ token, target, command, value }, to, [options])`
 
-Send a request to a specific node specified by the to address (`{ host, port }`).
+Send a request to a specific node specified by the `to` address (`{ host, port }`).
 See the query API for more info on the arguments.
 
 Options include:
