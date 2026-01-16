@@ -1,6 +1,6 @@
 {
   "name": "dht-rpc",
-  "version": "6.23.2",
+  "version": "6.24.0",
   "description": "Make RPC calls over a Kademlia based DHT",
   "main": "index.js",
   "files": [
@@ -14,6 +14,7 @@
     }
   },
   "dependencies": {
+    "adaptive-timeout": "^1.0.1",
     "b4a": "^1.6.1",
     "bare-events": "^2.2.0",
     "compact-encoding": "^2.11.0",

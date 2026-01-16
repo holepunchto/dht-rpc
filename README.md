@@ -276,6 +276,22 @@ Additional options include:
 }
 ```
 
+#### `reply = await node.delayedPing(to, delayMs, [options])`
+
+Send a ping that intentionally waits before replying. Useful for testing latency/timeout behavior and scheduling a delayed response.
+
+- `to` - `{ host, port }` of the target peer
+- `delayMs` - integer milliseconds to delay the reply (0–10_000). Values above 10_000 ms are rejected and no reply is sent (the request will time out).
+- `options` - same options as `node.request()`:
+
+Example:
+
+```js
+const start = Date.now()
+await node.delayedPing({ host: peer.host, port: peer.port }, 1000)
+console.log('elapsed >=', Date.now() - start, 'ms') // ~1s + network overhead
+```
+
 #### `stream = node.query({ target, command, value }, [options])`
 
 Query the DHT. Will move as close as possible to the `target` provided, which should be a 32-byte uniformly distributed buffer (ie a hash).
