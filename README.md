@@ -125,7 +125,9 @@ Options include:
   // dht-rpc will automatically detect if you are firewalled. If you know that you are not set this to false
   firewalled: true,
   // dht-rpc will hint when a node is down if a request times out. Setting to false disables sending hints
-  sendDownHints: true
+  sendDownHints: true,
+  // How many down hints can be sent per tick. -1 is unlimited
+  downHintsRateLimit: 50
 }
 ```
 
