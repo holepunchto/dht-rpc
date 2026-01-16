@@ -90,6 +90,45 @@ test('metrics', async function (t) {
   t.alike(swarm1.stats.commands.ping, { tx: 1, rx: 1 }, 'ping resp')
 })
 
+test('delayed ping', async function (t) {
+  const [swarm1, swarm2] = await makeSwarm(2, t)
+  const start = Date.now()
+  await swarm1.delayedPing({ host: swarm2.host, port: swarm2.port }, 1_100)
+  const end = Date.now()
+  t.ok(end - start >= 1_100, 'ping delayed for at least 1.1 seconds')
+})
+
+test('delayed ping - rejects when delay exceeds client cap', async function (t) {
+  const [swarm1, swarm2] = await makeSwarm(2, t)
+  t.exception(
+    async () => await swarm1.delayedPing({ host: swarm2.host, port: swarm2.port }, 10_001),
+    /Delay exceeds max delay: 10000ms/
+  )
+})
+
+test('delayed ping - server times out when exceeding delay', async function (t) {
+  const swarmServer = createDHT({ ephemeral: false, firewalled: false, maxPingDelay: 1_000 })
+  await swarmServer.fullyBootstrapped()
+  t.teardown(async function () {
+    await swarmServer.destroy()
+  })
+
+  const swarmClient = createDHT({
+    ephemeral: false,
+    firewalled: false,
+    bootstrap: [`localhost:${swarmServer.address().port}`]
+  })
+  await swarmClient.fullyBootstrapped()
+  t.teardown(async function () {
+    await swarmClient.destroy()
+  })
+
+  await t.exception(
+    () => swarmClient.delayedPing({ host: swarmServer.host, port: swarmServer.port }, 1_001),
+    /REQUEST_TIMEOUT/
+  )
+})
+
 test('make bigger swarm', { timeout: 120000 }, async function (t) {
   const swarm = await makeSwarm(500, t)
 
@@ -215,7 +254,7 @@ test('timeouts', async function (t) {
   let tries = 0
   const NOPE = 52
 
-  t.plan(5)
+  t.plan(7)
 
   b.on('request', function (req) {
     if (req.command === NOPE) {
@@ -227,7 +266,7 @@ test('timeouts', async function (t) {
   const q = a.query({ command: NOPE, target: Buffer.alloc(32) })
   await q.finished()
 
-  t.is(tries, 3)
+  t.is(tries, 5)
   t.is(a.stats.commands.downHint.tx, 1, 'a sent a down-hint message')
 })
 
@@ -238,7 +277,7 @@ test('timeouts - downhints disabled', async function (t) {
   const LOOKUP = DOWN_HINT // Command used in hyperdht
   const NOPE = LOOKUP
 
-  t.plan(5)
+  t.plan(7)
 
   b.on('request', function (req) {
     if (req.command === NOPE) {
@@ -250,7 +289,7 @@ test('timeouts - downhints disabled', async function (t) {
   const q = a.query({ command: NOPE, target: Buffer.alloc(32) })
   await q.finished()
 
-  t.is(tries, 3)
+  t.is(tries, 5)
   t.is(a.stats.commands.downHint.tx, 0, 'didnt send a down-hint message')
 })
 
@@ -420,7 +459,7 @@ test('timeouts when commiting', async function (t) {
   }
 
   t.ok(error, 'commit should fail')
-  t.is(tries, 3)
+  t.is(tries, 5)
 })
 
 test('toArray', async function (t) {

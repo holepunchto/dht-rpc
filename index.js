@@ -12,7 +12,7 @@ const Query = require('./lib/query')
 const Session = require('./lib/session')
 const peer = require('./lib/peer')
 const { UNKNOWN_COMMAND, INVALID_TOKEN } = require('./lib/errors')
-const { PING, PING_NAT, FIND_NODE, DOWN_HINT } = require('./lib/commands')
+const { PING, PING_NAT, FIND_NODE, DOWN_HINT, DELAYED_PING } = require('./lib/commands')
 
 const TMP = b4a.allocUnsafe(32)
 const TICK_INTERVAL = 5000
@@ -26,7 +26,8 @@ const OLD_NODE = 360 // if an node has been around more than 30 min we consider 
 const DEFAULTS = {
   concurrency: 10,
   maxWindow: IO.DEFAULT_MAX_WINDOW,
-  maxHealthWindow: NetworkHealth.DEFAULT_MAX_HEALTH_WINDOW
+  maxHealthWindow: NetworkHealth.DEFAULT_MAX_HEALTH_WINDOW,
+  maxPingDelay: 10_000
 }
 
 class DHT extends EventEmitter {
@@ -46,6 +47,7 @@ class DHT extends EventEmitter {
     this.health = new NetworkHealth(this, opts)
 
     this.concurrency = opts.concurrency || DEFAULTS.concurrency
+    this.maxPingDelay = opts.maxPingDelay || DEFAULTS.maxPingDelay
     this.bootstrapped = false
     this.ephemeral = true
     this.firewalled = this.io.firewalled
@@ -85,6 +87,7 @@ class DHT extends EventEmitter {
     this._downHintsRateLimit =
       opts.downHintsRateLimit !== undefined ? opts.downHintsRateLimit : 10 * 5
     this._downHintsSentPerTick = 0
+    this._pendingTimers = new Set()
 
     this.table.on('row', this._onrow)
 
@@ -263,6 +266,29 @@ class DHT extends EventEmitter {
     return this._requestToPromise(req, opts)
   }
 
+  delayedPing({ host, port }, delayMs, opts) {
+    if (delayMs > this.maxPingDelay) {
+      throw new Error(`Delay exceeds max delay: ${this.maxPingDelay}ms`)
+    }
+
+    const value = b4a.allocUnsafe(4)
+    c.uint32.encode({ start: 0, end: 4, buffer: value }, delayMs)
+
+    const req = this.io.createRequest(
+      { id: null, host, port },
+      null,
+      true,
+      DELAYED_PING,
+      null,
+      value,
+      (opts && opts.session) || null,
+      opts && opts.ttl
+    )
+    // add 1 second to the timeout to account for network overhead
+    req.timeout = delayMs + 1_000
+    return this._requestToPromise(req, opts)
+  }
+
   request({ token = null, command, target = null, value = null }, { host, port }, opts) {
     const req = this.io.createRequest(
       { id: null, host, port },
@@ -359,6 +385,9 @@ class DHT extends EventEmitter {
     const emitClose = !this.destroyed
     this.destroyed = true
     clearInterval(this._tickInterval)
+    for (const timer of this._pendingTimers) {
+      clearTimeout(timer)
+    }
     await this.io.destroy()
     if (emitClose) this.emit('close')
   }
@@ -555,6 +584,10 @@ class DHT extends EventEmitter {
           req.sendReply(0, null, false, false)
           return
         }
+        case DELAYED_PING: {
+          this._ondelayedping(req)
+          return
+        }
         // check if the other side can receive a message to their other socket
         case PING_NAT: {
           if (req.value === null || req.value.byteLength < 2) return
@@ -598,6 +631,18 @@ class DHT extends EventEmitter {
 
   onrequest(req) {
     return this.emit('request', req)
+  }
+
+  _ondelayedping(req) {
+    if (req.value === null || req.value.byteLength < 4) return
+    const delayMs = c.uint32.decode({ start: 0, end: 4, buffer: req.value })
+    if (delayMs > this.maxPingDelay) return
+    const timer = setTimeout(() => {
+      if (this.destroyed) return
+      this._pendingTimers.delete(timer)
+      req.sendReply(0, null, false, false)
+    }, delayMs)
+    this._pendingTimers.add(timer)
   }
 
   _onresponse(res, external) {
@@ -865,8 +910,7 @@ class DHT extends EventEmitter {
 
     const backgroundCon = Math.min(this.concurrency, Math.max(2, (this.concurrency / 8) | 0))
     const q = new Query(this, target, true, FIND_NODE, null, {
-      concurrency: backgroundCon,
-      maxSlow: 0
+      concurrency: backgroundCon
     })
 
     q.on('data', () => {
