@@ -906,8 +906,7 @@ class DHT extends EventEmitter {
 
     const backgroundCon = Math.min(this.concurrency, Math.max(2, (this.concurrency / 8) | 0))
     const q = new Query(this, target, true, FIND_NODE, null, {
-      concurrency: backgroundCon,
-      maxSlow: 0
+      concurrency: backgroundCon
     })
 
     q.on('data', () => {
