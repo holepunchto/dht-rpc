@@ -140,6 +140,17 @@ class DHT extends EventEmitter {
     return this.firewalled ? this.io.clientSocket : this.io.serverSocket
   }
 
+  get config() {
+    return {
+      concurrency: this.concurrency,
+      maxWindow: this.io.congestion._maxWindow,
+      randomPunchInterval: this._randomPunchInterval,
+      connectionKeepAlive: this.connectionKeepAlive,
+      sendDownHints: this._sendDownHints,
+      downHintsRateLimit: this._downHintsRateLimit
+    }
+  }
+
   onmessage(socket, buf, rinfo) {
     if (buf.byteLength > 1) this.io.onmessage(socket, buf, rinfo)
   }
