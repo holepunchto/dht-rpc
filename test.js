@@ -459,7 +459,7 @@ test('timeouts when commiting', async function (t) {
   }
 
   t.ok(error, 'commit should fail')
-  t.is(tries, 5)
+  t.is(tries, 6)
 })
 
 test('toArray', async function (t) {
