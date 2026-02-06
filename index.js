@@ -64,7 +64,8 @@ class DHT extends EventEmitter {
         pingNat: this.io.stats.commands[PING_NAT],
         findNode: this.io.stats.commands[FIND_NODE],
         downHint: this.io.stats.commands[DOWN_HINT]
-      }
+      },
+      health: this.health.stats
     }
 
     this._nat = new NatSampler()
