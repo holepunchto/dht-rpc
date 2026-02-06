@@ -1024,7 +1024,7 @@ test('health - offline', async (t) => {
   const dht = createDHT({ maxHealthWindow: 4 })
 
   t.alike(
-    dht.stats.health,
+    dht.health.stats,
     {
       online: true,
       degraded: false,
@@ -1048,7 +1048,7 @@ test('health - offline', async (t) => {
   dht.health.update()
 
   t.alike(
-    dht.stats.health,
+    dht.health.stats,
     {
       online: false,
       degraded: false,
@@ -1110,7 +1110,7 @@ test('debug - configuration', async (t) => {
 test('debug - stats - default', async (t) => {
   const dht = createDHT()
 
-  t.alike(dht.stats.health, {
+  t.alike(dht.health.stats, {
     online: true,
     degraded: false,
     responses: 0,
