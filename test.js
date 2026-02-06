@@ -1103,6 +1103,8 @@ test('debug - configuration', async (t) => {
     sendDownHints: true,
     downHintsRateLimit: 50
   })
+
+  dht.destroy()
 })
 
 test('debug - stats - default', async (t) => {
@@ -1115,6 +1117,8 @@ test('debug - stats - default', async (t) => {
     timeouts: 0,
     timeoutsRate: 0
   })
+
+  dht.destroy()
 })
 
 function fillHealthWindow(dht) {
