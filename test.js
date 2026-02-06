@@ -1023,6 +1023,18 @@ test('health - degraded', async (t) => {
 test('health - offline', async (t) => {
   const dht = createDHT({ maxHealthWindow: 4 })
 
+  t.alike(
+    dht.health.stats,
+    {
+      online: true,
+      degraded: false,
+      responses: 0,
+      timeouts: 0,
+      timeoutsRate: 0
+    },
+    'has starting health stats'
+  )
+
   fillHealthWindow(dht)
 
   dht.stats.requests.responses = 0
@@ -1034,6 +1046,18 @@ test('health - offline', async (t) => {
   dht.health.degraded = true
 
   dht.health.update()
+
+  t.alike(
+    dht.health.stats,
+    {
+      online: false,
+      degraded: false,
+      responses: 0,
+      timeouts: 20,
+      timeoutsRate: 1
+    },
+    'has offline health stats'
+  )
 
   t.is(dht.online, false, 'offline when no responses & timeouts > sanity')
   t.is(dht.degraded, false, 'not degraded when offline')
@@ -1064,6 +1088,35 @@ test('health - resume', async (t) => {
   t.is(dht.health._window.length, 0, 'window is empty after resume')
   t.is(dht.online, true, 'online after resume')
   t.is(dht.degraded, false, 'not degraded after resume')
+
+  dht.destroy()
+})
+
+test('debug - configuration', async (t) => {
+  const dht = createDHT()
+
+  t.alike(dht.config, {
+    concurrency: 10,
+    maxWindow: 80,
+    randomPunchInterval: undefined,
+    connectionKeepAlive: undefined,
+    sendDownHints: true,
+    downHintsRateLimit: 50
+  })
+
+  dht.destroy()
+})
+
+test('debug - stats - default', async (t) => {
+  const dht = createDHT()
+
+  t.alike(dht.health.stats, {
+    online: true,
+    degraded: false,
+    responses: 0,
+    timeouts: 0,
+    timeoutsRate: 0
+  })
 
   dht.destroy()
 })
