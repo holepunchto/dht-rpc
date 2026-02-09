@@ -301,7 +301,7 @@ class DHT extends EventEmitter {
   }
 
   async rttStats() {
-    let stats = {
+    const stats = {
       successes: 0,
       errors: 0,
       responses: {
