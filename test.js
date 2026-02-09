@@ -1121,7 +1121,7 @@ test('debug - stats - default', async (t) => {
   dht.destroy()
 })
 
-test.solo('debug - rtt stats', async (t) => {
+test('debug - rtt stats', async (t) => {
   const [swarm1] = await makeSwarm(10, t)
 
   const res = await swarm1.rttStats()
