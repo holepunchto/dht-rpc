@@ -1121,6 +1121,16 @@ test('debug - stats - default', async (t) => {
   dht.destroy()
 })
 
+test.solo('debug - rtt stats', async (t) => {
+  const [swarm1] = await makeSwarm(10, t)
+
+  const res = await swarm1.rttStats()
+
+  t.is(res.successes, 9)
+  t.is(res.responses.errors, 0)
+  t.is(res.closestReplies.errors, 0)
+})
+
 function fillHealthWindow(dht) {
   for (let i = 0; i < 4; i++) {
     dht.health.update()
