@@ -300,6 +300,53 @@ class DHT extends EventEmitter {
     return this._requestToPromise(req, opts)
   }
 
+  async rttStats() {
+    const stats = {
+      successes: 0,
+      errors: 0,
+      responses: {
+        avgRtt: 0,
+        errors: 0,
+        avgCloserNodes: 0
+      },
+      closestReplies: {
+        avgRtt: 0,
+        errors: 0,
+        avgCloserNodes: 0
+      }
+    }
+
+    if (this.nodes.latest) {
+      const q = this.findNode(this.nodes.latest.id)
+
+      let responseCount = 0
+      let closestCount = 0
+
+      for await (const msg of q) {
+        stats.responses.avgRtt += msg.rtt
+        stats.responses.errors += msg.error
+        stats.responses.avgCloserNodes += msg.closerNodes?.length || 0
+        responseCount++
+      }
+      stats.responses.avgRtt /= responseCount
+      stats.responses.avgCloserNodes /= responseCount
+
+      for await (const msg of q.closestReplies) {
+        stats.closestReplies.avgRtt += msg.rtt
+        stats.closestReplies.errors += msg.error
+        stats.closestReplies.avgCloserNodes += msg.closerNodes?.length || 0
+        closestCount++
+      }
+      stats.closestReplies.avgRtt /= closestCount
+      stats.closestReplies.avgCloserNodes /= closestCount
+
+      stats.successes = q.successes
+      stats.errors = q.errors
+    }
+
+    return stats
+  }
+
   request({ token = null, command, target = null, value = null }, { host, port }, opts) {
     const req = this.io.createRequest(
       { id: null, host, port },
