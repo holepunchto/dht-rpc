@@ -254,7 +254,7 @@ test('timeouts', async function (t) {
   let tries = 0
   const NOPE = 52
 
-  t.plan(7)
+  t.plan(8)
 
   b.on('request', function (req) {
     if (req.command === NOPE) {
@@ -266,7 +266,7 @@ test('timeouts', async function (t) {
   const q = a.query({ command: NOPE, target: Buffer.alloc(32) })
   await q.finished()
 
-  t.is(tries, 5)
+  t.is(tries, 6)
   t.is(a.stats.commands.downHint.tx, 1, 'a sent a down-hint message')
 })
 
@@ -277,7 +277,7 @@ test('timeouts - downhints disabled', async function (t) {
   const LOOKUP = DOWN_HINT // Command used in hyperdht
   const NOPE = LOOKUP
 
-  t.plan(7)
+  t.plan(8)
 
   b.on('request', function (req) {
     if (req.command === NOPE) {
@@ -289,7 +289,7 @@ test('timeouts - downhints disabled', async function (t) {
   const q = a.query({ command: NOPE, target: Buffer.alloc(32) })
   await q.finished()
 
-  t.is(tries, 5)
+  t.is(tries, 6)
   t.is(a.stats.commands.downHint.tx, 0, 'didnt send a down-hint message')
 })
 
@@ -311,8 +311,8 @@ test('request with/without retries', async function (t) {
     // do nothing
   }
 
-  t.is(tries, 3)
-  t.is(a.stats.requests.retries, 3 - 1, 'retried n - 1 times')
+  t.is(tries, 4)
+  t.is(a.stats.requests.retries, 4 - 1, 'retried n - 1 times')
 
   try {
     await a.request(
@@ -324,8 +324,8 @@ test('request with/without retries', async function (t) {
     // do nothing
   }
 
-  t.is(tries, 4)
-  t.is(a.stats.requests.retries, 3 - 1, 'didnt retry')
+  t.is(tries, 5)
+  t.is(a.stats.requests.retries, 4 - 1, 'didnt retry')
 })
 
 test('ratelimit downhint commands', async function (t) {
@@ -342,7 +342,7 @@ test('ratelimit downhint commands', async function (t) {
     }
   })
 
-  const queryOpts = { retries: 1 }
+  const queryOpts = { retries: 0 }
   const q = a.query({ command: NOPE, target: b.id }, queryOpts)
   await q.finished()
 
@@ -377,7 +377,7 @@ test('ratelimit downhint can be 0', async function (t) {
     }
   })
 
-  const queryOpts = { retries: 1 }
+  const queryOpts = { retries: 0 }
   const q = a.query({ command: NOPE, target: b.id }, queryOpts)
   await q.finished()
 
@@ -459,7 +459,7 @@ test('timeouts when commiting', async function (t) {
   }
 
   t.ok(error, 'commit should fail')
-  t.is(tries, 5)
+  t.is(tries, 6)
 })
 
 test('toArray', async function (t) {
