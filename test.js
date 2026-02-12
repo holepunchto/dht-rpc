@@ -1030,7 +1030,9 @@ test('health - offline', async (t) => {
       degraded: false,
       responses: 0,
       timeouts: 0,
-      timeoutsRate: 0
+      timeoutsRate: 0,
+      recentResponses: 0,
+      recentTimeouts: 0
     },
     'has starting health stats'
   )
@@ -1043,10 +1045,6 @@ test('health - offline', async (t) => {
 
   t.is(dht.online, false, 'offline when no responses & timeouts > sanity')
 
-  dht.health.degraded = true
-
-  dht.health.update()
-
   t.alike(
     dht.health.stats,
     {
@@ -1054,10 +1052,16 @@ test('health - offline', async (t) => {
       degraded: false,
       responses: 0,
       timeouts: 20,
-      timeoutsRate: 1
+      timeoutsRate: 1,
+      recentResponses: 0,
+      recentTimeouts: 20
     },
     'has offline health stats'
   )
+
+  dht.health.degraded = true
+
+  dht.health.update()
 
   t.is(dht.online, false, 'offline when no responses & timeouts > sanity')
   t.is(dht.degraded, false, 'not degraded when offline')
@@ -1115,7 +1119,9 @@ test('debug - stats - default', async (t) => {
     degraded: false,
     responses: 0,
     timeouts: 0,
-    timeoutsRate: 0
+    timeoutsRate: 0,
+    recentResponses: 0,
+    recentTimeouts: 0
   })
 
   dht.destroy()
