@@ -1028,6 +1028,7 @@ test('health - offline', async (t) => {
     {
       online: true,
       degraded: false,
+      idle: true,
       responses: 0,
       timeouts: 0,
       timeoutsRate: 0,
@@ -1050,6 +1051,7 @@ test('health - offline', async (t) => {
     {
       online: false,
       degraded: false,
+      idle: false,
       responses: 0,
       timeouts: 20,
       timeoutsRate: 1,
@@ -1117,6 +1119,7 @@ test('debug - stats - default', async (t) => {
   t.alike(dht.health.stats, {
     online: true,
     degraded: false,
+    idle: true,
     responses: 0,
     timeouts: 0,
     timeoutsRate: 0,
