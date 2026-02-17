@@ -1065,7 +1065,7 @@ test('health - offline', async (t) => {
 
   dht.stats.requests.timeouts += 10
   dht.health.update()
-  
+
   t.is(dht.online, false, 'offline after timeouts')
 
   dht.stats.requests.responses += 3
@@ -1083,30 +1083,37 @@ test('health - resume', async (t) => {
 
   fillHealthWindow(dht)
 
-  t.is(dht.health.cold, false)
+  t.is(dht.health.cold, false, 'not cold when window full')
 
-  dht.health.online = false
+  dht.stats.requests.timeouts += 20
+  dht.health.update()
+  t.is(dht.online, false, 'offline before suspend')
 
   await dht.suspend()
   await dht.resume()
 
   t.is(dht.health._window.length, 0, 'window is empty after resume')
   t.is(dht.health.cold, true, 'cold after resume')
-  t.is(dht.online, true, 'online after resume')
-  t.is(dht.degraded, false, 'not degraded after resume')
+  t.is(dht.online, false, 'still offline after resume')
+
+  dht.stats.requests.responses += 10
+  dht.health.update()
+
+  t.is(dht.health.cold, true, 'still cold')
+  t.is(dht.online, false, 'still offline when cold')
+
+  dht.health.update()
+  dht.health.update()
+
+  dht.stats.requests.responses += 10
+  dht.health.update()
+
+  t.is(dht.health.cold, false, 'not cold after window full')
+  t.is(dht.online, true, 'online after responses and window full')
 
   dht.stats.requests.timeouts += 10
   dht.health.update()
 
-  t.is(dht.health.cold, true, 'still cold')
-  t.is(dht.online, true, 'still online when cold')
-
-  dht.health.update()
-  dht.health.update()
-  dht.stats.requests.timeouts += 10 // add new timeouts since previous update
-  dht.health.update()
-
-  t.is(dht.health.cold, false, 'not cold after window full')
   t.is(dht.online, false, 'offline after timeouts and not cold')
 
   dht.health.update()
@@ -1138,8 +1145,21 @@ test('health - wakeup', async (t) => {
 
   t.is(dht.health._window.length, 0, 'window is empty after wakeup')
   t.is(dht.health.cold, true, 'cold after wakeup')
-  t.is(dht.online, true, 'online after wakeup')
-  t.is(dht.degraded, false, 'not degraded after wakeup')
+  t.is(dht.online, false, 'still offline after wakeup')
+
+  fillHealthWindow(dht)
+
+  dht.stats.requests.responses += 20
+  dht.health.update()
+
+  t.is(dht.online, true, 'online before wakeup')
+  t.is(dht.health.cold, false, 'not cold before wakeup')
+
+  dht._onwakeup()
+
+  t.is(dht.health._window.length, 0, 'window is empty after wakeup')
+  t.is(dht.health.cold, true, 'cold after wakeup')
+  t.is(dht.online, true, 'still online after wakeup')
 
   dht.destroy()
 })
