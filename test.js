@@ -980,8 +980,7 @@ test('health - online', async (t) => {
 
   dht.health.online = false
 
-  dht.stats.requests.responses = 10
-  dht.stats.requests.timeouts = 0
+  dht.stats.requests.responses += 10
   dht.health.update()
 
   t.is(dht.online, true, 'online after offline')
@@ -1033,8 +1032,7 @@ test('health - offline', async (t) => {
 
   fillHealthWindow(dht)
 
-  dht.stats.requests.responses = 0
-  dht.stats.requests.timeouts = 20
+  dht.stats.requests.timeouts += 20
   dht.health.update()
 
   t.is(dht.online, false, 'offline when no responses & timeouts > sanity')
@@ -1065,7 +1063,6 @@ test('health - offline', async (t) => {
   dht.health.reset()
   fillHealthWindow(dht)
 
-  dht.stats.requests.responses = 0
   dht.stats.requests.timeouts += 10
   dht.health.update()
   
@@ -1098,7 +1095,6 @@ test('health - resume', async (t) => {
   t.is(dht.online, true, 'online after resume')
   t.is(dht.degraded, false, 'not degraded after resume')
 
-  dht.stats.requests.responses = 0
   dht.stats.requests.timeouts += 10
   dht.health.update()
 
@@ -1132,8 +1128,7 @@ test('health - wakeup', async (t) => {
 
   fillHealthWindow(dht)
 
-  dht.stats.requests.responses = 0
-  dht.stats.requests.timeouts = 20
+  dht.stats.requests.timeouts += 20
   dht.health.update()
 
   t.is(dht.online, false, 'offline before wakeup')
