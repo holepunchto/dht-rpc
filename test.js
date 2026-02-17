@@ -1131,6 +1131,28 @@ test('health - resume', async (t) => {
   dht.destroy()
 })
 
+test('health - wakeup', async (t) => {
+  const dht = createDHT({ maxHealthWindow: 4 })
+
+  fillHealthWindow(dht)
+
+  dht.stats.requests.responses = 0
+  dht.stats.requests.timeouts = 20
+  dht.health.update()
+
+  t.is(dht.online, false, 'offline before wakeup')
+  t.is(dht.health.cold, false, 'not cold before wakeup')
+
+  dht._onwakeup()
+
+  t.is(dht.health._window.length, 0, 'window is empty after wakeup')
+  t.is(dht.health.cold, true, 'cold after wakeup')
+  t.is(dht.online, true, 'online after wakeup')
+  t.is(dht.degraded, false, 'not degraded after wakeup')
+
+  dht.destroy()
+})
+
 test('debug - configuration', async (t) => {
   const dht = createDHT()
 
