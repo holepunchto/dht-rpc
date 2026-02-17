@@ -1028,6 +1028,7 @@ test('health - offline', async (t) => {
     {
       online: true,
       degraded: false,
+      cold: true,
       idle: true,
       responses: 0,
       timeouts: 0,
@@ -1051,6 +1052,7 @@ test('health - offline', async (t) => {
     {
       online: false,
       degraded: false,
+      cold: false,
       idle: false,
       responses: 0,
       timeouts: 20,
@@ -1084,7 +1086,11 @@ test('health - offline', async (t) => {
 test('health - resume', async (t) => {
   const dht = createDHT({ maxHealthWindow: 4 })
 
+  t.is(dht.health.cold, true)
+
   fillHealthWindow(dht)
+
+  t.is(dht.health.cold, false)
 
   dht.health.online = false
 
@@ -1092,8 +1098,35 @@ test('health - resume', async (t) => {
   await dht.resume()
 
   t.is(dht.health._window.length, 0, 'window is empty after resume')
+  t.is(dht.health.cold, true, 'cold after resume')
   t.is(dht.online, true, 'online after resume')
   t.is(dht.degraded, false, 'not degraded after resume')
+
+  dht.stats.requests.responses = 0
+  dht.stats.requests.timeouts = 1
+  dht.health.update()
+
+  t.is(dht.health.cold, true, 'still cold')
+  t.is(dht.online, true, 'still online when cold')
+
+  dht.health.update()
+  dht.health.update()
+  dht.stats.requests.timeouts++ // add new timeout since previous update
+  dht.health.update()
+
+  t.is(dht.health.cold, false, 'not cold after window full')
+  t.is(dht.online, false, 'offline after timeout and not cold')
+
+  dht.health.update()
+
+  t.is(dht.health.idle, true, 'idle since no new responses or timeouts')
+  t.is(dht.online, false, 'still offline since idle')
+
+  dht.stats.requests.responses++
+  dht.health.update()
+
+  t.is(dht.health.idle, false, 'not idle after new response')
+  t.is(dht.online, true, 'back online')
 
   dht.destroy()
 })
@@ -1119,6 +1152,7 @@ test('debug - stats - default', async (t) => {
   t.alike(dht.health.stats, {
     online: true,
     degraded: false,
+    cold: true,
     idle: true,
     responses: 0,
     timeouts: 0,
