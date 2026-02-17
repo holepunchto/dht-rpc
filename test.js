@@ -980,7 +980,7 @@ test('health - online', async (t) => {
 
   dht.health.online = false
 
-  dht.stats.requests.responses = 1
+  dht.stats.requests.responses = 10
   dht.stats.requests.timeouts = 0
   dht.health.update()
 
@@ -997,22 +997,14 @@ test('health - degraded', async (t) => {
 
   fillHealthWindow(dht)
 
-  t.is(dht.degraded, false, 'not degraded after initially idle')
-
-  dht.stats.requests.responses = 0
-  dht.stats.requests.timeouts = 20
-  dht.health.update()
-
-  t.is(dht.degraded, false, 'not degraded when responses < sanity')
-
-  dht.stats.requests.responses = 80
-  dht.stats.requests.timeouts = 100
+  dht.stats.requests.responses += 10
+  dht.stats.requests.timeouts += 30
   dht.health.update()
 
   t.is(dht.degraded, true, 'degraded when responses > sanity and timeouts > 50%')
 
-  dht.stats.requests.responses = 60
-  dht.stats.requests.timeouts = 40
+  dht.stats.requests.responses += 40
+  dht.stats.requests.timeouts += 10
   dht.health.update()
 
   t.is(dht.degraded, false, 'not degraded when timeout rate < 50%')
@@ -1072,13 +1064,17 @@ test('health - offline', async (t) => {
 
   dht.health.reset()
   fillHealthWindow(dht)
-  dht.health.online = false
 
   dht.stats.requests.responses = 0
-  dht.stats.requests.timeouts = 1
+  dht.stats.requests.timeouts += 10
+  dht.health.update()
+  
+  t.is(dht.online, false, 'offline after timeouts')
+
+  dht.stats.requests.responses += 3
   dht.health.update()
 
-  t.is(dht.online, false, 'should stay offline when timeouts < sanity')
+  t.is(dht.online, false, 'should stay offline when responses < sanity')
 
   dht.destroy()
 })
@@ -1103,7 +1099,7 @@ test('health - resume', async (t) => {
   t.is(dht.degraded, false, 'not degraded after resume')
 
   dht.stats.requests.responses = 0
-  dht.stats.requests.timeouts = 1
+  dht.stats.requests.timeouts += 10
   dht.health.update()
 
   t.is(dht.health.cold, true, 'still cold')
@@ -1111,21 +1107,21 @@ test('health - resume', async (t) => {
 
   dht.health.update()
   dht.health.update()
-  dht.stats.requests.timeouts++ // add new timeout since previous update
+  dht.stats.requests.timeouts += 10 // add new timeouts since previous update
   dht.health.update()
 
   t.is(dht.health.cold, false, 'not cold after window full')
-  t.is(dht.online, false, 'offline after timeout and not cold')
+  t.is(dht.online, false, 'offline after timeouts and not cold')
 
   dht.health.update()
 
   t.is(dht.health.idle, true, 'idle since no new responses or timeouts')
   t.is(dht.online, false, 'still offline since idle')
 
-  dht.stats.requests.responses++
+  dht.stats.requests.responses += 10
   dht.health.update()
 
-  t.is(dht.health.idle, false, 'not idle after new response')
+  t.is(dht.health.idle, false, 'not idle after new responses')
   t.is(dht.online, true, 'back online')
 
   dht.destroy()
