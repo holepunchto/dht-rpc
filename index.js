@@ -179,7 +179,6 @@ class DHT extends EventEmitter {
     this._onwakeup()
     log('Resuming io')
     await this.io.resume()
-    this.health.reset()
     log('Done, dht resumed')
     this.io.networkInterfaces.on('change', (interfaces) => this._onnetworkchange(interfaces))
     this.refresh()
@@ -557,6 +556,7 @@ class DHT extends EventEmitter {
     this._stableTicks = MORE_STABLE_TICKS
     this._refreshTicks = 1 // triggers a refresh next tick (allow network time to wake up also)
     this._lastHost = null // clear network cache check
+    this.health.reset()
 
     if (this.adaptive) {
       // TODO: re-enable this as soon as we find out why this is over triggering in some edge cases

@@ -980,8 +980,7 @@ test('health - online', async (t) => {
 
   dht.health.online = false
 
-  dht.stats.requests.responses = 1
-  dht.stats.requests.timeouts = 0
+  dht.stats.requests.responses += 10
   dht.health.update()
 
   t.is(dht.online, true, 'online after offline')
@@ -997,22 +996,14 @@ test('health - degraded', async (t) => {
 
   fillHealthWindow(dht)
 
-  t.is(dht.degraded, false, 'not degraded after initially idle')
-
-  dht.stats.requests.responses = 0
-  dht.stats.requests.timeouts = 20
-  dht.health.update()
-
-  t.is(dht.degraded, false, 'not degraded when responses < sanity')
-
-  dht.stats.requests.responses = 80
-  dht.stats.requests.timeouts = 100
+  dht.stats.requests.responses += 10
+  dht.stats.requests.timeouts += 30
   dht.health.update()
 
   t.is(dht.degraded, true, 'degraded when responses > sanity and timeouts > 50%')
 
-  dht.stats.requests.responses = 60
-  dht.stats.requests.timeouts = 40
+  dht.stats.requests.responses += 40
+  dht.stats.requests.timeouts += 10
   dht.health.update()
 
   t.is(dht.degraded, false, 'not degraded when timeout rate < 50%')
@@ -1028,6 +1019,7 @@ test('health - offline', async (t) => {
     {
       online: true,
       degraded: false,
+      cold: true,
       idle: true,
       responses: 0,
       timeouts: 0,
@@ -1040,8 +1032,7 @@ test('health - offline', async (t) => {
 
   fillHealthWindow(dht)
 
-  dht.stats.requests.responses = 0
-  dht.stats.requests.timeouts = 20
+  dht.stats.requests.timeouts += 20
   dht.health.update()
 
   t.is(dht.online, false, 'offline when no responses & timeouts > sanity')
@@ -1051,6 +1042,7 @@ test('health - offline', async (t) => {
     {
       online: false,
       degraded: false,
+      cold: false,
       idle: false,
       responses: 0,
       timeouts: 20,
@@ -1070,13 +1062,16 @@ test('health - offline', async (t) => {
 
   dht.health.reset()
   fillHealthWindow(dht)
-  dht.health.online = false
 
-  dht.stats.requests.responses = 0
-  dht.stats.requests.timeouts = 1
+  dht.stats.requests.timeouts += 10
   dht.health.update()
 
-  t.is(dht.online, false, 'should stay offline when timeouts < sanity')
+  t.is(dht.online, false, 'offline after timeouts')
+
+  dht.stats.requests.responses += 3
+  dht.health.update()
+
+  t.is(dht.online, false, 'should stay offline when responses < sanity')
 
   dht.destroy()
 })
@@ -1084,16 +1079,87 @@ test('health - offline', async (t) => {
 test('health - resume', async (t) => {
   const dht = createDHT({ maxHealthWindow: 4 })
 
+  t.is(dht.health.cold, true)
+
   fillHealthWindow(dht)
 
-  dht.health.online = false
+  t.is(dht.health.cold, false, 'not cold when window full')
+
+  dht.stats.requests.timeouts += 20
+  dht.health.update()
+  t.is(dht.online, false, 'offline before suspend')
 
   await dht.suspend()
   await dht.resume()
 
   t.is(dht.health._window.length, 0, 'window is empty after resume')
-  t.is(dht.online, true, 'online after resume')
-  t.is(dht.degraded, false, 'not degraded after resume')
+  t.is(dht.health.cold, true, 'cold after resume')
+  t.is(dht.online, false, 'still offline after resume')
+
+  dht.stats.requests.responses += 10
+  dht.health.update()
+
+  t.is(dht.health.cold, true, 'still cold')
+  t.is(dht.online, false, 'still offline when cold')
+
+  dht.health.update()
+  dht.health.update()
+
+  dht.stats.requests.responses += 10
+  dht.health.update()
+
+  t.is(dht.health.cold, false, 'not cold after window full')
+  t.is(dht.online, true, 'online after responses and window full')
+
+  dht.stats.requests.timeouts += 10
+  dht.health.update()
+
+  t.is(dht.online, false, 'offline after timeouts and not cold')
+
+  dht.health.update()
+
+  t.is(dht.health.idle, true, 'idle since no new responses or timeouts')
+  t.is(dht.online, false, 'still offline since idle')
+
+  dht.stats.requests.responses += 10
+  dht.health.update()
+
+  t.is(dht.health.idle, false, 'not idle after new responses')
+  t.is(dht.online, true, 'back online')
+
+  dht.destroy()
+})
+
+test('health - wakeup', async (t) => {
+  const dht = createDHT({ maxHealthWindow: 4 })
+
+  fillHealthWindow(dht)
+
+  dht.stats.requests.timeouts += 20
+  dht.health.update()
+
+  t.is(dht.online, false, 'offline before wakeup')
+  t.is(dht.health.cold, false, 'not cold before wakeup')
+
+  dht._onwakeup()
+
+  t.is(dht.health._window.length, 0, 'window is empty after wakeup')
+  t.is(dht.health.cold, true, 'cold after wakeup')
+  t.is(dht.online, false, 'still offline after wakeup')
+
+  fillHealthWindow(dht)
+
+  dht.stats.requests.responses += 20
+  dht.health.update()
+
+  t.is(dht.online, true, 'online before wakeup')
+  t.is(dht.health.cold, false, 'not cold before wakeup')
+
+  dht._onwakeup()
+
+  t.is(dht.health._window.length, 0, 'window is empty after wakeup')
+  t.is(dht.health.cold, true, 'cold after wakeup')
+  t.is(dht.online, true, 'still online after wakeup')
 
   dht.destroy()
 })
@@ -1119,6 +1185,7 @@ test('debug - stats - default', async (t) => {
   t.alike(dht.health.stats, {
     online: true,
     degraded: false,
+    cold: true,
     idle: true,
     responses: 0,
     timeouts: 0,
