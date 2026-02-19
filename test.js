@@ -1094,13 +1094,14 @@ test('health - resume', async (t) => {
 
   t.is(dht.health._window.length, 0, 'window is empty after resume')
   t.is(dht.health.cold, true, 'cold after resume')
-  t.is(dht.online, false, 'still offline after resume')
+  t.is(dht.online, true, 'online after resume')
+  t.is(dht.degraded, false, 'not degrade after resume')
 
   dht.stats.requests.responses += 10
   dht.health.update()
 
   t.is(dht.health.cold, true, 'still cold')
-  t.is(dht.online, false, 'still offline when cold')
+  t.is(dht.online, true, 'still online when cold')
 
   dht.health.update()
   dht.health.update()
@@ -1145,7 +1146,8 @@ test('health - wakeup', async (t) => {
 
   t.is(dht.health._window.length, 0, 'window is empty after wakeup')
   t.is(dht.health.cold, true, 'cold after wakeup')
-  t.is(dht.online, false, 'still offline after wakeup')
+  t.is(dht.online, true, 'online after wakeup')
+  t.is(dht.degraded, false, 'online after wakeup')
 
   fillHealthWindow(dht)
 
