@@ -26,7 +26,6 @@ const OLD_NODE = 360 // if an node has been around more than 30 min we consider 
 const DEFAULTS = {
   concurrency: 10,
   maxWindow: IO.DEFAULT_MAX_WINDOW,
-  maxHealthWindow: NetworkHealth.DEFAULT_MAX_HEALTH_WINDOW,
   maxPingDelay: 10_000
 }
 
@@ -44,7 +43,7 @@ class DHT extends EventEmitter {
       onresponse: this._onresponse.bind(this),
       ontimeout: this._ontimeout.bind(this)
     })
-    this.health = new NetworkHealth(this, opts)
+    this.health = new NetworkHealth(this)
 
     this.concurrency = opts.concurrency || DEFAULTS.concurrency
     this.maxPingDelay = opts.maxPingDelay || DEFAULTS.maxPingDelay

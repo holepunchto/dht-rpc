@@ -943,7 +943,7 @@ test('peer ids do not retain a slab', async function (t) {
 })
 
 test('health - window wraps around', async (t) => {
-  const dht = createDHT({ maxHealthWindow: 4 })
+  const dht = createDHT()
 
   t.alike(dht.health._window, [])
 
@@ -970,7 +970,7 @@ test('health - window wraps around', async (t) => {
 })
 
 test('health - online', async (t) => {
-  const dht = createDHT({ maxHealthWindow: 4 })
+  const dht = createDHT()
 
   t.is(dht.online, true, 'online initially')
 
@@ -990,7 +990,7 @@ test('health - online', async (t) => {
 })
 
 test('health - degraded', async (t) => {
-  const dht = createDHT({ maxHealthWindow: 4 })
+  const dht = createDHT()
 
   t.is(dht.degraded, false, 'not degraded initially')
 
@@ -1000,7 +1000,7 @@ test('health - degraded', async (t) => {
   dht.stats.requests.timeouts += 30
   dht.health.update()
 
-  t.is(dht.degraded, false, 'not degraded until all ticks degraded')
+  t.is(dht.degraded, false, 'not degraded when not all ticks degraded')
 
   dht.stats.requests.responses += 10
   dht.stats.requests.timeouts += 30
@@ -1034,7 +1034,7 @@ test('health - degraded', async (t) => {
 })
 
 test('health - offline', async (t) => {
-  const dht = createDHT({ maxHealthWindow: 4 })
+  const dht = createDHT()
 
   t.alike(
     dht.health.stats,
@@ -1095,7 +1095,7 @@ test('health - offline', async (t) => {
 })
 
 test('health - resume', async (t) => {
-  const dht = createDHT({ maxHealthWindow: 4 })
+  const dht = createDHT()
 
   t.is(dht.health.cold, true)
 
@@ -1150,7 +1150,7 @@ test('health - resume', async (t) => {
 })
 
 test('health - wakeup', async (t) => {
-  const dht = createDHT({ maxHealthWindow: 4 })
+  const dht = createDHT()
 
   fillHealthWindow(dht)
 
