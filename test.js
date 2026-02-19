@@ -1000,13 +1000,35 @@ test('health - degraded', async (t) => {
   dht.stats.requests.timeouts += 30
   dht.health.update()
 
-  t.is(dht.degraded, true, 'degraded when responses > sanity and timeouts > 50%')
+  t.is(dht.degraded, false, 'not degraded until all ticks degraded')
 
-  dht.stats.requests.responses += 40
-  dht.stats.requests.timeouts += 10
+  dht.stats.requests.responses += 10
+  dht.stats.requests.timeouts += 30
   dht.health.update()
 
-  t.is(dht.degraded, false, 'not degraded when timeout rate < 50%')
+  dht.stats.requests.responses += 10
+  dht.stats.requests.timeouts += 30
+  dht.health.update()
+
+  dht.stats.requests.responses += 10
+  dht.stats.requests.timeouts += 30
+  dht.health.update()
+
+  t.is(dht.degraded, true, 'degraded when all ticks have timeout rate > 50%')
+
+  dht.stats.requests.responses += 40
+  dht.health.update()
+
+  dht.stats.requests.responses += 40
+  dht.health.update()
+
+  dht.stats.requests.responses += 40
+  dht.health.update()
+
+  dht.stats.requests.responses += 40
+  dht.health.update()
+
+  t.is(dht.degraded, false, 'not degraded when all ticks have timeout rate < 50%')
 
   dht.destroy()
 })
@@ -1023,9 +1045,7 @@ test('health - offline', async (t) => {
       idle: true,
       responses: 0,
       timeouts: 0,
-      timeoutsRate: 0,
-      recentResponses: 0,
-      recentTimeouts: 0
+      timeoutsRate: 0
     },
     'has starting health stats'
   )
@@ -1046,9 +1066,7 @@ test('health - offline', async (t) => {
       idle: false,
       responses: 0,
       timeouts: 20,
-      timeoutsRate: 1,
-      recentResponses: 0,
-      recentTimeouts: 20
+      timeoutsRate: 1
     },
     'has offline health stats'
   )
@@ -1191,9 +1209,7 @@ test('debug - stats - default', async (t) => {
     idle: true,
     responses: 0,
     timeouts: 0,
-    timeoutsRate: 0,
-    recentResponses: 0,
-    recentTimeouts: 0
+    timeoutsRate: 0
   })
 
   dht.destroy()
