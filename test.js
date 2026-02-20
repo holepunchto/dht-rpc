@@ -943,7 +943,7 @@ test('peer ids do not retain a slab', async function (t) {
 })
 
 test('health - window wraps around', async (t) => {
-  const dht = createDHT({ maxHealthWindow: 4 })
+  const dht = createDHT()
 
   t.alike(dht.health._window, [])
 
@@ -970,7 +970,7 @@ test('health - window wraps around', async (t) => {
 })
 
 test('health - online', async (t) => {
-  const dht = createDHT({ maxHealthWindow: 4 })
+  const dht = createDHT()
 
   t.is(dht.online, true, 'online initially')
 
@@ -990,7 +990,7 @@ test('health - online', async (t) => {
 })
 
 test('health - degraded', async (t) => {
-  const dht = createDHT({ maxHealthWindow: 4 })
+  const dht = createDHT()
 
   t.is(dht.degraded, false, 'not degraded initially')
 
@@ -1000,19 +1000,41 @@ test('health - degraded', async (t) => {
   dht.stats.requests.timeouts += 30
   dht.health.update()
 
-  t.is(dht.degraded, true, 'degraded when responses > sanity and timeouts > 50%')
+  t.is(dht.degraded, false, 'not degraded when not all ticks degraded')
 
-  dht.stats.requests.responses += 40
-  dht.stats.requests.timeouts += 10
+  dht.stats.requests.responses += 10
+  dht.stats.requests.timeouts += 30
   dht.health.update()
 
-  t.is(dht.degraded, false, 'not degraded when timeout rate < 50%')
+  dht.stats.requests.responses += 10
+  dht.stats.requests.timeouts += 30
+  dht.health.update()
+
+  dht.stats.requests.responses += 10
+  dht.stats.requests.timeouts += 30
+  dht.health.update()
+
+  t.is(dht.degraded, true, 'degraded when all ticks have timeout rate > 50%')
+
+  dht.stats.requests.responses += 40
+  dht.health.update()
+
+  dht.stats.requests.responses += 40
+  dht.health.update()
+
+  dht.stats.requests.responses += 40
+  dht.health.update()
+
+  dht.stats.requests.responses += 40
+  dht.health.update()
+
+  t.is(dht.degraded, false, 'not degraded when all ticks have timeout rate < 50%')
 
   dht.destroy()
 })
 
 test('health - offline', async (t) => {
-  const dht = createDHT({ maxHealthWindow: 4 })
+  const dht = createDHT()
 
   t.alike(
     dht.health.stats,
@@ -1023,9 +1045,7 @@ test('health - offline', async (t) => {
       idle: true,
       responses: 0,
       timeouts: 0,
-      timeoutsRate: 0,
-      recentResponses: 0,
-      recentTimeouts: 0
+      timeoutsRate: 0
     },
     'has starting health stats'
   )
@@ -1046,9 +1066,7 @@ test('health - offline', async (t) => {
       idle: false,
       responses: 0,
       timeouts: 20,
-      timeoutsRate: 1,
-      recentResponses: 0,
-      recentTimeouts: 20
+      timeoutsRate: 1
     },
     'has offline health stats'
   )
@@ -1077,7 +1095,7 @@ test('health - offline', async (t) => {
 })
 
 test('health - resume', async (t) => {
-  const dht = createDHT({ maxHealthWindow: 4 })
+  const dht = createDHT()
 
   t.is(dht.health.cold, true)
 
@@ -1094,13 +1112,14 @@ test('health - resume', async (t) => {
 
   t.is(dht.health._window.length, 0, 'window is empty after resume')
   t.is(dht.health.cold, true, 'cold after resume')
-  t.is(dht.online, false, 'still offline after resume')
+  t.is(dht.online, true, 'online after resume')
+  t.is(dht.degraded, false, 'not degrade after resume')
 
   dht.stats.requests.responses += 10
   dht.health.update()
 
   t.is(dht.health.cold, true, 'still cold')
-  t.is(dht.online, false, 'still offline when cold')
+  t.is(dht.online, true, 'still online when cold')
 
   dht.health.update()
   dht.health.update()
@@ -1131,7 +1150,7 @@ test('health - resume', async (t) => {
 })
 
 test('health - wakeup', async (t) => {
-  const dht = createDHT({ maxHealthWindow: 4 })
+  const dht = createDHT()
 
   fillHealthWindow(dht)
 
@@ -1145,7 +1164,8 @@ test('health - wakeup', async (t) => {
 
   t.is(dht.health._window.length, 0, 'window is empty after wakeup')
   t.is(dht.health.cold, true, 'cold after wakeup')
-  t.is(dht.online, false, 'still offline after wakeup')
+  t.is(dht.online, true, 'online after wakeup')
+  t.is(dht.degraded, false, 'online after wakeup')
 
   fillHealthWindow(dht)
 
@@ -1189,9 +1209,7 @@ test('debug - stats - default', async (t) => {
     idle: true,
     responses: 0,
     timeouts: 0,
-    timeoutsRate: 0,
-    recentResponses: 0,
-    recentTimeouts: 0
+    timeoutsRate: 0
   })
 
   dht.destroy()
