@@ -43,12 +43,12 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/mafintosh/dht-rpc.git"
+    "url": "https://github.com/holepunchto/dht-rpc.git"
   },
   "author": "Mathias Buus (@mafintosh)",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/mafintosh/dht-rpc/issues"
+    "url": "https://github.com/holepunchto/dht-rpc/issues"
   },
-  "homepage": "https://github.com/mafintosh/dht-rpc"
+  "homepage": "https://github.com/holepunchto/dht-rpc#"
 }
