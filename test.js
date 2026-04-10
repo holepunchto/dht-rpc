@@ -1062,6 +1062,21 @@ test('health - offline', async (t) => {
 
   t.is(dht.online, false, 'offline after 2 offline ticks')
 
+  dht.stats.requests.responses += 20
+  dht.health.update()
+
+  t.is(dht.online, true, 'back online after 1 online tick')
+
+  dht.stats.requests.timeouts += 20
+  dht.health.update()
+
+  t.is(dht.online, true, 'still online after 1 offline tick')
+
+  dht.stats.requests.timeouts += 20
+  dht.health.update()
+
+  t.is(dht.online, false, 'offline after 2 offline ticks')
+
   t.alike(
     dht.health.stats,
     {
@@ -1101,7 +1116,7 @@ test('health - offline', async (t) => {
   dht.stats.requests.responses += 4
   dht.health.update()
 
-  t.is(dht.online, true, 'back online after single good tick')
+  t.is(dht.online, true, 'back online after 1 online tick')
 
   dht.destroy()
 })
@@ -1201,6 +1216,68 @@ test('health - wakeup', async (t) => {
   t.is(dht.health._window.length, 0, 'window is empty after wakeup')
   t.is(dht.health.cold, true, 'cold after wakeup')
   t.is(dht.online, true, 'still online after wakeup')
+
+  dht.destroy()
+})
+
+test('health - flickers', async (t) => {
+  const dht = createDHT()
+
+  t.alike(
+    dht.health.stats,
+    {
+      online: true,
+      degraded: false,
+      cold: true,
+      idle: true,
+      responses: 0,
+      timeouts: 0,
+      timeoutsRate: 0
+    },
+    'has starting health stats'
+  )
+
+  fillHealthWindow(dht)
+
+  // prime for flickering
+
+  dht.stats.requests.timeouts += 20
+  dht.health.update()
+
+  t.is(dht.health._offlineTicks, 1, 'added offline tick')
+  t.is(dht.online, true, 'still online after 1 offline tick')
+
+  dht.stats.requests.timeouts += 20
+  dht.health.update()
+
+  t.is(dht.health._offlineTicks, 2, 'added offline tick')
+  t.is(dht.online, false, 'now offline')
+
+  dht.stats.requests.timeouts += 20
+  dht.health.update()
+
+  t.is(dht.health._offlineTicks, 3, 'added offline tick')
+  t.is(dht.online, false, 'still offline')
+
+  // do not flicker
+
+  dht.stats.requests.responses += 20
+  dht.health.update()
+
+  t.is(dht.health._offlineTicks, 0, 'offline tick reset after online')
+  t.is(dht.online, true, 'back online')
+
+  dht.stats.requests.timeouts += 20
+  dht.health.update()
+
+  t.is(dht.health._offlineTicks, 1, 'added offline tick')
+  t.is(dht.online, true, 'still online after 1 offline tick')
+
+  dht.stats.requests.timeouts += 20
+  dht.health.update()
+
+  t.is(dht.health._offlineTicks, 2, 'added offline tick')
+  t.is(dht.online, false, 'back offline')
 
   dht.destroy()
 })
