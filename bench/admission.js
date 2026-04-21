@@ -17,11 +17,11 @@ const {
 // Warm-network admission benchmark.
 // Default shape:
 // - 64 warm base nodes
-// - 32 additional joining nodes
-// - join concurrency 4
+// - 224 additional joining nodes
+// - join concurrency 6
 const BASE_NODES = Number(process.env.DHT_RPC_BENCH_BASE_NODES || 64)
-const ADMISSION_NODES = Number(process.env.DHT_RPC_BENCH_ADMISSION_NODES || 32)
-const ADMISSION_CONCURRENCY = Number(process.env.DHT_RPC_BENCH_CONCURRENCY || 4)
+const ADMISSION_NODES = Number(process.env.DHT_RPC_BENCH_ADMISSION_NODES || 224)
+const ADMISSION_CONCURRENCY = Number(process.env.DHT_RPC_BENCH_CONCURRENCY || 6)
 const REPEATS = Number(process.env.DHT_RPC_BENCH_REPEATS || 5)
 
 async function main() {

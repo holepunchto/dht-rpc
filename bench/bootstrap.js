@@ -16,9 +16,9 @@ const {
 
 // Cold-start swarm bring-up benchmark.
 // Default shape:
-// - 64 total local nodes
-// - 1 bootstrapper plus 63 additional joining nodes
-const NODE_COUNT = Number(process.env.DHT_RPC_BENCH_NODES || 64)
+// - 256 total local nodes
+// - 1 bootstrapper plus 255 additional joining nodes
+const NODE_COUNT = Number(process.env.DHT_RPC_BENCH_NODES || 256)
 const REPEATS = Number(process.env.DHT_RPC_BENCH_REPEATS || 5)
 
 async function main() {

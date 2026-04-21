@@ -17,13 +17,13 @@ const {
 // Steady-state lookup benchmark.
 // Default shape:
 // - 96-node warm local swarm
-// - 20 warmup lookups
-// - 80 sequential lookups for latency
-// - 240 concurrent lookups for throughput at concurrency 12
+// - 50 warmup lookups
+// - 240 sequential lookups for latency
+// - 1600 concurrent lookups for throughput at concurrency 12
 const NODE_COUNT = Number(process.env.DHT_RPC_BENCH_NODES || 96)
-const WARMUP_LOOKUPS = Number(process.env.DHT_RPC_BENCH_WARMUP_LOOKUPS || 20)
-const LATENCY_LOOKUPS = Number(process.env.DHT_RPC_BENCH_LATENCY_LOOKUPS || 80)
-const THROUGHPUT_LOOKUPS = Number(process.env.DHT_RPC_BENCH_THROUGHPUT_LOOKUPS || 240)
+const WARMUP_LOOKUPS = Number(process.env.DHT_RPC_BENCH_WARMUP_LOOKUPS || 50)
+const LATENCY_LOOKUPS = Number(process.env.DHT_RPC_BENCH_LATENCY_LOOKUPS || 240)
+const THROUGHPUT_LOOKUPS = Number(process.env.DHT_RPC_BENCH_THROUGHPUT_LOOKUPS || 1600)
 const THROUGHPUT_CONCURRENCY = Number(process.env.DHT_RPC_BENCH_CONCURRENCY || 12)
 const REPEATS = Number(process.env.DHT_RPC_BENCH_REPEATS || 5)
 
