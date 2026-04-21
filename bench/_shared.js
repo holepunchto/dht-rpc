@@ -57,7 +57,7 @@ function runCaseInChild(filename) {
       const errorOutput = Buffer.concat(stderr).toString('utf8').trim()
 
       if (code !== 0) {
-        reject(new Error(errorOutput || ('Benchmark child exited with code ' + code)))
+        reject(new Error(errorOutput || 'Benchmark child exited with code ' + code))
         return
       }
 
