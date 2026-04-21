@@ -30,21 +30,6 @@ async function main() {
 
   const runs = await runRepeatedCases(REPEATS, () => runCaseInChild(__filename))
 
-  console.log('Per-run results')
-  console.table(
-    runs.map((result) => ({
-      round: result.round,
-      nodes: result.nodes,
-      bootstrapAvgMs: round(result.bootstrap.avgMs),
-      bootstrapP95Ms: round(result.bootstrap.p95Ms),
-      totalElapsedMs: round(result.bootstrap.totalElapsedMs),
-      nodesPerSec: round(result.bootstrap.nodesPerSec),
-      cpuMs: round(result.bootstrap.cpuMs),
-      rssDeltaMb: round(toMb(result.bootstrap.memory.rss)),
-      heapDeltaMb: round(toMb(result.bootstrap.memory.heapUsed))
-    }))
-  )
-
   console.log('Median summary')
   console.table(
     [summarizeRuns(runs)].map((result) => ({
