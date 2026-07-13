@@ -95,11 +95,11 @@ test('delayed ping', async function (t) {
   let delayed = false
   const timer = setTimeout(() => {
     delayed = true
-  }, 1_000)
+  }, 1_100)
 
   await swarm1.delayedPing({ host: swarm2.host, port: swarm2.port }, 1_100)
   clearTimeout(timer)
-  t.ok(delayed, 'ping delayed for at least 1 second')
+  t.ok(delayed, 'ping delayed for at least 1.1 seconds')
 })
 
 test('delayed ping - rejects when delay exceeds client cap', async function (t) {
