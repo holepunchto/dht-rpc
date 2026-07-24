@@ -38,7 +38,12 @@ test('bootstrapper - bind host', async function (t) {
 
 test('bootstrapper - opts.bootstrap', async function (t) {
   const port1 = await freePort()
-  const port2 = await freePort()
+  let port2 = await freePort()
+
+  // Ensure they don't pick the same port
+  while (port1 === port2) {
+    port2 = await freePort()
+  }
 
   const node1 = createBootstrapper(port1)
   await node1.fullyBootstrapped()
