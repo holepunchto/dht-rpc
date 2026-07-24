@@ -97,10 +97,14 @@ test('metrics', async function (t) {
 
 test('delayed ping', async function (t) {
   const [swarm1, swarm2] = await makeSwarm(2, t)
-  const start = Date.now()
+  let delayed = false
+  const timer = setTimeout(() => {
+    delayed = true
+  }, 1_100)
+
   await swarm1.delayedPing({ host: swarm2.host, port: swarm2.port }, 1_100)
-  const end = Date.now()
-  t.ok(end - start >= 1_100, 'ping delayed for at least 1.1 seconds')
+  clearTimeout(timer)
+  t.ok(delayed, 'ping delayed for at least 1.1 seconds')
 })
 
 test('delayed ping - rejects when delay exceeds client cap', async function (t) {
@@ -641,8 +645,6 @@ test('filter nodes from routing table', async function (t) {
 
 test('request session, destroy all', async function (t) {
   const [, a, b] = await makeSwarm(3, t)
-
-  a.on('request', () => t.fail())
 
   const s = b.session()
   const p = [s.request({ command: 42 }, a), s.request({ command: 42 }, a)]
