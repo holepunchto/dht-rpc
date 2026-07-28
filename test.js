@@ -616,12 +616,48 @@ test('relay', async function (t) {
 
   const res = await a.request(
     { command: ROUTE, value: Buffer.from('a') },
-    { host: '127.0.0.1', port: b.address().port }
+    { host: '127.0.0.1', port: b.address().port },
+    { responseFrom: { host: '127.0.0.1', port: c.address().port } }
   )
 
   t.alike(res.value, Buffer.from('abc'))
   t.is(res.from.port, c.address().port)
   t.is(res.to.port, a.address().port)
+})
+
+test('response must come from the requested peer', async function (t) {
+  const victim = createDHT({ bootstrap: [] })
+  const expected = createDHT({ bootstrap: [] })
+  const unexpected = createDHT({ bootstrap: [] })
+
+  t.teardown(() => Promise.all([victim.destroy(), expected.destroy(), unexpected.destroy()]))
+
+  await Promise.all([
+    victim.fullyBootstrapped(),
+    expected.fullyBootstrapped(),
+    unexpected.fullyBootstrapped()
+  ])
+
+  const expectedAddress = expected.address()
+  const unexpectedResponseReceived = new Promise((resolve) => {
+    victim.socket.once('message', resolve)
+  })
+
+  expected.once('request', async function (req) {
+    await unexpectedResponseReceived
+    req.reply()
+  })
+
+  unexpected.once('request', function (req) {
+    // The target request gets the transaction ID immediately after the decoy.
+    req.tid = (req.tid + 1) & 0xffff
+    req.reply()
+  })
+
+  victim.request({ command: 100 }, unexpected.address(), { retry: false }).catch(() => {})
+  const response = await victim.request({ command: 101 }, expectedAddress, { retry: false })
+
+  t.is(response.from.port, expectedAddress.port, 'reply came from requested peer')
 })
 
 test('filter nodes from routing table', async function (t) {
