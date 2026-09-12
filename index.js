@@ -53,6 +53,7 @@ class DHT extends EventEmitter {
     this.adaptive = typeof opts.ephemeral !== 'boolean' && opts.adaptive !== false
     this.destroyed = false
     this.suspended = false
+    this.resuming = null
     this.online = true
     this.degraded = false
     this.stats = {
@@ -159,8 +160,15 @@ class DHT extends EventEmitter {
   }
 
   async suspend({ log = noop } = {}) {
+    // Let an in-flight resume finish first so the final state is suspended
+    try {
+      if (this.resuming) await this.resuming
+    } catch {}
     log('Suspending waiting for io bind...')
-    await this.io.bind()
+    // A failed bind must not prevent suspending, _clear tolerates missing sockets
+    try {
+      await this.io.bind()
+    } catch {}
     log('Done, continuing')
     if (this.suspended || this.destroyed) return
     this.suspended = true
@@ -173,12 +181,25 @@ class DHT extends EventEmitter {
 
   async resume({ log = noop } = {}) {
     if (!this.suspended || this.destroyed) return
+    if (this.resuming) return this.resuming
+    this.resuming = this._resume({ log })
+    try {
+      await this.resuming
+    } finally {
+      this.resuming = null
+    }
+  }
+
+  async _resume({ log }) {
+    log('Resuming io')
+    // If this throws we stay suspended, so the caller can retry resume() later
+    await this.io.resume()
+    log('Done, dht resumed')
+    if (this.destroyed) return
+    // Only start ticking (pings, refreshes) once the sockets are back
     this.suspended = false
     this._tickInterval = setInterval(this._ontick.bind(this), TICK_INTERVAL)
     this._onwakeup()
-    log('Resuming io')
-    await this.io.resume()
-    log('Done, dht resumed')
     this.io.networkInterfaces.on('change', (interfaces) => this._onnetworkchange(interfaces))
     this.refresh()
     this.emit('resume')
