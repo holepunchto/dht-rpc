@@ -1330,6 +1330,68 @@ test('debug - rtt stats', async (t) => {
   t.is(res.closestReplies.errors, 0)
 })
 
+test('suspend - a failed rebind can be retried', async function (t) {
+  const a = createDHT({ ephemeral: false, firewalled: false })
+  await a.fullyBootstrapped()
+
+  await a.suspend()
+  t.is(a.suspended, true)
+
+  const bindSockets = a.io._bindSockets
+  a.io._bindSockets = function () {
+    return Promise.reject(new Error('EADDRNOTAVAIL (simulated)'))
+  }
+
+  await t.exception(a.resume(), /EADDRNOTAVAIL/)
+  t.is(a.suspended, true, 'dht stays suspended after a failed resume')
+  t.is(a.io.suspended, true, 'io stays suspended after a failed resume')
+
+  a.io._bindSockets = bindSockets
+
+  await a.resume()
+  t.is(a.suspended, false, 'second resume succeeds')
+  t.ok(a.io.serverSocket.bound && !a.io.serverSocket.closing, 'server socket is open again')
+  t.ok(a.io.clientSocket.bound && !a.io.clientSocket.closing, 'client socket is open again')
+
+  await a.destroy()
+})
+
+test('suspend - concurrent resumes bind only once', async function (t) {
+  const a = createDHT({ ephemeral: false, firewalled: false })
+  await a.fullyBootstrapped()
+
+  await a.suspend()
+
+  let binds = 0
+  const bindSockets = a.io._bindSockets
+  a.io._bindSockets = function () {
+    binds++
+    return bindSockets.call(this)
+  }
+
+  await Promise.all([a.resume(), a.resume(), a.resume()])
+
+  t.is(binds, 1, 'sockets were bound exactly once')
+  t.is(a.suspended, false)
+
+  await a.destroy()
+})
+
+test('suspend - suspend and destroy still work after a failed rebind', async function (t) {
+  const a = createDHT({ ephemeral: false, firewalled: false })
+  await a.fullyBootstrapped()
+
+  await a.suspend()
+  a.io._bindSockets = function () {
+    return Promise.reject(new Error('EADDRNOTAVAIL (simulated)'))
+  }
+  await t.exception(a.resume())
+
+  await a.suspend()
+  await a.destroy()
+  t.pass('destroy resolved')
+})
+
 function fillHealthWindow(dht) {
   for (let i = 0; i < 4; i++) {
     dht.health.update()
