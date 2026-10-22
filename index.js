@@ -87,6 +87,7 @@ class DHT extends EventEmitter {
       opts.downHintsRateLimit !== undefined ? opts.downHintsRateLimit : 10 * 5
     this._downHintsSentPerTick = 0
     this._pendingTimers = new Set()
+    this._lifecycle = Promise.resolve()
 
     this.table.on('row', this._onrow)
 
@@ -158,7 +159,17 @@ class DHT extends EventEmitter {
     return this.io.bind()
   }
 
-  async suspend({ log = noop } = {}) {
+  suspend(opts) {
+    this._lifecycle = this._lifecycle.catch(noop).then(() => this._suspend(opts))
+    return this._lifecycle
+  }
+
+  resume(opts) {
+    this._lifecycle = this._lifecycle.catch(noop).then(() => this._resume(opts))
+    return this._lifecycle
+  }
+
+  async _suspend({ log = noop } = {}) {
     log('Suspending waiting for io bind...')
     await this.io.bind()
     log('Done, continuing')
@@ -171,7 +182,7 @@ class DHT extends EventEmitter {
     this.emit('suspend')
   }
 
-  async resume({ log = noop } = {}) {
+  async _resume({ log = noop } = {}) {
     if (!this.suspended || this.destroyed) return
     this.suspended = false
     this._tickInterval = setInterval(this._ontick.bind(this), TICK_INTERVAL)
