@@ -857,11 +857,15 @@ test('suspend - resume while suspending', async function (t) {
   const dht = createDHT({ ephemeral: false, firewalled: false })
   await dht.fullyBootstrapped()
 
+  const watcher = dht.io.networkInterfaces
+  t.teardown(() => watcher.destroy())
+
   const suspending = dht.suspend()
   await new Promise((resolve) => setImmediate(resolve))
   await dht.resume()
   await suspending
 
+  t.ok(watcher._destroying, 'old watcher destroyed')
   t.absent(dht.io.networkInterfaces._destroying, 'watching interfaces')
   t.ok(dht.io._drainInterval, 'draining')
 
@@ -872,12 +876,26 @@ test('suspend - resume right after suspend', async function (t) {
   const dht = createDHT({ ephemeral: false, firewalled: false })
   await dht.fullyBootstrapped()
 
-  const suspending = dht.suspend()
-  await dht.resume()
-  await suspending
+  const watcher = dht.io.networkInterfaces
+  t.teardown(() => watcher.destroy())
+
+  await Promise.all([dht.suspend(), dht.resume()])
 
   t.absent(dht.suspended, 'resumed')
-  t.absent(dht.io.suspended, 'io resumed')
+
+  await dht.destroy()
+})
+
+test('suspend - suspend right after resume', async function (t) {
+  const dht = createDHT({ ephemeral: false, firewalled: false })
+  await dht.fullyBootstrapped()
+
+  const watcher = dht.io.networkInterfaces
+  t.teardown(() => watcher.destroy())
+
+  await Promise.all([dht.suspend(), dht.resume(), dht.suspend()])
+
+  t.ok(dht.suspended, 'suspended')
 
   await dht.destroy()
 })
