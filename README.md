@@ -321,7 +321,7 @@ that is called for each close reply.
   async commit (reply, dht, query) {
     // normally you'd send back the roundtrip token here, to prove to the remote that you own
     // your ip/port
-    await dht.request({ token: reply.token, target, command, value }, reply.from)
+    return dht.request({ token: reply.token, target, command, value }, reply.from)
   }
 }
 ```
