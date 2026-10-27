@@ -321,8 +321,19 @@ that is called for each close reply.
   async commit (reply, dht, query) {
     // normally you'd send back the roundtrip token here, to prove to the remote that you own
     // your ip/port
-    await dht.request({ token: reply.token, target, command, value }, reply.from)
+    return dht.request({ token: reply.token, target, command, value }, reply.from)
   }
+}
+```
+
+By default the replies from the commit calls are not emitted on the stream. If you want them
+forwarded to the stream like a normal reply (passed through `map` as well), set `forwardCommit`.
+
+```js
+{
+  commit: true,
+  // emit the replies from the commit requests on the query stream
+  forwardCommit: true
 }
 ```
 
