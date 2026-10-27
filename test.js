@@ -429,6 +429,36 @@ test('shorthand commit', async function (t) {
   t.ok(notTokens >= tokens)
 })
 
+test('forward commit replies to the stream', async function (t) {
+  const swarm = await makeSwarm(40, t)
+
+  for (const node of swarm) {
+    node.on('request', function (req) {
+      req.reply(req.token ? Buffer.from('commit') : Buffer.from('query'))
+    })
+  }
+
+  const q = swarm[0].query(
+    { command: 42, target: Buffer.alloc(32) },
+    { commit: true, forwardCommit: true }
+  )
+
+  let commits = 0
+  let queries = 0
+
+  for await (const data of q) {
+    if (data.value.toString() === 'commit') {
+      t.ok(data.token, 'commit replies carry a token')
+      commits++
+    } else {
+      queries++
+    }
+  }
+
+  t.is(commits, 20)
+  t.ok(queries >= commits)
+})
+
 test('after fullyBootstrapped it is always bound', async function (t) {
   t.plan(2)
 

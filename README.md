@@ -326,6 +326,17 @@ that is called for each close reply.
 }
 ```
 
+By default the replies from the commit calls are not emitted on the stream. If you want them
+forwarded to the stream like a normal reply (passed through `map` as well), set `forwardCommit`.
+
+```js
+{
+  commit: true,
+  // emit the replies from the commit requests on the query stream
+  forwardCommit: true
+}
+```
+
 Other options include:
 
 ```js
