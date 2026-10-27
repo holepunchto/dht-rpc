@@ -659,6 +659,34 @@ test('request session, destroy all', async function (t) {
   }
 })
 
+test('request session, destroy releases each request from the congestion window once', async function (t) {
+  const [, a, b] = await makeSwarm(3, t)
+  const NOPE = 442
+
+  b.on('request', function () {
+    // never reply, so requests stay in flight
+  })
+
+  const to = { host: '127.0.0.1', port: b.address().port }
+  const congestion = a.io.congestion
+  const before = congestion._total
+
+  a.request({ command: NOPE }, to).catch(() => {})
+  const s = a.session()
+  const p = [
+    s.request({ command: NOPE }, to),
+    s.request({ command: NOPE }, to),
+    s.request({ command: NOPE }, to)
+  ]
+
+  t.is(congestion._total, before + 4, 'four requests in flight')
+
+  s.destroy(new Error('destroyed'))
+  await Promise.allSettled(p)
+
+  t.is(congestion._total, before + 1, 'the request outside the session is still counted')
+})
+
 test('close event', async function (t) {
   t.plan(1)
 
