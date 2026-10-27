@@ -429,6 +429,56 @@ test('shorthand commit', async function (t) {
   t.ok(notTokens >= tokens)
 })
 
+test('commit fails when the closest nodes reply without a token', async function (t) {
+  const swarm = await makeSwarm(20, t)
+
+  for (const node of swarm) {
+    node.on('request', function (req) {
+      req.reply(null, { token: false })
+    })
+  }
+
+  const q = swarm[0].query({ command: 42, target: Buffer.alloc(32) }, { commit: true })
+
+  let error = null
+
+  try {
+    await q.finished()
+  } catch (err) {
+    error = err
+  }
+
+  t.ok(q.closestReplies.length > 0, 'the query itself succeeded')
+  t.ok(
+    q.closestReplies.every((reply) => reply.token === null),
+    'no closest reply carried a token'
+  )
+  t.is(error?.message, 'No token received for closest node', 'autoCommit rejected every reply')
+})
+
+test('findNode with commit: true can never commit', async function (t) {
+  const swarm = await makeSwarm(10, t)
+
+  // The internal FIND_NODE handler always replies with sendReply(0, null, false, true),
+  // ie token = false, so autoCommit has nothing to commit with.
+  const q = swarm[0].findNode(Buffer.alloc(32), { commit: true })
+
+  let error = null
+
+  try {
+    await q.finished()
+  } catch (err) {
+    error = err
+  }
+
+  t.ok(q.closestReplies.length > 0, 'the query itself succeeded')
+  t.ok(
+    q.closestReplies.every((reply) => reply.token === null),
+    'internal FIND_NODE replies never carry a token'
+  )
+  t.is(error?.message, 'No token received for closest node', 'autoCommit rejected every reply')
+})
+
 test('forward commit replies to the stream', async function (t) {
   const swarm = await makeSwarm(40, t)
 
