@@ -968,12 +968,12 @@ test('response includes roundtrip time', async function (t) {
   t.ok(response.rtt !== undefined)
 })
 
-test('query hinted with routing table nodes does not resolve bootstrap nodes', async function (t) {
+test('hinted query does not fall back to bootstrap nodes when the table can fill k', async function (t) {
   const swarm = await makeSwarm(40, t)
   const node = swarm[swarm.length - 1]
   const target = swarm[0].table.id
 
-  t.ok(node.table.size >= node.table.k, 'routing table is full enough')
+  t.ok(node.table.size >= node.table.k, 'routing table can fill k')
 
   let resolved = false
   node._resolveBootstrapNodes = async function* () {
@@ -986,19 +986,19 @@ test('query hinted with routing table nodes does not resolve bootstrap nodes', a
   t.absent(resolved, 'did not fall back to the bootstrap nodes')
 })
 
-test('query hinted with routing table nodes falls back to bootstrap nodes if the table cannot fill k', async function (t) {
+test('hinted query falls back to bootstrap nodes when the table cannot fill k', async function (t) {
   const swarm = await makeSwarm(4, t)
   const node = swarm[swarm.length - 1]
   const target = swarm[0].table.id
 
-  t.ok(node.table.size < node.table.k, 'routing table is too small to fill k')
+  t.ok(node.table.size < node.table.k, 'routing table cannot fill k')
 
   let resolved = false
   node._resolveBootstrapNodes = async function* () {
     resolved = true
   }
 
-  const nodes = node.table.closest(target, 1)
+  const nodes = node.table.closest(target, 3)
   await node.findNode(target, { nodes }).finished()
 
   t.ok(resolved, 'fell back to the bootstrap nodes')
