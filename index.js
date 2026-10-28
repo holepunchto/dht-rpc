@@ -367,6 +367,7 @@ class DHT extends EventEmitter {
     if (req === null) return Promise.reject(new Error('Node destroyed'))
 
     if (opts && opts.socket) req.socket = opts.socket
+    if (opts && opts.responseFrom !== undefined) req.responseFrom = opts.responseFrom
     if (opts && opts.retry === false) req.retries = 0
 
     return new Promise((resolve, reject) => {
