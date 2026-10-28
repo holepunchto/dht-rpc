@@ -968,6 +968,24 @@ test('response includes roundtrip time', async function (t) {
   t.ok(response.rtt !== undefined)
 })
 
+test('query hinted with routing table nodes does not resolve bootstrap nodes', async function (t) {
+  const swarm = await makeSwarm(40, t)
+  const node = swarm[swarm.length - 1]
+  const target = swarm[0].table.id
+
+  t.ok(node.table.size >= node.table.k, 'routing table is full enough')
+
+  let resolved = false
+  node._resolveBootstrapNodes = async function* () {
+    resolved = true
+  }
+
+  const nodes = node.table.closest(target, 3)
+  await node.findNode(target, { nodes }).finished()
+
+  t.absent(resolved, 'did not fall back to the bootstrap nodes')
+})
+
 test('bootstrap with reachable suggested-IP and skip DNS', async function (t) {
   const ip = '127.0.0.1'
   const domain = 'invalid'
