@@ -35,6 +35,9 @@
     "test-suspend": "^1.0.0"
   },
   "scripts": {
+    "bench:admission": "node --expose-gc bench/admission.js",
+    "bench:bootstrap": "node --expose-gc bench/bootstrap.js",
+    "bench:lookup": "node --expose-gc bench/find-node.js",
     "format": "prettier --write .",
     "test": "npm run test:node && npm run test:bare",
     "test:bare": "brittle-bare --coverage test.js",
