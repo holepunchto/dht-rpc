@@ -875,6 +875,70 @@ test('nat update event', async function (t) {
   await b.destroy()
 })
 
+// Fraction of the k closest nodes that must learn about a node from its self-lookup. A lookup can
+// miss a few of the true k closest: routing tables return the closest rows, but not the closest
+// nodes within the farthest row they return (on average ~k/2 nodes, so the misses scale with k).
+const MIN_ANNOUNCED = 0.75
+
+test('adaptive node announces itself to its closest nodes when it turns persistent', async function (t) {
+  const swarm = await makeSwarm(100, t)
+
+  const bootstrap = ['localhost:' + swarm[0].address().port]
+  const node = createDHT({ bootstrap, quickFirewall: false })
+  t.teardown(() => node.destroy())
+
+  await node.fullyBootstrapped()
+  t.ok(node.ephemeral, 'ephemeral after bootstrap')
+  t.ok(node.firewalled, 'firewalled after bootstrap')
+
+  // a refresh looks up a random peer, which only reaches our neighbourhood by luck
+  node.refresh = {}
+
+  t.ok(await node._updateNetworkState(), 'network state updated')
+  t.absent(node.ephemeral, 'turned persistent')
+
+  await backgroundQueriesDone(node)
+
+  const closest = closestNodes(node.id, swarm, node.table.k)
+  const known = knownBy(node, closest)
+  t.ok(
+    known >= MIN_ANNOUNCED * node.table.k,
+    known + '/' + closest.length + ' closest nodes have it in their table'
+  )
+})
+
+test('persistent node periodically looks up its own id', async function (t) {
+  const swarm = await makeSwarm(100, t)
+  const node = swarm[swarm.length - 1]
+  const closest = closestNodes(
+    node.id,
+    swarm.filter((n) => n !== node),
+    node.table.k
+  )
+
+  for (const n of closest) {
+    const entry = n.table.get(node.id)
+    if (entry) n._removeNode(entry)
+  }
+  t.is(knownBy(node, closest), 0, 'closest nodes forgot about it')
+
+  if ((node._tick + 1) % 8 === 0) node._tick++ // ensure ontick doesn't ping
+  if (node._refreshTicks <= 1) node._refreshTicks = 60 // or refresh
+  const refreshTicks = node._refreshTicks
+
+  node._selfLookupTicks = 1
+  node._ontick()
+  t.is(node._refreshTicks, refreshTicks - 1, 'self-lookup does not postpone the regular refresh')
+
+  await backgroundQueriesDone(node)
+
+  const known = knownBy(node, closest)
+  t.ok(
+    known >= MIN_ANNOUNCED * node.table.k,
+    known + '/' + closest.length + ' closest nodes have it in their table again'
+  )
+})
+
 test('suspend - random port', async function (t) {
   const a = createDHT({ ephemeral: false, firewalled: false })
   await a.fullyBootstrapped()
@@ -1471,6 +1535,30 @@ async function makeSwarm(n, t, opts = {}) {
 
 function cmpNodes(a, b) {
   return a.port - b.port
+}
+
+// the k persistent nodes closest to target by XOR distance
+function closestNodes(target, nodes, k) {
+  return nodes
+    .filter((node) => node.id !== null)
+    .sort((a, b) => cmpDistance(target, a.id, b.id))
+    .slice(0, k)
+}
+
+function cmpDistance(target, a, b) {
+  for (let i = 0; i < target.length; i++) {
+    const d = (a[i] ^ target[i]) - (b[i] ^ target[i])
+    if (d !== 0) return d
+  }
+  return 0
+}
+
+function knownBy(node, nodes) {
+  return nodes.filter((n) => n.table.get(node.id)).length
+}
+
+async function backgroundQueriesDone(node) {
+  while (node.stats.queries.active > 0) await new Promise((resolve) => setTimeout(resolve, 50))
 }
 
 function createDHT(opts) {
