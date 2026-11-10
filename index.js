@@ -20,6 +20,7 @@ const SLEEPING_INTERVAL = 3 * TICK_INTERVAL
 const STABLE_TICKS = 240 // if nothing major bad happens in ~20mins we can consider this node stable (if nat is friendly)
 const MORE_STABLE_TICKS = 3 * STABLE_TICKS
 const REFRESH_TICKS = 60 // refresh every ~5min when idle
+const SELF_LOOKUP_TICKS = 60 // persistent nodes look up their own id every ~5min, busy or not
 const RECENT_NODE = 12 // we've heard from a node less than 1min ago
 const OLD_NODE = 360 // if an node has been around more than 30 min we consider it old
 
@@ -73,6 +74,7 @@ class DHT extends EventEmitter {
     this._checks = 0
     this._tick = randomOffset(100) // make sure to random offset all the network ticks
     this._refreshTicks = randomOffset(REFRESH_TICKS)
+    this._selfLookupTicks = randomOffset(SELF_LOOKUP_TICKS)
     this._stableTicks = this.adaptive ? STABLE_TICKS : 0
     this._tickInterval = setInterval(this._ontick.bind(this), TICK_INTERVAL)
     this._lastTick = Date.now()
@@ -437,6 +439,16 @@ class DHT extends EventEmitter {
     this._backgroundQuery(node ? node.id : this.table.id).on('error', noop)
   }
 
+  // Keeps us in touch with the nodes closest to our own id: we learn about them and,
+  // when persistent (our id is sent with each request), they add us to their tables.
+  _selfLookup() {
+    // only covers our own neighbourhood, so don't let it postpone the regular refresh
+    const refreshTicks = this._refreshTicks
+    this._selfLookupTicks = SELF_LOOKUP_TICKS
+    this._backgroundQuery(this.table.id).on('error', noop)
+    this._refreshTicks = refreshTicks
+  }
+
   async destroy() {
     const emitClose = !this.destroyed
     this.destroyed = true
@@ -783,6 +795,10 @@ class DHT extends EventEmitter {
       }
     }
 
+    if (!this.ephemeral && --this._selfLookupTicks <= 0) {
+      this._selfLookup()
+    }
+
     if ((this._tick & 7) === 0) {
       this._pingSome()
     }
@@ -851,7 +867,9 @@ class DHT extends EventEmitter {
     // as possible, vs blindly copying them over...
 
     // all good! copy over the old routing table to the new one
-    if (!b4a.equals(this.table.id, id)) {
+    const idChanged = !b4a.equals(this.table.id, id)
+
+    if (idChanged) {
       const nodes = this.table.toArray()
 
       this.table = this.io.table = new Table(id)
@@ -862,13 +880,16 @@ class DHT extends EventEmitter {
       }
 
       this.table.on('row', this._onrow)
-
-      // we need to rebootstrap/refresh since we updated our id
-      if (this.bootstrapped) this.refresh()
     }
 
     if (!this.ephemeral) {
       this.emit('persistent')
+    }
+
+    // Find our neighbours under the new id and, now that we're persistent, announce ourselves
+    // to them. While bootstrapping, _bootstrap runs this lookup itself.
+    if (this.bootstrapped && (idChanged || !this.ephemeral)) {
+      this._selfLookup()
     }
 
     return true
