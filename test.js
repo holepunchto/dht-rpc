@@ -704,6 +704,34 @@ test('relay', async function (t) {
   t.is(res.to.port, a.address().port)
 })
 
+test('tids are not sequential', async function (t) {
+  const [, a, b] = await makeSwarm(3, t)
+  const NOPE = 442
+
+  b.on('request', function () {
+    // never reply, so the requests stay in flight
+  })
+
+  const s = a.session()
+  const to = { host: '127.0.0.1', port: b.address().port }
+  const p = []
+
+  for (let i = 0; i < 200; i++) p.push(s.request({ command: NOPE }, to))
+
+  const tids = s.inflight.map((req) => req.tid)
+
+  s.destroy()
+  await Promise.allSettled(p)
+
+  let sequential = 0
+  for (let i = 1; i < tids.length; i++) {
+    if (tids[i] === ((tids[i - 1] + 1) & 0xffff)) sequential++
+  }
+
+  // ~200 / 65536 expected for random tids
+  t.ok(sequential < 5, `${sequential} of ${tids.length - 1} tids followed the previous one`)
+})
+
 test('filter nodes from routing table', async function (t) {
   const [a, b, c] = await makeSwarm(3, t)
 
