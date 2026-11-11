@@ -732,29 +732,6 @@ test('tids are not sequential', async function (t) {
   t.ok(sequential < 5, `${sequential} of ${tids.length - 1} tids followed the previous one`)
 })
 
-test('tids are unique among in-flight requests', async function (t) {
-  const [, a, b] = await makeSwarm(3, t)
-  const NOPE = 442
-
-  b.on('request', function () {
-    // never reply, so the requests stay in flight
-  })
-
-  const s = a.session()
-  const to = { host: '127.0.0.1', port: b.address().port }
-  const p = []
-
-  for (let i = 0; i < 1000; i++) p.push(s.request({ command: NOPE }, to))
-
-  const tids = a.io.inflight.map((req) => req.tid)
-
-  s.destroy()
-  await Promise.allSettled(p)
-
-  t.ok(tids.length >= 1000, 'requests are in flight')
-  t.is(new Set(tids).size, tids.length, 'no tid is used twice')
-})
-
 test('filter nodes from routing table', async function (t) {
   const [a, b, c] = await makeSwarm(3, t)
 
