@@ -20,6 +20,7 @@ const SLEEPING_INTERVAL = 3 * TICK_INTERVAL
 const STABLE_TICKS = 240 // if nothing major bad happens in ~20mins we can consider this node stable (if nat is friendly)
 const MORE_STABLE_TICKS = 3 * STABLE_TICKS
 const REFRESH_TICKS = 60 // refresh every ~5min when idle
+const SELF_LOOKUP_TICKS = 60 // persistent nodes look up their own id every ~5min, busy or not
 const RECENT_NODE = 12 // we've heard from a node less than 1min ago
 const OLD_NODE = 360 // if an node has been around more than 30 min we consider it old
 
@@ -73,6 +74,9 @@ class DHT extends EventEmitter {
     this._checks = 0
     this._tick = randomOffset(100) // make sure to random offset all the network ticks
     this._refreshTicks = randomOffset(REFRESH_TICKS)
+    this._selfLookupTicks = randomOffset(SELF_LOOKUP_TICKS)
+    this._refreshes = 0
+    this._rowRefreshed = new Array(this.table.rows.length).fill(0) // value of _refreshes when each row was last refreshed, 0 = never
     this._stableTicks = this.adaptive ? STABLE_TICKS : 0
     this._tickInterval = setInterval(this._ontick.bind(this), TICK_INTERVAL)
     this._lastTick = Date.now()
@@ -433,8 +437,50 @@ class DHT extends EventEmitter {
   }
 
   refresh() {
-    const node = this.table.random()
-    this._backgroundQuery(node ? node.id : this.table.id).on('error', noop)
+    const row = this._pickRefreshRow()
+
+    if (row === -1) {
+      // empty table, or every row we know is full so new nodes can only fit deeper
+      this._backgroundQuery(this.table.id).on('error', noop)
+      return
+    }
+
+    this._rowRefreshed[row] = ++this._refreshes
+    this._backgroundQuery(peer.randomIdInRow(this.table.id, row)).on('error', noop)
+  }
+
+  // Least recently refreshed row with fewer than k nodes, among rows
+  // 0..deepest (deepest being the deepest non-empty row). Returns -1 when the
+  // table is empty or all these rows are full
+  _pickRefreshRow() {
+    const { rows, k } = this.table
+
+    let deepest = rows.length - 1
+    while (deepest >= 0 && !(rows[deepest] && rows[deepest].nodes.length > 0)) deepest--
+    if (deepest === -1) return -1 // empty routing table
+
+    let best = -1
+    let bestRefreshed = Infinity
+    for (let i = 0; i <= deepest; i++) {
+      if (rows[i] && rows[i].nodes.length >= k) continue
+      const refreshed = this._rowRefreshed[i]
+      if (refreshed < bestRefreshed) {
+        best = i
+        bestRefreshed = refreshed
+      }
+    }
+
+    return best
+  }
+
+  // Keeps us in touch with the nodes closest to our own id: we learn about them and,
+  // when persistent (our id is sent with each request), they add us to their tables.
+  _selfLookup() {
+    // only covers our own neighbourhood, so don't let it postpone the regular refresh
+    const refreshTicks = this._refreshTicks
+    this._selfLookupTicks = SELF_LOOKUP_TICKS
+    this._backgroundQuery(this.table.id).on('error', noop)
+    this._refreshTicks = refreshTicks
   }
 
   async destroy() {
@@ -783,6 +829,10 @@ class DHT extends EventEmitter {
       }
     }
 
+    if (!this.ephemeral && --this._selfLookupTicks <= 0) {
+      this._selfLookup()
+    }
+
     if ((this._tick & 7) === 0) {
       this._pingSome()
     }
@@ -851,10 +901,13 @@ class DHT extends EventEmitter {
     // as possible, vs blindly copying them over...
 
     // all good! copy over the old routing table to the new one
-    if (!b4a.equals(this.table.id, id)) {
+    const idChanged = !b4a.equals(this.table.id, id)
+
+    if (idChanged) {
       const nodes = this.table.toArray()
 
       this.table = this.io.table = new Table(id)
+      this._rowRefreshed.fill(0) // rows are relative to the id, so start over
 
       for (const node of nodes) {
         if (b4a.equals(node.id, id)) continue
@@ -862,13 +915,16 @@ class DHT extends EventEmitter {
       }
 
       this.table.on('row', this._onrow)
-
-      // we need to rebootstrap/refresh since we updated our id
-      if (this.bootstrapped) this.refresh()
     }
 
     if (!this.ephemeral) {
       this.emit('persistent')
+    }
+
+    // Find our neighbours under the new id and, now that we're persistent, announce ourselves
+    // to them. While bootstrapping, _bootstrap runs this lookup itself.
+    if (this.bootstrapped && (idChanged || !this.ephemeral)) {
+      this._selfLookup()
     }
 
     return true

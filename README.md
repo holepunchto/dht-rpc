@@ -194,7 +194,11 @@ Will be emitted after `node.destroy()` is completed.
 
 #### `node.refresh()`
 
-Refresh the routing table by looking up a random node in the background.
+Refresh the routing table in the background. Each call looks up a random id in
+one routing table row that isn't full (a row holds the nodes that share the
+same number of leading bits with our id). It picks the least recently refreshed
+row, up to the deepest non-empty row. If the table is empty, or all those rows
+are full, it looks up our own id instead.
 This is called internally periodically, but exposed in-case you want to force a refresh.
 
 #### `node.host`

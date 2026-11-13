@@ -1,7 +1,9 @@
 const test = require('brittle')
 const suspend = require('test-suspend')
 const UDX = require('udx-native')
+const Table = require('kademlia-routing-table')
 const DHT = require('./')
+const peer = require('./lib/peer.js')
 const { DOWN_HINT } = require('./lib/commands.js')
 
 test('bootstrapper', async function (t) {
@@ -875,6 +877,70 @@ test('nat update event', async function (t) {
   await b.destroy()
 })
 
+// Fraction of the k closest nodes that must learn about a node from its self-lookup. A lookup can
+// miss a few of the true k closest: routing tables return the closest rows, but not the closest
+// nodes within the farthest row they return (on average ~k/2 nodes, so the misses scale with k).
+const MIN_ANNOUNCED = 0.75
+
+test('adaptive node announces itself to its closest nodes when it turns persistent', async function (t) {
+  const swarm = await makeSwarm(100, t)
+
+  const bootstrap = ['localhost:' + swarm[0].address().port]
+  const node = createDHT({ bootstrap, quickFirewall: false })
+  t.teardown(() => node.destroy())
+
+  await node.fullyBootstrapped()
+  t.ok(node.ephemeral, 'ephemeral after bootstrap')
+  t.ok(node.firewalled, 'firewalled after bootstrap')
+
+  // a refresh looks up a random peer, which only reaches our neighbourhood by luck
+  node.refresh = {}
+
+  t.ok(await node._updateNetworkState(), 'network state updated')
+  t.absent(node.ephemeral, 'turned persistent')
+
+  await backgroundQueriesDone(node)
+
+  const closest = closestNodes(node.id, swarm, node.table.k)
+  const known = knownBy(node, closest)
+  t.ok(
+    known >= MIN_ANNOUNCED * node.table.k,
+    known + '/' + closest.length + ' closest nodes have it in their table'
+  )
+})
+
+test('persistent node periodically looks up its own id', async function (t) {
+  const swarm = await makeSwarm(100, t)
+  const node = swarm[swarm.length - 1]
+  const closest = closestNodes(
+    node.id,
+    swarm.filter((n) => n !== node),
+    node.table.k
+  )
+
+  for (const n of closest) {
+    const entry = n.table.get(node.id)
+    if (entry) n._removeNode(entry)
+  }
+  t.is(knownBy(node, closest), 0, 'closest nodes forgot about it')
+
+  if ((node._tick + 1) % 8 === 0) node._tick++ // ensure ontick doesn't ping
+  if (node._refreshTicks <= 1) node._refreshTicks = 60 // or refresh
+  const refreshTicks = node._refreshTicks
+
+  node._selfLookupTicks = 1
+  node._ontick()
+  t.is(node._refreshTicks, refreshTicks - 1, 'self-lookup does not postpone the regular refresh')
+
+  await backgroundQueriesDone(node)
+
+  const known = knownBy(node, closest)
+  t.ok(
+    known >= MIN_ANNOUNCED * node.table.k,
+    known + '/' + closest.length + ' closest nodes have it in their table again'
+  )
+})
+
 test('suspend - random port', async function (t) {
   const a = createDHT({ ephemeral: false, firewalled: false })
   await a.fullyBootstrapped()
@@ -1438,6 +1504,111 @@ test('debug - rtt stats', async (t) => {
   t.is(res.closestReplies.errors, 0)
 })
 
+test('randomIdInRow - id lands in the requested row', function (t) {
+  const ids = [
+    Buffer.alloc(32, 0x00),
+    Buffer.alloc(32, 0xff),
+    peer.id('127.0.0.1', 10000),
+    peer.id('10.0.0.1', 49737)
+  ]
+
+  for (const id of ids) {
+    const table = new Table(id)
+    const wrong = []
+
+    for (let i = 0; i < table.rows.length; i++) {
+      const row = table._diff(peer.randomIdInRow(id, i))
+      if (row !== i) wrong.push({ expected: i, actual: row })
+    }
+
+    t.alike(wrong, [], 'all rows for ' + id.toString('hex'))
+  }
+})
+
+test('refresh - targets the least recently refreshed row that is not full', async function (t) {
+  const node = createDHT({ bootstrap: [] })
+  t.teardown(() => node.destroy())
+  await node.fullyBootstrapped()
+
+  const { table } = node
+  const targets = []
+  node._backgroundQuery = (target) => {
+    targets.push(target)
+    return { on() {} }
+  }
+  const refresh = (n) => {
+    const rows = []
+    for (let i = 0; i < n; i++) {
+      node.refresh()
+      rows.push(table._diff(targets.pop()))
+    }
+    return rows
+  }
+
+  node.refresh()
+  t.alike(targets.pop(), table.id, 'empty table looks up our own id')
+
+  // only row 0, and it is full
+  for (let i = 0; i < table.k; i++) table.add({ id: peer.randomIdInRow(table.id, 0) })
+
+  node.refresh()
+  t.alike(targets.pop(), table.id, 'every row we know is full, looks up our own id')
+
+  // rows 1 and 3 partially filled, row 2 empty
+  for (let i = 0; i < 3; i++) table.add({ id: peer.randomIdInRow(table.id, 1) })
+  table.add({ id: peer.randomIdInRow(table.id, 3) })
+
+  // shallowest first on ties
+  t.alike(refresh(5), [1, 2, 3, 1, 2], 'up to the deepest non-empty row, skips full row 0')
+
+  // row 1 becomes full, and a node shows up in row 6
+  while (table.rows[1].nodes.length < table.k) table.add({ id: peer.randomIdInRow(table.id, 1) })
+  table.add({ id: peer.randomIdInRow(table.id, 6) })
+
+  // rows 4, 5 and 6 were never refreshed, then rows 3 and 2
+  t.alike(refresh(5), [4, 5, 6, 3, 2], 'least recently refreshed first, skips full row 1')
+})
+
+test(
+  'refresh - fills rows outside the region the table was seeded with',
+  { timeout: 60000 },
+  async function (t) {
+    const swarm = await makeSwarm(200, t)
+    // the first node has no bootstrap so it never becomes persistent, and has no id
+    const persistent = swarm.filter((node) => node.id !== null)
+
+    const node = createDHT({ bootstrap: [] })
+    t.teardown(() => node.destroy())
+    await node.fullyBootstrapped()
+
+    const { table } = node
+
+    // only know peers in row 0
+    for (const other of persistent) {
+      if (table._diff(other.id) === 0 && table.size < table.k) node.addNode(other)
+    }
+    t.is(table.size, table.k, 'seeded a full row 0')
+
+    const queries = []
+    const backgroundQuery = node._backgroundQuery
+    node._backgroundQuery = function (target) {
+      const q = backgroundQuery.call(this, target)
+      queries.push(q)
+      return q
+    }
+
+    for (let i = 0; i < 5; i++) {
+      node.refresh()
+      await queries[queries.length - 1].finished()
+    }
+
+    const rows = new Set(persistent.map((other) => table._diff(other.id)))
+    const empty = [...rows].filter((i) => !table.rows[i] || table.rows[i].nodes.length === 0)
+
+    t.alike(empty, [], 'every row with nodes in the swarm has nodes in the table')
+  }
+)
+
 function fillHealthWindow(dht) {
   for (let i = 0; i < 4; i++) {
     dht.health.update()
@@ -1471,6 +1642,30 @@ async function makeSwarm(n, t, opts = {}) {
 
 function cmpNodes(a, b) {
   return a.port - b.port
+}
+
+// the k persistent nodes closest to target by XOR distance
+function closestNodes(target, nodes, k) {
+  return nodes
+    .filter((node) => node.id !== null)
+    .sort((a, b) => cmpDistance(target, a.id, b.id))
+    .slice(0, k)
+}
+
+function cmpDistance(target, a, b) {
+  for (let i = 0; i < target.length; i++) {
+    const d = (a[i] ^ target[i]) - (b[i] ^ target[i])
+    if (d !== 0) return d
+  }
+  return 0
+}
+
+function knownBy(node, nodes) {
+  return nodes.filter((n) => n.table.get(node.id)).length
+}
+
+async function backgroundQueriesDone(node) {
+  while (node.stats.queries.active > 0) await new Promise((resolve) => setTimeout(resolve, 50))
 }
 
 function createDHT(opts) {
