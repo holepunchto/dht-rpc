@@ -1,7 +1,9 @@
 const test = require('brittle')
 const suspend = require('test-suspend')
 const UDX = require('udx-native')
+const Table = require('kademlia-routing-table')
 const DHT = require('./')
+const peer = require('./lib/peer.js')
 const { DOWN_HINT } = require('./lib/commands.js')
 
 test('bootstrapper', async function (t) {
@@ -1501,6 +1503,111 @@ test('debug - rtt stats', async (t) => {
   t.is(res.responses.errors, 0)
   t.is(res.closestReplies.errors, 0)
 })
+
+test('randomIdInRow - id lands in the requested row', function (t) {
+  const ids = [
+    Buffer.alloc(32, 0x00),
+    Buffer.alloc(32, 0xff),
+    peer.id('127.0.0.1', 10000),
+    peer.id('10.0.0.1', 49737)
+  ]
+
+  for (const id of ids) {
+    const table = new Table(id)
+    const wrong = []
+
+    for (let i = 0; i < table.rows.length; i++) {
+      const row = table._diff(peer.randomIdInRow(id, i))
+      if (row !== i) wrong.push({ expected: i, actual: row })
+    }
+
+    t.alike(wrong, [], 'all rows for ' + id.toString('hex'))
+  }
+})
+
+test('refresh - targets the least recently refreshed row that is not full', async function (t) {
+  const node = createDHT({ bootstrap: [] })
+  t.teardown(() => node.destroy())
+  await node.fullyBootstrapped()
+
+  const { table } = node
+  const targets = []
+  node._backgroundQuery = (target) => {
+    targets.push(target)
+    return { on() {} }
+  }
+  const refresh = (n) => {
+    const rows = []
+    for (let i = 0; i < n; i++) {
+      node.refresh()
+      rows.push(table._diff(targets.pop()))
+    }
+    return rows
+  }
+
+  node.refresh()
+  t.alike(targets.pop(), table.id, 'empty table looks up our own id')
+
+  // only row 0, and it is full
+  for (let i = 0; i < table.k; i++) table.add({ id: peer.randomIdInRow(table.id, 0) })
+
+  node.refresh()
+  t.alike(targets.pop(), table.id, 'every row we know is full, looks up our own id')
+
+  // rows 1 and 3 partially filled, row 2 empty
+  for (let i = 0; i < 3; i++) table.add({ id: peer.randomIdInRow(table.id, 1) })
+  table.add({ id: peer.randomIdInRow(table.id, 3) })
+
+  // shallowest first on ties
+  t.alike(refresh(5), [1, 2, 3, 1, 2], 'up to the deepest non-empty row, skips full row 0')
+
+  // row 1 becomes full, and a node shows up in row 6
+  while (table.rows[1].nodes.length < table.k) table.add({ id: peer.randomIdInRow(table.id, 1) })
+  table.add({ id: peer.randomIdInRow(table.id, 6) })
+
+  // rows 4, 5 and 6 were never refreshed, then rows 3 and 2
+  t.alike(refresh(5), [4, 5, 6, 3, 2], 'least recently refreshed first, skips full row 1')
+})
+
+test(
+  'refresh - fills rows outside the region the table was seeded with',
+  { timeout: 60000 },
+  async function (t) {
+    const swarm = await makeSwarm(200, t)
+    // the first node has no bootstrap so it never becomes persistent, and has no id
+    const persistent = swarm.filter((node) => node.id !== null)
+
+    const node = createDHT({ bootstrap: [] })
+    t.teardown(() => node.destroy())
+    await node.fullyBootstrapped()
+
+    const { table } = node
+
+    // only know peers in row 0
+    for (const other of persistent) {
+      if (table._diff(other.id) === 0 && table.size < table.k) node.addNode(other)
+    }
+    t.is(table.size, table.k, 'seeded a full row 0')
+
+    const queries = []
+    const backgroundQuery = node._backgroundQuery
+    node._backgroundQuery = function (target) {
+      const q = backgroundQuery.call(this, target)
+      queries.push(q)
+      return q
+    }
+
+    for (let i = 0; i < 5; i++) {
+      node.refresh()
+      await queries[queries.length - 1].finished()
+    }
+
+    const rows = new Set(persistent.map((other) => table._diff(other.id)))
+    const empty = [...rows].filter((i) => !table.rows[i] || table.rows[i].nodes.length === 0)
+
+    t.alike(empty, [], 'every row with nodes in the swarm has nodes in the table')
+  }
+)
 
 function fillHealthWindow(dht) {
   for (let i = 0; i < 4; i++) {

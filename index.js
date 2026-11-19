@@ -75,6 +75,8 @@ class DHT extends EventEmitter {
     this._tick = randomOffset(100) // make sure to random offset all the network ticks
     this._refreshTicks = randomOffset(REFRESH_TICKS)
     this._selfLookupTicks = randomOffset(SELF_LOOKUP_TICKS)
+    this._refreshes = 0
+    this._rowRefreshed = new Array(this.table.rows.length).fill(0) // value of _refreshes when each row was last refreshed, 0 = never
     this._stableTicks = this.adaptive ? STABLE_TICKS : 0
     this._tickInterval = setInterval(this._ontick.bind(this), TICK_INTERVAL)
     this._lastTick = Date.now()
@@ -435,8 +437,40 @@ class DHT extends EventEmitter {
   }
 
   refresh() {
-    const node = this.table.random()
-    this._backgroundQuery(node ? node.id : this.table.id).on('error', noop)
+    const row = this._pickRefreshRow()
+
+    if (row === -1) {
+      // empty table, or every row we know is full so new nodes can only fit deeper
+      this._backgroundQuery(this.table.id).on('error', noop)
+      return
+    }
+
+    this._rowRefreshed[row] = ++this._refreshes
+    this._backgroundQuery(peer.randomIdInRow(this.table.id, row)).on('error', noop)
+  }
+
+  // Least recently refreshed row with fewer than k nodes, among rows
+  // 0..deepest (deepest being the deepest non-empty row). Returns -1 when the
+  // table is empty or all these rows are full
+  _pickRefreshRow() {
+    const { rows, k } = this.table
+
+    let deepest = rows.length - 1
+    while (deepest >= 0 && !(rows[deepest] && rows[deepest].nodes.length > 0)) deepest--
+    if (deepest === -1) return -1 // empty routing table
+
+    let best = -1
+    let bestRefreshed = Infinity
+    for (let i = 0; i <= deepest; i++) {
+      if (rows[i] && rows[i].nodes.length >= k) continue
+      const refreshed = this._rowRefreshed[i]
+      if (refreshed < bestRefreshed) {
+        best = i
+        bestRefreshed = refreshed
+      }
+    }
+
+    return best
   }
 
   // Keeps us in touch with the nodes closest to our own id: we learn about them and,
@@ -873,6 +907,7 @@ class DHT extends EventEmitter {
       const nodes = this.table.toArray()
 
       this.table = this.io.table = new Table(id)
+      this._rowRefreshed.fill(0) // rows are relative to the id, so start over
 
       for (const node of nodes) {
         if (b4a.equals(node.id, id)) continue
