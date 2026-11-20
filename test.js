@@ -682,16 +682,22 @@ test('relay', async function (t) {
 
   b.on('request', function (req) {
     t.is(req.command, ROUTE, 'b got request')
-    t.is(req.from.port, a.address().port, 'from a')
     const value = Buffer.concat([req.value, Buffer.from('b')])
-    req.relay(value, { host: '127.0.0.1', port: c.address().port })
+
+    if (req.from.port === a.address().port) {
+      req.relay(value, { host: '127.0.0.1', port: c.address().port })
+      return
+    }
+
+    t.is(req.from.port, c.address().port, 'relayed back from c')
+    req.reply(value, { to: { host: '127.0.0.1', port: a.address().port } })
   })
 
   c.on('request', function (req) {
     t.is(req.command, ROUTE, 'c got request')
     t.is(req.from.port, b.address().port, 'from b')
     const value = Buffer.concat([req.value, Buffer.from('c')])
-    req.reply(value, { to: { host: '127.0.0.1', port: a.address().port } })
+    req.relay(value, req.from)
   })
 
   const res = await a.request(
@@ -699,8 +705,8 @@ test('relay', async function (t) {
     { host: '127.0.0.1', port: b.address().port }
   )
 
-  t.alike(res.value, Buffer.from('abc'))
-  t.is(res.from.port, c.address().port)
+  t.alike(res.value, Buffer.from('abcb'))
+  t.is(res.from.port, b.address().port, 'reply comes from the node a sent to')
   t.is(res.to.port, a.address().port)
 })
 
@@ -730,6 +736,73 @@ test('tids are not sequential', async function (t) {
 
   // ~200 / 65536 expected for random tids
   t.ok(sequential < 5, `${sequential} of ${tids.length - 1} tids followed the previous one`)
+})
+
+test('relay - reply sent straight from the relay target is ignored', async function (t) {
+  const [, a, b, c] = await makeSwarm(4, t)
+
+  const ROUTE = 1
+
+  b.on('request', function (req) {
+    req.relay(req.value, { host: '127.0.0.1', port: c.address().port })
+  })
+
+  c.on('request', function (req) {
+    req.reply(req.value, { to: { host: '127.0.0.1', port: a.address().port } })
+  })
+
+  await t.exception(
+    a.request(
+      { command: ROUTE, value: Buffer.from('a') },
+      { host: '127.0.0.1', port: b.address().port },
+      { retry: false }
+    ),
+    /REQUEST_TIMEOUT/
+  )
+})
+
+test('reply from a node the request was not sent to is ignored', async function (t) {
+  const [, a, b, m] = await makeSwarm(4, t)
+  const NOPE = 442
+  const ECHO = 443
+
+  b.on('request', function () {
+    // never reply, so the request to b stays in flight
+  })
+
+  const timeout = t.exception(
+    a.request({ command: NOPE }, { host: '127.0.0.1', port: b.address().port }, { retry: false }),
+    /REQUEST_TIMEOUT/,
+    'request to b is not resolved by the reply from m'
+  )
+  const toB = a.io.inflight.find((req) => req.command === NOPE)
+
+  // m first sends a reply for the request a sent to b, then answers its own request
+  m.on('request', function (req) {
+    const tid = req.tid
+    req.tid = toB.tid
+    req.reply(Buffer.from('m'))
+    req.tid = tid
+    req.reply(Buffer.from('echo'))
+  })
+
+  const res = await a.request({ command: ECHO }, { host: '127.0.0.1', port: m.address().port })
+
+  t.alike(res.value, Buffer.from('echo'))
+  t.ok(a.io.inflight.includes(toB), 'request to b is still in flight')
+
+  await timeout
+})
+
+test('requests to a hostname are rejected', async function (t) {
+  const [, a, b] = await makeSwarm(3, t)
+
+  // replies are matched by comparing their source with the destination, so destinations have to be
+  // ip literals. hostnames are rejected before anything is sent
+  const err = await a.ping({ host: 'localhost', port: b.address().port }).catch((err) => err)
+
+  t.ok(err instanceof Error, 'ping rejected')
+  t.not(err.code, 'REQUEST_TIMEOUT', 'rejected up front, not timed out')
 })
 
 test('filter nodes from routing table', async function (t) {
@@ -901,6 +974,70 @@ test('nat update event', async function (t) {
 
   await a.destroy()
   await b.destroy()
+})
+
+// Fraction of the k closest nodes that must learn about a node from its self-lookup. A lookup can
+// miss a few of the true k closest: routing tables return the closest rows, but not the closest
+// nodes within the farthest row they return (on average ~k/2 nodes, so the misses scale with k).
+const MIN_ANNOUNCED = 0.75
+
+test('adaptive node announces itself to its closest nodes when it turns persistent', async function (t) {
+  const swarm = await makeSwarm(100, t)
+
+  const bootstrap = ['localhost:' + swarm[0].address().port]
+  const node = createDHT({ bootstrap, quickFirewall: false })
+  t.teardown(() => node.destroy())
+
+  await node.fullyBootstrapped()
+  t.ok(node.ephemeral, 'ephemeral after bootstrap')
+  t.ok(node.firewalled, 'firewalled after bootstrap')
+
+  // a refresh looks up a random peer, which only reaches our neighbourhood by luck
+  node.refresh = {}
+
+  t.ok(await node._updateNetworkState(), 'network state updated')
+  t.absent(node.ephemeral, 'turned persistent')
+
+  await backgroundQueriesDone(node)
+
+  const closest = closestNodes(node.id, swarm, node.table.k)
+  const known = knownBy(node, closest)
+  t.ok(
+    known >= MIN_ANNOUNCED * node.table.k,
+    known + '/' + closest.length + ' closest nodes have it in their table'
+  )
+})
+
+test('persistent node periodically looks up its own id', async function (t) {
+  const swarm = await makeSwarm(100, t)
+  const node = swarm[swarm.length - 1]
+  const closest = closestNodes(
+    node.id,
+    swarm.filter((n) => n !== node),
+    node.table.k
+  )
+
+  for (const n of closest) {
+    const entry = n.table.get(node.id)
+    if (entry) n._removeNode(entry)
+  }
+  t.is(knownBy(node, closest), 0, 'closest nodes forgot about it')
+
+  if ((node._tick + 1) % 8 === 0) node._tick++ // ensure ontick doesn't ping
+  if (node._refreshTicks <= 1) node._refreshTicks = 60 // or refresh
+  const refreshTicks = node._refreshTicks
+
+  node._selfLookupTicks = 1
+  node._ontick()
+  t.is(node._refreshTicks, refreshTicks - 1, 'self-lookup does not postpone the regular refresh')
+
+  await backgroundQueriesDone(node)
+
+  const known = knownBy(node, closest)
+  t.ok(
+    known >= MIN_ANNOUNCED * node.table.k,
+    known + '/' + closest.length + ' closest nodes have it in their table again'
+  )
 })
 
 test('suspend - random port', async function (t) {
@@ -1499,6 +1636,30 @@ async function makeSwarm(n, t, opts = {}) {
 
 function cmpNodes(a, b) {
   return a.port - b.port
+}
+
+// the k persistent nodes closest to target by XOR distance
+function closestNodes(target, nodes, k) {
+  return nodes
+    .filter((node) => node.id !== null)
+    .sort((a, b) => cmpDistance(target, a.id, b.id))
+    .slice(0, k)
+}
+
+function cmpDistance(target, a, b) {
+  for (let i = 0; i < target.length; i++) {
+    const d = (a[i] ^ target[i]) - (b[i] ^ target[i])
+    if (d !== 0) return d
+  }
+  return 0
+}
+
+function knownBy(node, nodes) {
+  return nodes.filter((n) => n.table.get(node.id)).length
+}
+
+async function backgroundQueriesDone(node) {
+  while (node.stats.queries.active > 0) await new Promise((resolve) => setTimeout(resolve, 50))
 }
 
 function createDHT(opts) {
