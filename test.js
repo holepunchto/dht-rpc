@@ -682,16 +682,22 @@ test('relay', async function (t) {
 
   b.on('request', function (req) {
     t.is(req.command, ROUTE, 'b got request')
-    t.is(req.from.port, a.address().port, 'from a')
     const value = Buffer.concat([req.value, Buffer.from('b')])
-    req.relay(value, { host: '127.0.0.1', port: c.address().port })
+
+    if (req.from.port === a.address().port) {
+      req.relay(value, { host: '127.0.0.1', port: c.address().port })
+      return
+    }
+
+    t.is(req.from.port, c.address().port, 'relayed back from c')
+    req.reply(value, { to: { host: '127.0.0.1', port: a.address().port } })
   })
 
   c.on('request', function (req) {
     t.is(req.command, ROUTE, 'c got request')
     t.is(req.from.port, b.address().port, 'from b')
     const value = Buffer.concat([req.value, Buffer.from('c')])
-    req.reply(value, { to: { host: '127.0.0.1', port: a.address().port } })
+    req.relay(value, req.from)
   })
 
   const res = await a.request(
@@ -699,9 +705,76 @@ test('relay', async function (t) {
     { host: '127.0.0.1', port: b.address().port }
   )
 
-  t.alike(res.value, Buffer.from('abc'))
-  t.is(res.from.port, c.address().port)
+  t.alike(res.value, Buffer.from('abcb'))
+  t.is(res.from.port, b.address().port, 'reply comes from the node a sent to')
   t.is(res.to.port, a.address().port)
+})
+
+test('relay - reply sent straight from the relay target is ignored', async function (t) {
+  const [, a, b, c] = await makeSwarm(4, t)
+
+  const ROUTE = 1
+
+  b.on('request', function (req) {
+    req.relay(req.value, { host: '127.0.0.1', port: c.address().port })
+  })
+
+  c.on('request', function (req) {
+    req.reply(req.value, { to: { host: '127.0.0.1', port: a.address().port } })
+  })
+
+  await t.exception(
+    a.request(
+      { command: ROUTE, value: Buffer.from('a') },
+      { host: '127.0.0.1', port: b.address().port },
+      { retry: false }
+    ),
+    /REQUEST_TIMEOUT/
+  )
+})
+
+test('reply from a node the request was not sent to is ignored', async function (t) {
+  const [, a, b, m] = await makeSwarm(4, t)
+  const NOPE = 442
+  const ECHO = 443
+
+  b.on('request', function () {
+    // never reply, so the request to b stays in flight
+  })
+
+  const timeout = t.exception(
+    a.request({ command: NOPE }, { host: '127.0.0.1', port: b.address().port }, { retry: false }),
+    /REQUEST_TIMEOUT/,
+    'request to b is not resolved by the reply from m'
+  )
+  const toB = a.io.inflight.find((req) => req.command === NOPE)
+
+  // m first sends a reply for the request a sent to b, then answers its own request
+  m.on('request', function (req) {
+    const tid = req.tid
+    req.tid = toB.tid
+    req.reply(Buffer.from('m'))
+    req.tid = tid
+    req.reply(Buffer.from('echo'))
+  })
+
+  const res = await a.request({ command: ECHO }, { host: '127.0.0.1', port: m.address().port })
+
+  t.alike(res.value, Buffer.from('echo'))
+  t.ok(a.io.inflight.includes(toB), 'request to b is still in flight')
+
+  await timeout
+})
+
+test('requests to a hostname are rejected', async function (t) {
+  const [, a, b] = await makeSwarm(3, t)
+
+  // replies are matched by comparing their source with the destination, so destinations have to be
+  // ip literals. hostnames are rejected before anything is sent
+  const err = await a.ping({ host: 'localhost', port: b.address().port }).catch((err) => err)
+
+  t.ok(err instanceof Error, 'ping rejected')
+  t.not(err.code, 'REQUEST_TIMEOUT', 'rejected up front, not timed out')
 })
 
 test('filter nodes from routing table', async function (t) {
