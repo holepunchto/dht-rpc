@@ -908,13 +908,12 @@ class DHT extends EventEmitter {
 
       this.table = this.io.table = new Table(id)
       this._rowRefreshed.fill(0) // rows are relative to the id, so start over
+      this.table.on('row', this._onrow)
 
       for (const node of nodes) {
         if (b4a.equals(node.id, id)) continue
         if (!this.table.add(node)) this.nodes.remove(node)
       }
-
-      this.table.on('row', this._onrow)
     }
 
     if (!this.ephemeral) {

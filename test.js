@@ -2,6 +2,8 @@ const test = require('brittle')
 const suspend = require('test-suspend')
 const UDX = require('udx-native')
 const Table = require('kademlia-routing-table')
+const sodium = require('sodium-universal')
+const b4a = require('b4a')
 const DHT = require('./')
 const peer = require('./lib/peer.js')
 const { DOWN_HINT } = require('./lib/commands.js')
@@ -1709,6 +1711,42 @@ test(
     t.alike(empty, [], 'every row with nodes in the swarm has nodes in the table')
   }
 )
+
+test('rows created when the id changes get a full handler', async function (t) {
+  const dht = createDHT({ firewalled: false, bootstrap: [] })
+  t.teardown(() => dht.destroy())
+  await dht.fullyBootstrapped()
+
+  for (let i = 0; i < 100; i++) {
+    const id = b4a.alloc(32)
+    sodium.randombytes_buf(id)
+    dht._addNode({
+      id,
+      host: '127.0.0.1',
+      port: 10000 + i,
+      to: null,
+      sampled: 0,
+      added: 0,
+      pinged: 0,
+      seen: 0,
+      downHints: 0,
+      prev: null,
+      next: null
+    })
+  }
+
+  const oldTable = dht.table
+  dht._nat.add('127.0.0.1', dht.address().port)
+  t.ok(await dht._updateNetworkState(), 'became persistent')
+  t.not(dht.table, oldTable, 'table was rebuilt for the new id')
+
+  const rows = dht.table.rows.filter(Boolean)
+  t.ok(rows.length > 0)
+  t.ok(
+    rows.every((row) => row.listenerCount('full') > 0),
+    'every row has a full handler'
+  )
+})
 
 function fillHealthWindow(dht) {
   for (let i = 0; i < 4; i++) {
